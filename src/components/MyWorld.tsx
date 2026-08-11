@@ -30,6 +30,8 @@ import { useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { networkQO } from "@/lib/network-query";
 import { MyConvictions } from "@/components/MyConvictions";
+import { MARKETS_TAB } from "@/domain/markets";
+import { MarketsPanel } from "@/components/MarketsPanel";
 import { NetworkPanel } from "@/components/NetworkPanel";
 import { presentRelationship } from "@/domain/relationship";
 import { type MarketRow } from "@/components/MarketCard";
@@ -160,16 +162,20 @@ export function MyWorld({
    * THREE DESTINATIONS, THREE JOBS.
    *
    *   EXPLORE    discover markets
-   *   POSITIONS  what I have backed, and what is happening with it
+   *   MARKETS    the questions I own and the ones I hold a side in
    *   PEOPLE     who I connect with, through shared and opposing convictions
    *
    * "For You" named ONE of Explore's five lenses, which made the tab and the
    * lens row inside it contradict each other the moment a reader picked Moving.
-   * "Convictions" was the older word for the same thing "Positions" says
-   * plainly — and the internal tab key has been `positions` the whole time.
+   * "Convictions" was the older word for the same thing "Positions" said, and
+   * "Positions" was itself too small: a position is what you HOLD, which left
+   * nowhere to put the question you WROTE and never backed, and no way to say
+   * that authoring outranks holding. MARKETS holds both roles — Market Maker
+   * first, Believer second — and the internal tab key stays `positions` so no
+   * bookmarked URL breaks over a word.
    */
   const tabName = (t: Tab): string =>
-    t === "feed" ? "Explore" : t === "positions" ? "Positions" : "People";
+    t === "feed" ? "Explore" : t === "positions" ? MARKETS_TAB : "People";
 
   // The playlist tab carries no count: how many markets are queued is an
   // implementation detail, and no reader decides anything differently for it.
@@ -233,6 +239,12 @@ export function MyWorld({
         connectPrompt
       ) : tab === "positions" ? (
         <div className="min-h-0 flex-1 overflow-y-auto">
+          {/* THE TWO ROLES LEAD. Market Maker first, Believer second, one market
+              in exactly one section — the question you WROTE is the thing a
+              portfolio view had nowhere to put. The value/return cards keep
+              their place underneath: this section says what is HAPPENING around
+              your questions, and that one says what they are worth. */}
+          <MarketsPanel wallet={wallet} onSelectMarket={onSelectMarket} />
           <MyConvictions
             wallet={wallet}
             rows={rows}

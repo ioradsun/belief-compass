@@ -123,6 +123,38 @@ describe("one card, one state, decided in one place", () => {
     );
   });
 
+  /**
+   * THE BEST OUTCOME WAS UNREACHABLE. `finished` used to be ranked third, below
+   * `people_showing_up`, so any Challenge with a responder took the news state
+   * first — including one that auto-closed BECAUSE everybody answered. The
+   * celebration copy existed and no state could arrive at it.
+   */
+  it("finishes when everybody answered, so the celebration is reachable", () => {
+    const c = card({
+      outgoing: outgoing({
+        reached: 11,
+        showedUp: 11,
+        waiting: 0,
+        responders: [responder("Casey")],
+        closedAtMs: 9,
+      }),
+    });
+    expect(c.state).toBe("finished");
+    expect(completionFor(c.outgoing!)).toEqual({ headline: "Everyone showed up", support: null });
+  });
+
+  it("treats a taken-down Challenge as over even when people answered it", () => {
+    const c = card({
+      outgoing: outgoing({
+        showedUp: 3,
+        waiting: 10,
+        closedAtMs: 9,
+        responders: [responder("Casey")],
+      }),
+    });
+    expect(c.state).toBe("finished");
+  });
+
   it("finishes when the creator took it down", () => {
     expect(card({ outgoing: outgoing({ closedAtMs: 9 }) }).state).toBe("finished");
   });

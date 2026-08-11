@@ -17,6 +17,7 @@ import type { CallReach, Challenge, NamedPerson } from "@/domain/challenge";
 import type { AudienceResult } from "@/domain/audience";
 import type { ChallengeCardProjection } from "@/domain/challenge-card";
 import type { ChallengeChainProjection } from "@/domain/challenge-chain";
+import type { MarketEntry } from "@/domain/markets";
 import type {
   ChainContext,
   ChallengeHistory,
@@ -211,4 +212,20 @@ export const getChallengeChain = createServerFn({ method: "GET" })
     if (!data.wallet) return null;
     const { challengeChainFor } = await import("@/lib/challenge-chain.server");
     return challengeChainFor(data.wallet, data.marketId);
+  });
+
+/**
+ * THE MARKETS PAGE — the questions this viewer owns, and the ones they hold.
+ *
+ * Unsigned like the other reads here: it describes the viewer's own two roles,
+ * and the Challenge state it carries is the same projection the durable card
+ * already shows them. Nothing in the payload names anybody the Challenge
+ * surface would not.
+ */
+export const getMarkets = createServerFn({ method: "GET" })
+  .inputValidator((raw: unknown) => z.object({ wallet: WALLET.nullish() }).parse(raw ?? {}))
+  .handler(async ({ data }): Promise<MarketEntry[]> => {
+    if (!data.wallet) return [];
+    const { marketsFor } = await import("@/lib/markets.server");
+    return marketsFor(data.wallet);
   });
