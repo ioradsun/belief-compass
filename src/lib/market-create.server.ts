@@ -159,6 +159,51 @@ export async function alternateQuestions(question: string): Promise<string[]> {
 }
 
 /**
+ * FOUR CONTESTED QUESTIONS ON A TOPIC — the left rail's spark generator.
+ *
+ * The personalised House idea only exists once somebody has a history worth
+ * reading. A first-time writer staring at an empty form got an empty column,
+ * which is honest but useless. A topic is the smallest input that makes a
+ * genuinely interesting question possible without pretending to know the
+ * person, so the rail asks for one and this answers it.
+ *
+ * CONTESTED, NOT TRIVIA. The whole product fails if the answer is lookup-able:
+ * every question must be one where informed people actually split.
+ */
+export async function topicIdeas(topic: string): Promise<string[]> {
+  const t = topic.trim().slice(0, 60);
+  if (!t) return [];
+  const raw = await askAI(
+    [
+      "You write opinion-market questions for a permissionless prediction app.",
+      "Given a TOPIC, return exactly 4 questions on that topic that thoughtful people genuinely disagree about.",
+      "Each is a single sharply-worded claim someone can back YES or NO on today.",
+      "They do NOT need a real-world resolution date — these are opinion markets about belief, not verifiable events.",
+      "Never write trivia, lookups, or anything with a settled factual answer. Aim for the disagreement, not the fact.",
+      "Each must be under 140 characters, and the four must be genuinely different from each other.",
+      'Reply ONLY as JSON: {"ideas":[string, string, string, string]}',
+    ].join(" "),
+    t,
+  );
+  const parsed = parseJson<{ ideas?: unknown }>(raw);
+  const list = Array.isArray(parsed?.ideas) ? parsed.ideas : [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const item of list) {
+    if (typeof item !== "string") continue;
+    const s = item.trim();
+    if (s.length < 8 || s.length > 200) continue;
+    const key = normalizeQuestion(s);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(s);
+    if (out.length >= 4) break;
+  }
+  return out;
+}
+
+
+/**
  * WHAT WAS HERE. A private stopword list, a private `tokens()`, a Jaccard
  * `similarity()`, and `findSimilarMarkets()` — a blind 4,000-row scan of
  * `markets` + `conviction_markets` on every debounced keystroke, whose result
