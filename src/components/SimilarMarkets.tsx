@@ -106,10 +106,7 @@ export function SimilarMarkets({
             ×
           </button>
         </div>
-        <p className="mt-0.5 text-[11.5px] leading-snug text-[var(--text-secondary)]">
-          Joining one of these puts you in a room with people in it. Starting a second copy splits
-          them.
-        </p>
+
       </div>
 
       <ul className="space-y-2">

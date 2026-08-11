@@ -50,7 +50,7 @@ export function IdeasRail({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="mb-3 shrink-0 text-[11px] font-semibold tracking-wide text-[var(--text-muted)] uppercase">
-        Need a spark?
+        Market Ideas
       </div>
 
       <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">

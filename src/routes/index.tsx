@@ -1498,7 +1498,17 @@ function Feed() {
           className={`${show("mine")} relative row-start-1 h-full min-h-0 max-h-full flex-col overflow-hidden bg-[var(--bg)] px-5 py-6 lg:col-start-1 lg:flex`}
           style={{ borderRight: "1px solid var(--hairline)" }}
         >
-          {caseActive && currentRow ? (
+          {createOpen ? (
+            /* WRITING A MARKET — the everyday rail steps aside so nothing under
+               the composer shifts while the AI thinks. Left is the spark. */
+            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+              <IdeasRail
+                suggestion={ideaDue ? null : houseIdea.suggestion}
+                onUse={() => acceptIdea(false)}
+                onDismiss={houseIdea.onDismiss}
+              />
+            </div>
+          ) : caseActive && currentRow ? (
             // YES Case — the existing YES-supporting intelligence, reorganized.
             // Keyed on the market so switching resets the column scroll to top.
             <Suspense fallback={<DeckSkeleton />}>
@@ -1531,13 +1541,9 @@ function Feed() {
                 onOpenDashboard={openDashboard}
                 initialNetwork={Boolean(selectedPerson || dnaOpen)}
                 onOpenFeedTab={closeCase}
-                /* LAUNCH MODE — "should I join one of these instead?", asked in
-                   the column that already answers "where should I go". It self-
-                   hides unless a draft is being written and something is
-                   actually similar. Join is `selectMarket`, which clears
-                   `?create` on its way to `?m`, so accepting the advice exits
-                   the composer and lands on the existing debate. */
-                launchPanel={<SimilarMarkets wallet={wallet} onJoin={selectMarket} />}
+                /* SimilarMarkets moved to the right rail while writing — the
+                   whole left column steps aside in create mode. */
+                launchPanel={null}
                 feedList={
                   <div className="flex min-h-0 flex-1 flex-col">
                     {/* FIRST TEN CONVICTIONS — the brief owns this slot until
@@ -1814,20 +1820,12 @@ function Feed() {
                 those apart belongs in the tape, which is why the tape is passed
                 in rather than owned here. */}
               {createOpen || ideaDue ? (
-                /* THE RIGHT RAIL WHILE WRITING — rewrites of your own question
-                   first, then a House spark. Alternates take their natural height
-                   on top; the spark fills what's left and self-hides when there is
-                   nothing to suggest, so an untouched form shows an empty column
-                   rather than a padded one. */
+                /* THE RIGHT RAIL WHILE WRITING — other ways to ask the same
+                   question, then the debates that already exist. The House spark
+                   moved to the left rail, so nothing is offered twice. */
                 <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
                   <AlternatesRail />
-                  <IdeasRail
-                    /* Never twice: while the idea itself is on stage the rail
-                       has nothing left to offer. */
-                    suggestion={ideaDue ? null : houseIdea.suggestion}
-                    onUse={() => acceptIdea(false)}
-                    onDismiss={houseIdea.onDismiss}
-                  />
+                  <SimilarMarkets wallet={wallet} onJoin={selectMarket} />
                 </div>
               ) : (
                 <ChallengeRail
