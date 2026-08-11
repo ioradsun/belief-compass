@@ -575,9 +575,22 @@ export function MyConvictions({
   }, [marketCount, onCount]);
 
 
-  if (!wallet || built.length === 0) {
+  /**
+   * THE QUESTIONS YOU WROTE AND NEVER BACKED.
+   *
+   * They have no value, no return and no side, so they cannot be position cards
+   * — but they are still yours, and removing the Market Maker section must not
+   * remove them from the rail. One line each, under the portfolio.
+   */
+  const heldIds = new Set(built.map((b) => b.id));
+  const authoredOnly = (marketEntries ?? [])
+    .filter((e) => e.ownership === "market_maker" && !heldIds.has(e.marketId))
+    .map((e) => ({ id: e.marketId, question: e.question }));
+
+  if (!wallet || (built.length === 0 && authoredOnly.length === 0)) {
     return <EmptyState onExplore={onExplore} />;
   }
+
 
   return (
     <div>
