@@ -101,19 +101,19 @@ export function AudienceGroups({
   stacked?: boolean;
 }) {
   return (
-    <div className={stacked ? "flex flex-col gap-3" : "mt-2 flex flex-col gap-1.5"}>
+    <div className={stacked ? "flex flex-col gap-4" : "mt-2 flex flex-col gap-1.5"}>
       {groups.map((g) => (
         <div
           key={g.key}
-          className={stacked ? "flex flex-col gap-1.5" : "flex items-center gap-2"}
+          className={stacked ? "flex flex-col gap-2" : "flex items-center gap-2"}
         >
           {stacked ? (
             <div className="min-w-0">
-              <p className="text-[12.5px] font-semibold leading-snug text-[var(--text)]">
+              <p className="text-[15px] font-semibold leading-snug text-[var(--text)]">
                 {g.label}
-                <span className="ml-1 font-normal text-[var(--text-muted)]">{g.count}</span>
+                <span className="ml-1.5 font-normal text-[var(--text-muted)]">{g.count}</span>
               </p>
-              <p className="text-[11.5px] leading-snug text-[var(--text-muted)]">{g.note}</p>
+              <p className="text-[13px] leading-snug text-[var(--text-secondary)]">{g.note}</p>
             </div>
           ) : null}
 
@@ -123,14 +123,19 @@ export function AudienceGroups({
               and a Rivals of seven pushed their headings to different places and
               the rows stopped reading as one list. `min-w` rather than `w`, so a
               three-digit overflow grows instead of clipping. */}
-          <div className="flex min-w-[102px] shrink-0 -space-x-1.5">
+          <div
+            className={cn(
+              "flex -space-x-1.5",
+              stacked ? "min-w-[140px]" : "min-w-[102px] shrink-0"
+            )}
+          >
             {g.visiblePeople.map((p) => (
               <PersonAvatar
                 key={p.wallet}
                 wallet={p.wallet}
                 name={p.displayName}
                 avatarUrl={p.avatarUrl}
-                size={22}
+                size={stacked ? 32 : 22}
                 className="ring-1 ring-[var(--bg)]"
               />
             ))}
@@ -139,7 +144,10 @@ export function AudienceGroups({
                 do — it would be filler wearing a person's shape. */}
             {g.overflow > 0 && (
               <span
-                className="flex h-[22px] min-w-[22px] items-center justify-center rounded-full px-1 text-[10px] font-medium ring-1 ring-[var(--bg)]"
+                className={cn(
+                  "flex items-center justify-center rounded-full px-1 font-medium ring-1 ring-[var(--bg)]",
+                  stacked ? "h-[32px] min-w-[32px] text-[12px]" : "h-[22px] min-w-[22px] text-[10px]"
+                )}
                 style={{
                   background: "color-mix(in oklab, var(--text-muted) 16%, transparent)",
                   color: "var(--text-secondary)",
