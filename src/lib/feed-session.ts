@@ -13,40 +13,76 @@ export interface FeedSessionSnapshot {
   cardsViewed: number;
   cardsSinceIdea: number;
   ideasShownThisSession: number;
+  /** When the reader's current pass began, epoch ms. */
+  cycleStartedAt: number;
 }
 
-const MAX_SEEN = 200;
+/**
+ * HOW MUCH OF A PASS THE BROWSER REMEMBERS.
+ *
+ * A pass can be thousands of markets long, so this is a working set, not the
+ * record: for a connected wallet the server ledger is the truth and this only
+ * covers sightings it has not stored yet. The cap is generous enough that a
+ * signed-out reader browsing hard still never sees a repeat inside a pass.
+ */
+const MAX_SEEN = 1_000;
+/** How many of them travel with a request — the schema's own cap. */
+const SEND_SEEN = 500;
+/**
+ * How many just-seen markets survive a roll.
+ *
+ * Rolling the pass makes everything eligible again, and the markets nearest the
+ * roll are the ones the reader was looking at seconds ago. Carrying a handful
+ * across the boundary is what stops the first card of a new pass being the last
+ * card of the old one.
+ */
+const CARRY_ON_ROLL = 12;
 
 /** The server's initial-admission floor (currently immediate for ready ideas). */
 const MIN_CARDS_FOR_IDEA = SUGGESTION.MIN_SESSION_CARDS_VIEWED;
 
 /**
- * A BROWSING SESSION SURVIVES A PAGE LOAD.
+ * A BROWSING PASS OUTLIVES THE TAB.
  *
- * The counters below let the server enforce repeat cadence consistently across
- * a full document load, a market opened from search, or a return from an info
- * page. sessionStorage is exactly the right lifetime: one tab, one visit.
+ * The pass is the reader's position in the catalogue, so it belongs in
+ * localStorage: closing a tab is not finishing a pass, and a fresh tab that
+ * forgot would start handing back the markets the last one just showed.
  */
-const KEY = "feed-session:v1";
+const KEY = "feed-session:v2";
 
 const state = {
   seen: new Set<number>(),
   cardsViewed: 0,
   cardsSinceIdea: Number.MAX_SAFE_INTEGER,
   ideasShown: 0,
+  cycleStartedAt: 0,
 };
 
 let hydrated = false;
+
+function store(): Storage | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
 
 function hydrate(): void {
   if (hydrated || typeof window === "undefined") return;
   hydrated = true;
   try {
-    const raw = window.sessionStorage.getItem(KEY);
-    if (!raw) return;
+    const raw = store()?.getItem(KEY);
+    if (!raw) {
+      // No record at all = the first pass, and it starts now.
+      state.cycleStartedAt = Date.now();
+      return;
+    }
     const p = JSON.parse(raw) as Partial<FeedSessionSnapshot>;
     state.seen = new Set(Array.isArray(p.seenIds) ? p.seenIds : []);
     state.cardsViewed = Number(p.cardsViewed) || 0;
+    state.cycleStartedAt = Number(p.cycleStartedAt) || Date.now();
     state.cardsSinceIdea =
       p.cardsSinceIdea == null || p.cardsSinceIdea >= 10_000
         ? Number.MAX_SAFE_INTEGER
@@ -56,8 +92,10 @@ function hydrate(): void {
     // inside one continuous read, not to hide it forever.
   } catch {
     // A corrupt entry must never cost the reader their feed.
+    state.cycleStartedAt = Date.now();
   }
 }
+
 
 function persist(): void {
   if (typeof window === "undefined") return;
