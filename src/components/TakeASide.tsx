@@ -46,7 +46,9 @@ export function TakeASide({
   const { count, target, progress } = sim.profileProgress;
 
   // Retired at the goal, and stood down while Simulation is running.
-  if (wallet && (sim.profileProgress.complete || sim.active)) return <>{children}</>;
+  // Retired only at the goal. It stays through Simulation too: the progress to
+  // ten is the same journey whether the convictions are simulated or real.
+  if (wallet && sim.profileProgress.complete) return <>{children}</>;
 
   const pct = Math.min(100, progress * 100);
   // Signed out, the same button starts the wallet. Nothing about Simulation can
