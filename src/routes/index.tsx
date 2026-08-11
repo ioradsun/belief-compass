@@ -1822,7 +1822,7 @@ function Feed() {
                 "what is happening across Conviction". Anything that cannot tell
                 those apart belongs in the tape, which is why the tape is passed
                 in rather than owned here. */}
-              {createOpen || ideaDue ? (
+              {createOpen && !ideaDue ? (
                 /* THE RIGHT RAIL WHILE WRITING — a FIXED SPLIT, not a stack.
                    Both panels fill and empty as the writer types; stacked, each
                    arrival shoved the other one down the column. Two halves that
