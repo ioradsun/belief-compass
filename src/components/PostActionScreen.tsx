@@ -95,8 +95,6 @@ export function PostActionScreen({
         {/* MARKET MAKER FIRST. A creator who also backed their question is both,
           and the authorship is the larger fact — this badge is the one place the
           screen refuses to reduce them to a believer. */}
-          and the authorship is the larger fact — this badge is the one place the
-          screen refuses to reduce them to a believer. */}
       {x.identity && (
         <p className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
           {x.identity}
