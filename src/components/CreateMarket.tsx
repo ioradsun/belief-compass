@@ -379,8 +379,23 @@ export function CreateMarket({
         {/* 2 · The conviction statement. */}
         <div>
           <div
-            className="rounded-[14px] border bg-[var(--surface)] transition-colors focus-within:border-[var(--border-strong)]"
-            style={{ borderColor: "var(--border)" }}
+            className="relative rounded-[14px] border bg-[var(--surface)] transition-colors focus-within:border-[var(--border-strong)]"
+            style={{ borderColor: dragging ? "var(--border-strong)" : "var(--border)" }}
+            onDragOver={(e) => {
+              if (!e.dataTransfer.types.includes("Files")) return;
+              e.preventDefault();
+              setDragging(true);
+            }}
+            onDragLeave={(e) => {
+              if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+              setDragging(false);
+            }}
+            onDrop={(e) => {
+              if (!e.dataTransfer.types.includes("Files")) return;
+              e.preventDefault();
+              setDragging(false);
+              takeFile(e.dataTransfer.files?.[0]);
+            }}
           >
             {attachment && !linkOpen && (
               <MediaChip attachment={attachment} onRemove={() => setAttachment(null)} />
@@ -392,26 +407,42 @@ export function CreateMarket({
               rows={3}
               autoFocus
               onChange={(e) => setQuestion(e.target.value)}
+              onPaste={(e) => {
+                // A screenshot pasted into the statement is the same gesture.
+                const f = Array.from(e.clipboardData.files ?? [])[0];
+                if (f) takeFile(f);
+              }}
               placeholder={"Write a statement people can answer Yes or No."}
               className="w-full resize-none bg-transparent px-3 pt-2.5 text-[16px] leading-snug text-[var(--text)] outline-none placeholder:text-[var(--text-muted)]"
             />
-            {/* Inside the field: Add media on the left (only until one is
+            {/* Inside the field: media affordances on the left (only until one is
               attached — a market holds a single media object; the chip's Remove
               is then the control), counter on the right. */}
             <div className="flex items-center justify-between px-3 pb-2">
               {attachment && !linkOpen ? (
                 <span />
               ) : (
-                <AddMedia onPick={() => setLinkOpen((v) => !v)} active={linkOpen} />
+                <span className="flex items-center gap-3">
+                  <AddMedia onPick={() => setLinkOpen((v) => !v)} active={linkOpen} />
+                  <DropImage onPick={takeFile} />
+                </span>
               )}
               <span className="num text-[11px] text-[var(--text-muted)]">
                 {question.length}/{QUESTION_MAX}
               </span>
             </div>
+            {dragging && (
+              <div
+                className="pointer-events-none absolute inset-0 grid place-items-center rounded-[14px] bg-[var(--surface)]/90 text-[12px] font-medium text-[var(--text)]"
+                style={{ border: "1px dashed var(--border-strong)" }}
+              >
+                Drop the image
+              </div>
+            )}
           </div>
           {linkOpen && (
             <EmbedPicker
-              initialUrl={attachment?.media.url ?? ""}
+              initialUrl={attachment?.kind === "embed" ? attachment.media.url : ""}
               onClose={() => {
                 setAttachment(null);
                 setLinkOpen(false);
@@ -422,6 +453,7 @@ export function CreateMarket({
               }}
             />
           )}
+
 
           {/* NO AI FEEDBACK RENDERS IN THE FORM. The old inline "Polish" rewrite
               and the rejection reason both appeared a beat after typing paused and
