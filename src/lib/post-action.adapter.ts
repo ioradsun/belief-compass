@@ -245,7 +245,23 @@ export function usePostActionFacts(
   const { answered, parentCall } = useAnsweredFacts(act.marketId);
 
   const holds = !!act.after && (act.after.yes > 0 || act.after.no > 0);
-  const common = { outgoing, outgoingProgress, capacity, audience } as const;
+  /**
+   * THE MARKET IS THE SEED, and that is the whole of the rotation policy here.
+   *
+   * Two different questions should not read as the same screen, and the same
+   * question must read identically every time it is drawn — including across a
+   * refetch, a remount, and a second device. A market id is stable, carries no
+   * clock, and is already canonical. Nothing else is used, and in particular
+   * nothing that changes between renders is: the reader must never be able to
+   * watch the emotional premise mutate while looking at unchanged state.
+   */
+  const common = {
+    outgoing,
+    outgoingProgress,
+    capacity,
+    audience,
+    copySeed: String(act.marketId),
+  } as const;
 
   if (kind === "create") {
     const input: CreateMarketInput = {

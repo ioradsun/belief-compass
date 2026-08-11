@@ -116,9 +116,13 @@ export function PostActionScreen({
           <p className="text-[12px] font-semibold leading-snug text-[var(--text)]">
             {x.challengeModule.title}
           </p>
-          <p className="mt-0.5 text-[11.5px] leading-snug text-[var(--text-secondary)]">
-            {x.challengeModule.support}
-          </p>
+          {/* SOME FRAMINGS ARE STRONGER ALONE. A one-sentence hook renders as
+              one sentence rather than being padded to fill a slot. */}
+          {x.challengeModule.support && (
+            <p className="mt-0.5 text-[11.5px] leading-snug text-[var(--text-secondary)]">
+              {x.challengeModule.support}
+            </p>
+          )}
           {/* FACES ONLY WHEN THERE ARE FACES. `make_room` has an audience it
               cannot reach yet, so it shows the sentence and the way out. */}
           {x.challengeModule.kind !== "make_room" && groups && groups.length > 0 && (
