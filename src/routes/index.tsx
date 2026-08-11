@@ -16,6 +16,8 @@ import { getOpportunityFeed, getWarmFeed } from "@/lib/opportunity-feed.function
 import {
   feedSession,
   feedSessionVersion,
+  rollFeedCycle,
+
   ideaGateOpen,
   resetFeedSession,
   subscribeFeedSession,
