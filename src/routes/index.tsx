@@ -1280,11 +1280,16 @@ function Feed() {
    * is the real bottom, and the only place `pagedOut` becomes true.
    */
   const refillAtRef = useRef(0);
-  const fetchMore = useCallback(async () => {
-    const at = Date.now();
-    if (at - refillAtRef.current < FEED_REFILL_MS) return;
-    refillAtRef.current = at;
-    const q = queueRef.current;
+  /**
+   * `force` is for the two cases where waiting out the throttle is just a stall
+   * the reader can see: an empty playlist, and an explicit "Load more" tap.
+   */
+  const fetchMore = useCallback(
+    async (force = false) => {
+      const at = Date.now();
+      if (!force && at - refillAtRef.current < FEED_REFILL_MS) return;
+      refillAtRef.current = at;
+      const q = queueRef.current;
     for (let dig = 0; dig <= MAX_DIG; dig += 1) {
       const depth = poolPageRef.current;
       try {
