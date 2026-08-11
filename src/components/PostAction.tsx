@@ -25,6 +25,8 @@ import { putOnTable } from "@/lib/table.functions";
 import { railSideKey, tableKey } from "@/components/YourTable";
 import { audienceKey, useAudience } from "@/components/AudiencePreview";
 import { PostActionScreen } from "@/components/PostActionScreen";
+import { PostPositionBar } from "@/components/PostPositionBar";
+import { ChallengeSheet } from "@/components/ChallengeSheet";
 import { usePostActionFacts, type ConfirmedAction } from "@/lib/post-action.adapter";
 import {
   refusalIsCanonical,
@@ -60,6 +62,14 @@ export interface PostActionProps {
   onAnswer?: () => void;
   /** The personal story, rendered only if the resolver asked for one. */
   reveal?: ReactNode;
+  /**
+   * WHERE THIS MOMENT LIVES.
+   *
+   * `surface` is the full vertical document. `bar` is the SAME moment rendered
+   * into the region the order form just vacated, leaving the market on screen —
+   * a state change at the bottom of the interface rather than a new screen.
+   */
+  variant?: "surface" | "bar";
 }
 
 export function PostAction({
@@ -72,11 +82,16 @@ export function PostAction({
   onSeeChain,
   onAnswer,
   reveal,
+  variant = "surface",
 }: PostActionProps) {
   const qc = useQueryClient();
   const { ensureSession } = useWalletSession();
   const { input, parentCall } = usePostActionFacts(kind, wallet, act, mode);
   const { data: audience } = useAudience(wallet, act.marketId, mode);
+  /** Open only by a press on the bar; closes back to this same market state. */
+  const [sheet, setSheet] = useState(false);
+  /** Scarcity, not a fraction: how many Challenge slots are still free. */
+  const remaining = Math.max(0, input.capacity.total - Math.max(0, input.capacity.active));
 
   /**
    * ONE PRESS'S OUTCOME, and deliberately not part of the experience.
