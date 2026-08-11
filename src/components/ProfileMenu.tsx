@@ -362,11 +362,13 @@ function Modal({
             </svg>
           </button>
         </div>
-        {children}
+        <div className="min-h-0 flex-1">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
+
 
 /** General preferences — kept short and honest: only what actually works today. */
 function SettingsPanel({
