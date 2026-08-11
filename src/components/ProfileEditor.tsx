@@ -1,18 +1,19 @@
 /**
  * Edit your own identity — display name and picture — from inside the account
- * panel. The change is authorised by a single wallet signature, then it wins
+ * panel. The change is authorised by the connected-wallet session, then it wins
  * over whatever we resolved from POV everywhere in the app.
  */
 import { useEffect, useRef, useState } from "react";
-import { useAccount, useSignMessage } from "wagmi";
+import { useAccount } from "wagmi";
+import { useWalletSession } from "@/hooks/useWalletSession";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Camera, Loader2 } from "lucide-react";
 import { getProfileOverride, saveProfileOverride } from "@/lib/profile-edit.functions";
-import { fileToAvatarDataUrl, profileEditMessage, MAX_DISPLAY_NAME } from "@/lib/profile-edit";
+import { fileToAvatarDataUrl, MAX_DISPLAY_NAME } from "@/lib/profile-edit";
 
 export function ProfileEditor({ wallet, fallbackName }: { wallet: string; fallbackName: string }) {
   const { address } = useAccount();
-  const { signMessageAsync } = useSignMessage();
+  const { ensureSession } = useWalletSession();
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -40,16 +41,11 @@ export function ProfileEditor({ wallet, fallbackName }: { wallet: string; fallba
   const save = useMutation({
     mutationFn: async () => {
       if (!address) throw new Error("Connect a wallet first.");
-      const nonce = Math.random().toString(36).slice(2) + Date.now().toString(36);
-      const signature = await signMessageAsync({
-        message: profileEditMessage(wallet, nonce),
-      });
+      const session = await ensureSession();
       return await saveProfileOverride({
         data: {
           wallet,
-          signer: address,
-          nonce,
-          signature,
+          session,
           displayName: name.trim() || null,
           avatarUrl: avatar,
         },
@@ -141,7 +137,7 @@ export function ProfileEditor({ wallet, fallbackName }: { wallet: string; fallba
         className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--text)] px-3 py-2 text-[12px] font-medium text-[var(--bg)] transition-opacity disabled:opacity-40"
       >
         {save.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-        {save.isPending ? "Sign to confirm…" : saved ? "Saved" : "Save profile"}
+        {save.isPending ? "Saving…" : saved ? "Saved" : "Save profile"}
       </button>
 
       {error && <p className="mt-2 text-[11px] text-[var(--danger,#f87171)]">{error}</p>}

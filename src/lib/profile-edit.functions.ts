@@ -29,12 +29,7 @@ export const saveProfileOverride = createServerFn({ method: "POST" })
     z
       .object({
         wallet: addr,
-        signer: addr,
-        nonce: z.string().min(8).max(80),
-        signature: z
-          .string()
-          .regex(/^0x[a-fA-F0-9]+$/)
-          .max(4000),
+        session: z.string().min(10).max(4000),
         displayName: z.string().trim().max(MAX_DISPLAY_NAME).nullable(),
         avatarUrl: z
           .string()
@@ -46,29 +41,14 @@ export const saveProfileOverride = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const wallet = data.wallet.toLowerCase();
-    const signer = data.signer.toLowerCase();
 
-    const { getBaseClient } = await import("@/chain/client");
-    const ok = await getBaseClient().verifyMessage({
-      address: signer as `0x${string}`,
-      message: profileEditMessage(wallet, data.nonce),
-      signature: data.signature as `0x${string}`,
-    });
-    if (!ok) throw new Error("Signature did not match your wallet.");
+    // Editing your own name and picture costs nothing, so it is authorised by
+    // the connected-wallet session rather than a fresh signature prompt.
+    const { assertWalletOwnership } = await import("@/lib/wallet-session.server");
+    await assertWalletOwnership(wallet, data.session);
 
     const { serviceClient } = await import("@/lib/supabase-clients");
     const sb = serviceClient();
-
-    if (signer !== wallet) {
-      const { data: links } = await sb
-        .from("wallet_links")
-        .select("connected_wallet")
-        .eq("connected_wallet", signer)
-        .eq("linked_wallet", wallet)
-        .not("verified_at", "is", null)
-        .limit(1);
-      if (!links?.length) throw new Error("This wallet isn't linked to that profile.");
-    }
 
     const name = data.displayName?.trim() || null;
     if (name && /^0x[a-f0-9]{6,}/i.test(name)) throw new Error("Pick a name, not an address.");

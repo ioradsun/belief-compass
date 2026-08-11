@@ -37,3 +37,19 @@ export const startWalletSession = createServerFn({ method: "POST" })
     const { token, exp } = await mintSessionToken(wallet);
     return { wallet, token, exp };
   });
+
+/**
+ * Connect-only session — no signature.
+ *
+ * Signing is reserved for actions that move money. Everything else (beliefs,
+ * challenges, the House, Simulation) opens a session from the connected wallet
+ * address alone, so a person is never asked to sign for a free action.
+ */
+export const startConnectSession = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => z.object({ wallet: addr }).parse(raw))
+  .handler(async ({ data }) => {
+    const wallet = data.wallet.toLowerCase();
+    const { mintSessionToken } = await import("@/lib/wallet-session.server");
+    const { token, exp } = await mintSessionToken(wallet);
+    return { wallet, token, exp };
+  });
