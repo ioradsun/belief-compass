@@ -55,6 +55,22 @@ export interface CardPerson {
   avatarUrl: string | null;
 }
 
+/**
+ * SOMEBODY WHO PUT THIS QUESTION IN FRONT OF THEIR OWN PEOPLE.
+ *
+ * The card only ever needed the name. A tape row needs two more facts and
+ * neither can be reconstructed downstream: WHEN they did it, because a feed is
+ * chronological and a relay dated by anything else is dated by a guess; and
+ * what THEIR OWN relay reached, because `relayReach` on the branch is the sum
+ * across every relayer, and spending the whole total on one person's row would
+ * credit them with tables two other people opened.
+ */
+export interface CardRelayer extends CardPerson {
+  atMs: number;
+  /** Recipient opportunities THIS person's relays created. Tables, not people. */
+  reach: number;
+}
+
 /** A person who answered, and which way they went at that moment. */
 export interface CardResponder extends CardPerson {
   /** Null on rows stamped before the side was kept. The card prints none. */
@@ -94,7 +110,7 @@ export interface Outgoing {
   /** Newest first. Passers can never appear here — not anonymised, absent. */
   responders: CardResponder[];
   /** Unique people who put this question in front of their OWN people. */
-  relayers: CardPerson[];
+  relayers: CardRelayer[];
   /** Opportunities created by those relays. Tables, not people. */
   relayReach: number;
   closedAtMs: number | null;

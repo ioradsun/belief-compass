@@ -1451,3 +1451,78 @@ deciding, from the audience, that a Tribe or a Rival context is _meaningful_ —
 and `Audience` carries only `formingOnly` today. Per the brief's own rule, that
 belongs in a domain projection first, not in a component or in a copy module
 guessing from group counts.
+
+## T. Wiring the Insider semantics into the tape
+
+§303 landed `semanticEvents` and said plainly that nothing called it. That is
+the shape this codebase keeps having to fix — a correct module production never
+reaches — so it is closed here.
+
+### What the tape could actually say about a Challenge
+
+One thing: somebody answered. `showedUpForMe` → a `showed_up` row, aggregated
+one per market. So a branch that travelled two links and then finished produced
+**one row on the day it started and silence afterwards**, which reads as a
+question nobody picked up — the precise opposite of what happened.
+
+Two families were missing, both named in the brief:
+
+```
+JOHN KEPT IT MOVING              YOUR CHALLENGE IS COMPLETE
+The question is now on 8         8 of 11 showed up.
+more tables.
+```
+
+### `showed_up` stays aggregated, and that is not a compromise
+
+The brief's per-person examples (`CASEY BACKED NO / Answered John's Challenge.`)
+and the existing aggregation ("three rows would be a notification inbox getting
+loudest on your best day") look like a conflict and are not. They are about
+different readers: the aggregated family is **the reader's own market**, where
+three answers is one thing that happened to them. Relays and completions are
+already one per person and one per Challenge, so there is nothing to collapse
+and no rule to break.
+
+`first_believer`, `new_believer` and the position changes stay unwired
+deliberately — the tape's existing trade families already own those sentences,
+and wiring them would create the second owner in the other direction.
+
+### Two facts the projection could not carry
+
+`Outgoing.relayers` was `CardPerson[]`: a name and nothing else. A tape row
+needs two more, and neither can be reconstructed downstream.
+
+**When.** A feed is chronological, and a relay dated by anything other than when
+it happened is dated by a guess. An undated relay is now DROPPED rather than
+stamped with `now` — losing one entry costs one entry; dating it `now` corrupts
+the order of every entry around it.
+
+**Whose reach.** `relayReach` is the sum across every relayer on the branch.
+Spending the whole total on one person's row credits them with tables two other
+people opened. `CardRelayer.reach` is that person's own.
+
+### The selection is a domain module, not a loop in the loader
+
+`lifecycleEvents(cards, ctx)` is pure and takes the canonical
+`ChallengeCardProjection` — the same object the durable card renders. It decides
+WHICH moments deserve a row and WHEN each happened. It counts nothing and writes
+no sentence; `semanticEvent` still owns every word, and a source-grep test fails
+if the loader ever starts composing one again.
+
+### Completion is dated, and a closed market is not evidence of one
+
+`closed_at` when the creator took it down; otherwise the last answer, because a
+Challenge that completed BECAUSE everybody answered has no closure stamp of its
+own — the lifecycle ended, nobody ended it. Zero when nothing proves an ending,
+and zero means do not print.
+
+`marketClosed` is refused outright as a completion signal. It is hardcoded false
+until an indexer supplies it, and:
+
+> **Conviction observes closure; it does not declare it.** A row announcing a
+> completed Challenge on the strength of an unproven closure is that inference
+> wearing a headline.
+
+One consequence worth naming: `EVERYONE SHOWED UP` now has a live path to the
+tape. It was unreachable copy twice over — once because of the card state
+ordering fixed in §302, and once because nothing built a completion row at all.

@@ -324,12 +324,25 @@ function outgoingFor(
    * UNIQUE PEOPLE, not child rows. One person who relays two of my calls in the
    * same market is one person who kept it moving.
    */
-  const relayerWallets = new Set<string>();
+  const byRelayer = new Map<string, { atMs: number; reach: number }>();
   let relayReach = 0;
   for (const c of children) {
     if (Number(c.market_id) !== marketId) continue;
-    relayerWallets.add(String(c.challenger_wallet).toLowerCase());
-    relayReach += childReach.get(Number(c.id)) ?? 0;
+    const w = String(c.challenger_wallet).toLowerCase();
+    const reach = childReach.get(Number(c.id)) ?? 0;
+    relayReach += reach;
+    const at = Date.parse(c.created_at);
+    const held = byRelayer.get(w);
+    /**
+     * ONE PERSON, THEIR LATEST RELAY, THEIR OWN TOTAL. Reach SUMS across their
+     * relays because each opened real tables; the timestamp takes the most
+     * recent because that is when this person last kept it moving. A parse
+     * failure contributes reach without inventing a time.
+     */
+    byRelayer.set(w, {
+      atMs: Math.max(held?.atMs ?? 0, Number.isFinite(at) ? at : 0),
+      reach: (held?.reach ?? 0) + reach,
+    });
   }
 
   return {
@@ -339,7 +352,7 @@ function outgoingFor(
     passed,
     waiting,
     responders: responders.sort((a, b) => b.atMs - a.atMs),
-    relayers: [...relayerWallets].map(personOf),
+    relayers: [...byRelayer].map(([w, v]) => ({ ...personOf(w), atMs: v.atMs, reach: v.reach })),
     relayReach,
     closedAtMs: ch.closed_at ? Date.parse(ch.closed_at) : null,
   };

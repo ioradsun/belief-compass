@@ -31,6 +31,7 @@ const outgoing = (over: Partial<Outgoing> = {}): Outgoing => ({
 });
 
 const person = (name: string) => ({ wallet: `0x${name}`, name, avatarUrl: null });
+const relayer = (name: string, atMs = 1, reach = 0) => ({ ...person(name), atMs, reach });
 
 const projection = (over: Partial<ChallengeCardProjection> = {}): ChallengeCardProjection => {
   const base: Omit<ChallengeCardProjection, "state"> = {
@@ -154,7 +155,7 @@ describe("the Challenge summary reads canonical state", () => {
 
   it("reports a chain moving without recounting it", () => {
     const c = projection({
-      outgoing: outgoing({ showedUp: 1, relayers: [person("casey")], relayReach: 8 }),
+      outgoing: outgoing({ showedUp: 1, relayers: [relayer("casey")], relayReach: 8 }),
     });
     expect(c.state).toBe("chain_moving");
     expect(challengeSummary(c)).toBe("Challenge: casey kept it moving.");
@@ -240,7 +241,7 @@ describe("human activity leads, money does not", () => {
       challenge: projection({ outgoing: outgoing({ showedUp: 2, waiting: 11 }) }),
     });
     const relaying = entry({
-      challenge: projection({ outgoing: outgoing({ showedUp: 1, relayers: [person("c")] }) }),
+      challenge: projection({ outgoing: outgoing({ showedUp: 1, relayers: [relayer("c")] }) }),
     });
     const traded = entry({ challenge: null, latest: { line: "Maya backed YES.", atMs: 1 } });
     const quiet = entry({ challenge: null, latest: null });
@@ -289,7 +290,7 @@ describe("words this page must never use", () => {
           projection(),
           projection({ outgoing: outgoing({ showedUp: 2, passed: 1, waiting: 10 }) }),
           projection({
-            outgoing: outgoing({ relayers: [person("c")], relayReach: 8, showedUp: 1 }),
+            outgoing: outgoing({ relayers: [relayer("c")], relayReach: 8, showedUp: 1 }),
           }),
           projection({ outgoing: outgoing({ reached: 11, showedUp: 11, waiting: 0 }) }),
           projection({ outgoing: outgoing({ reached: 11, showedUp: 0, passed: 11, waiting: 0 }) }),

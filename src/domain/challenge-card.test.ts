@@ -15,6 +15,7 @@ import {
   tablesLine,
   youShowedUpFor,
   type CardPerson,
+  type CardRelayer,
   type CardResponder,
   type CardState,
   type ChallengeCardProjection,
@@ -26,6 +27,12 @@ const person = (name: string): CardPerson => ({
   wallet: `0x${name.toLowerCase()}`,
   name,
   avatarUrl: null,
+});
+
+const relayer = (name: string, atMs = 1, reach = 0): CardRelayer => ({
+  ...person(name),
+  atMs,
+  reach,
 });
 
 const responder = (name: string, side: "YES" | "NO" | null = "NO", atMs = 1): CardResponder => ({
@@ -110,7 +117,7 @@ describe("one card, one state, decided in one place", () => {
         showedUp: 3,
         waiting: 10,
         responders: [responder("Casey")],
-        relayers: [person("Casey")],
+        relayers: [relayer("Casey")],
         relayReach: 8,
       }),
     });
@@ -168,7 +175,7 @@ describe("one card, one state, decided in one place", () => {
       { incoming: incoming() },
       { outgoing: outgoing() },
       { outgoing: outgoing({ showedUp: 2, responders: [responder("Casey")] }) },
-      { outgoing: outgoing({ relayers: [person("Casey")] }) },
+      { outgoing: outgoing({ relayers: [relayer("Casey")] }) },
     ])
       expect(card({ ...over, marketClosed: true }).state).toBe("finished");
   });
@@ -187,7 +194,7 @@ describe("one card, one state, decided in one place", () => {
         null,
         outgoing(),
         outgoing({ showedUp: 2, responders: [responder("Casey")] }),
-        outgoing({ relayers: [person("Casey")] }),
+        outgoing({ relayers: [relayer("Casey")] }),
         outgoing({ waiting: 0, passed: 13 }),
         outgoing({ closedAtMs: 1 }),
       ])
@@ -406,7 +413,7 @@ describe("words this surface must never use", () => {
         null,
         outgoing(),
         outgoing({ showedUp: 3, passed: 1, waiting: 9, responders: [responder("Casey")] }),
-        outgoing({ relayers: [person("Casey")], relayReach: 8, showedUp: 1 }),
+        outgoing({ relayers: [relayer("Casey")], relayReach: 8, showedUp: 1 }),
         outgoing({ reached: 11, showedUp: 11, waiting: 0 }),
         outgoing({ reached: 11, showedUp: 0, passed: 11, waiting: 0 }),
         outgoing({ closedAtMs: 1, reached: 0 }),
