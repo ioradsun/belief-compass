@@ -70,11 +70,7 @@ export function IdeasRail({
       <div className="mb-1.5 shrink-0 text-[11px] font-semibold tracking-wide text-[var(--text-muted)] uppercase">
         Market ideas
       </div>
-      {/* WHAT THIS COLUMN IS FOR, said once. A reader who understands the offer
-          can ignore it deliberately instead of wondering what it is. */}
-      <p className="mb-3 shrink-0 text-[11.5px] leading-snug text-[var(--text-secondary)]">
-        Pick a topic and we&apos;ll draft four questions people actually disagree about.
-      </p>
+
 
       {/* THE PERSONALISED SPARK, when there is one, sits above the topics — it
           knows something about this reader that a topic never will. */}
