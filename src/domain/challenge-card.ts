@@ -232,6 +232,32 @@ export function cardStateFor(p: Omit<ChallengeCardProjection, "state">): CardSta
   return "finished";
 }
 
+/**
+ * WHICH STATES BELONG ON THE CURRENT RAIL — the live social loop, and only it.
+ *
+ * The rail is where a reader ACTS: a question waiting on them, one of theirs that
+ * is still gathering answers, a chain still moving. The two terminal states are
+ * the record of what already happened — `showed_up` is an answer they have
+ * already given, `finished` is a Challenge that has run its course — and both
+ * belong in Past Challenges, not in a column somebody has to keep watching. An
+ * outcome asks for nothing, so badging it beside live requests would turn the
+ * payoff into another chore, which is the exact confusion this split removes.
+ *
+ * ONE PREDICATE, SO THE TWO SURFACES CANNOT DISAGREE. The panel keeps what this
+ * admits; the history keeps the rest. If the boundary lived in two places a card
+ * could show up in both, or in neither.
+ */
+export const LIVE_CARD_STATES: ReadonlySet<CardState> = new Set([
+  "waiting",
+  "branch_live",
+  "people_showing_up",
+  "chain_moving",
+]);
+
+export function isLiveCard(state: CardState): boolean {
+  return LIVE_CARD_STATES.has(state);
+}
+
 /* ── Copy. Baseline only — rotation is a later phase, deliberately. ───────── */
 
 /** "Maya brought you in" / "Maya + 2 others brought you in". */

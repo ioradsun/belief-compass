@@ -1,39 +1,57 @@
 /**
- * SEE ALL — every challenge either of you ever made.
+ * PAST CHALLENGES — the record of what my questions did, told as a story.
  *
- * THE RAIL AND THIS ANSWER DIFFERENT QUESTIONS, and keeping them apart is why the
- * rail can stay short. The rail is "who is waiting on me, and what just happened":
- * a handful of rows that go quiet after a week, because an outcome deserves to be
- * in the way for a while and then stop being in the way. This is "what have we
- * actually done" — complete, chronological, and reached only on purpose.
+ * THE RAIL AND THIS ANSWER DIFFERENT QUESTIONS, and keeping them apart is the
+ * whole point. The rail is the live loop — who is waiting on me, what of mine is
+ * still gathering answers — and it stays short because a finished Challenge stops
+ * being in the way. This is "what became of the questions I put up": complete,
+ * grouped by the EVENT rather than the recipient, and reached only on purpose.
  *
- * IT IS NOT A FEED, AND THE ABSENCES ARE THE PROOF. No scoring, no ranking, no
- * significance, no admission rule, no "interesting" — the order is time and the
- * contents are everything. The moment something here decided what was worth
- * showing, this would be the Insider tape with a different heading, and Insider
- * already exists one tab across answering "what is happening" for everybody.
+ * ONE EVENT, ONE CARD — THE ANTI-INBOX RULE. A question I put to thirty people is
+ * one thing I did, and it reads as one card: my call, how many showed up, who
+ * they were, and what their answers revealed. The old page rendered a row per
+ * recipient — "WAITING ON A · WAITING ON B …" thirty times over — which turned a
+ * single act into a log and destroyed every scent of hierarchy. The meaningful
+ * number is six challenges, never a hundred and two call rows.
  *
- * EVERY ROW IS A SENTENCE ABOUT PEOPLE. "Maya showed up", "You showed up",
- * "Waiting on Alex" — never a status, never a state name, never a challenge id.
- * The vocabulary is `historyRows`, the same one the profile's "Between you"
- * section renders, so one interaction cannot be described two ways.
+ * SHOWING UP IS THE HEADLINE AND IT IS SIDE-BLIND; agreement is the reveal beneath
+ * it, in the product's warm register. Nobody is named for not showing up — a
+ * responder took a public position and is shown, a passer is counted and never
+ * named. All of that lives in `domain/challenge-past`; this file only renders it.
+ *
+ * IT IS NOT A FEED. No scoring, no ranking, no "interesting enough" — the order is
+ * time and the contents are everything I did. The read costs the rail nothing
+ * until somebody opens the sheet.
  */
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Sheet } from "@/components/Sheet";
-import { getChallengeHistory } from "@/lib/challenge.functions";
-import { groupHistory, historyRows, type HistoryRow } from "@/domain/dependability";
+import { PersonAvatar } from "@/components/PersonAvatar";
+import { getChallengePast } from "@/lib/challenge.functions";
+import {
+  completionSupport,
+  discoveryLine,
+  groupPast,
+  otherSide,
+  pastOverview,
+  showedUpForLine,
+  showedUpLine,
+  statusLabel,
+  tribeLine,
+  type PastChallenge,
+  type PastResponder,
+  type ShowedUpEntry,
+} from "@/domain/challenge-past";
 
-export const historyKey = (wallet?: string) => ["challenge-history", wallet ?? null] as const;
+export const pastKey = (wallet?: string) => ["challenge-past", wallet ?? null] as const;
 
 /**
  * The control and the sheet, together, because they are one affordance.
  *
- * IT SAYS THE COUNT BEFORE IT IS PRESSED. "See all" alone asks the reader to
- * gamble a tap on whether there is anything behind it; "See all 41" is a fact that
- * makes the decision for them. The number is what the server actually read, never
- * an estimate — and the query only runs once the sheet is open, so an unread
- * history costs the rail nothing.
+ * IT SAYS THE COUNT BEFORE IT IS PRESSED. "Challenge History" alone asks the
+ * reader to gamble a tap on whether anything is behind it; the sheet's title says
+ * the number of questions they have actually put up. The query only runs once the
+ * sheet is open, so an unread history costs the rail nothing.
  */
 export function ChallengeHistory({
   wallet,
@@ -46,28 +64,31 @@ export function ChallengeHistory({
 }) {
   const [open, setOpen] = useState(false);
   const { data, isError } = useQuery({
-    queryKey: historyKey(wallet),
-    queryFn: () => getChallengeHistory({ data: { wallet: wallet ?? null } }),
+    queryKey: pastKey(wallet),
+    queryFn: () => getChallengePast({ data: { wallet: wallet ?? null } }),
     enabled: !!wallet && open,
     staleTime: 60_000,
   });
 
-  const groups = useMemo(
-    () => groupHistory(historyRows(data?.entries ?? []), Date.now()),
-    [data?.entries],
-  );
-  const total = data?.entries.length ?? 0;
+  const items = data?.items ?? [];
+  const eras = useMemo(() => groupPast(items, Date.now()), [items]);
+  const overview = useMemo(() => pastOverview(items), [items]);
+  const showedUp = data?.showedUp ?? [];
+  const nothing = items.length === 0 && showedUp.length === 0;
 
   if (!wallet) return null;
 
   return (
     <>
+      {/* THE WAY OUT OF THE RAIL, AND THE ONLY ONE. Everything above it is the
+          live loop and goes quiet; this is where the whole record lives. It sits
+          last because it is the least urgent thing here. */}
       <button
         type="button"
         onClick={() => setOpen(true)}
         className="mt-1 block text-[11.5px] text-[var(--text-secondary)] underline-offset-2 transition-colors hover:text-[var(--text)] hover:underline"
       >
-        See all →
+        Challenge History →
       </button>
 
       {open && (
@@ -75,19 +96,19 @@ export function ChallengeHistory({
           onClose={() => setOpen(false)}
           title={
             <>
-              Challenges
-              {total > 0 && (
+              Past Challenges
+              {items.length > 0 && (
                 <>
                   {" "}
-                  · <span className="num text-[var(--text-muted)]">{total}</span>
+                  · <span className="num text-[var(--text-muted)]">{items.length}</span>
                 </>
               )}
             </>
           }
         >
-          {/* A FAILED READ IS NOT AN EMPTY HISTORY. The confident zero this
-              codebase keeps paying for, and here it would tell somebody with a
-              year of relationships that they have never challenged anybody. */}
+          {/* A FAILED READ IS NOT AN EMPTY HISTORY. The confident zero would tell
+              somebody with a year of relationships that they never challenged
+              anybody. */}
           {isError ? (
             <p className="py-6 text-[12px] leading-snug text-[var(--text-muted)]">
               Could not load your history. This is a fault on our side, not an empty one — try again
@@ -95,40 +116,31 @@ export function ChallengeHistory({
             </p>
           ) : data == null ? (
             <p className="py-6 text-[12px] text-[var(--text-muted)]">Reading your history…</p>
-          ) : groups.length === 0 ? (
-            /* NOTHING HAS HAPPENED YET, which is a correct state and by far the
-               most common one — measured platform-wide, most wallets have no
-               Tribe at all. It says so without implying anything is broken and
-               without a zero. */
-            <p className="py-6 text-[12px] leading-snug text-[var(--text-muted)]">
-              Nothing between you and anybody yet. Put a question on the table and this fills in.
-            </p>
+          ) : nothing ? (
+            <EmptyState onExplore={() => setOpen(false)} />
           ) : (
-            <div className="space-y-5 pb-2">
-              {groups.map((g) => (
-                <section key={g.key}>
-                  <h4 className="mb-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
-                    {g.label}
+            <div className="space-y-6 pb-2">
+              {items.length > 0 && <Overview overview={overview} />}
+
+              {eras.map((era) => (
+                <section key={era.key}>
+                  <h4 className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
+                    {era.label}
                   </h4>
-                  <ul>
-                    {g.rows.map((r) => (
-                      <HistoryRowLine
-                        key={`${r.direction}-${r.marketId}-${r.who ?? ""}`}
-                        row={r}
-                        onSelect={onSelect}
-                        onSelectPerson={
-                          onSelectPerson && r.who && data.people[r.who]
-                            ? () => onSelectPerson(data.people[r.who as string])
-                            : undefined
-                        }
-                      />
+                  <div className="space-y-2.5">
+                    {era.items.map((pc) => (
+                      <PastCard key={pc.marketId} pc={pc} onSelect={onSelect} />
                     ))}
-                  </ul>
+                  </div>
                 </section>
               ))}
+
+              {showedUp.length > 0 && (
+                <ShowedUpSection rows={showedUp} onSelect={onSelect} onSelectPerson={onSelectPerson} />
+              )}
+
               {/* SAID OUT LOUD. A history that stopped at its read bound without
-                  mentioning it would be claiming completeness it does not have,
-                  on the one surface whose whole promise is completeness. */}
+                  mentioning it would claim a completeness it does not have. */}
               {data.truncated && (
                 <p className="text-[11px] leading-snug text-[var(--text-muted)]">
                   Showing your most recent challenges. There are older ones behind these.
@@ -142,68 +154,267 @@ export function ChallengeHistory({
   );
 }
 
-/** One fixed column for the label, so sixty rows read as a column and not a list. */
-const LABEL =
-  "w-[124px] shrink-0 truncate text-left text-[10px] font-semibold uppercase tracking-wide";
+/**
+ * ORIENTATION, NOT A DASHBOARD. Four numbers that help a reader understand their
+ * own history — how many questions they put up, how many answers those drew, and
+ * the two shares that say something about their people. The rates are absent
+ * rather than zeroed when there is nothing to divide.
+ */
+function Overview({ overview }: { overview: ReturnType<typeof pastOverview> }) {
+  const stats: { value: string; label: string }[] = [
+    { value: String(overview.challenges), label: overview.challenges === 1 ? "challenge" : "challenges" },
+    { value: String(overview.responses), label: overview.responses === 1 ? "response" : "responses" },
+  ];
+  if (overview.showedUpPct != null) stats.push({ value: `${overview.showedUpPct}%`, label: "showed up" });
+  if (overview.agreedPct != null)
+    stats.push({ value: `${overview.agreedPct}%`, label: "agreed with you" });
+
+  return (
+    <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
+      <h3 className="text-[12px] font-semibold text-[var(--text)]">Your challenge history</h3>
+      <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1.5">
+        {stats.map((s) => (
+          <div key={s.label} className="flex items-baseline gap-1.5">
+            <span className="num text-[14px] font-semibold text-[var(--text)]">{s.value}</span>
+            <span className="text-[11px] text-[var(--text-muted)]">{s.label}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
 
 /**
- * ONE ROW: WHAT HAPPENED, WHO WITH, WHICH QUESTION.
+ * ONE HISTORICAL ITEM: WHAT I BELIEVED, WHO SHOWED UP, WHAT WE DISCOVERED.
  *
- * The label leads because it is the only part that differs between two rows about
- * the same market, and the question follows because it is what the reader is most
- * likely to want to open. Nothing states a date: the group heading above already
- * did, once, for every row under it.
+ * The reader should understand what happened without opening it. Opening reveals
+ * the people, grouped by which way they went — the one place individual names
+ * become useful, and the one place the "still out" number stays a number.
  */
-function HistoryRowLine({
-  row,
+function PastCard({ pc, onSelect }: { pc: PastChallenge; onSelect: (marketId: number) => void }) {
+  const [expanded, setExpanded] = useState(false);
+  const showed = showedUpLine(pc);
+  const discovery = discoveryLine(pc);
+  const tribe = tribeLine(pc);
+  const support = completionSupport(pc);
+
+  return (
+    <article className="rounded-xl border border-[var(--border)] p-3">
+      <div className="flex items-start justify-between gap-3">
+        {/* THE QUESTION — a market to open, not just a label. */}
+        <button
+          type="button"
+          onClick={() => onSelect(pc.marketId)}
+          className="min-w-0 flex-1 text-left text-[13px] font-medium leading-snug text-[var(--text)] underline-offset-2 hover:underline"
+        >
+          {pc.title}
+        </button>
+        <span className="mt-0.5 shrink-0 text-[10px] uppercase tracking-wide text-[var(--text-muted)]">
+          {statusLabel(pc)}
+        </span>
+      </div>
+
+      {/* WHAT I BACKED — the belief this Challenge was a test of. */}
+      {pc.yourSide && (
+        <p className="mt-1 text-[11.5px] text-[var(--text-secondary)]">
+          Your call: <span className="font-semibold text-[var(--text)]">{pc.yourSide}</span>
+        </p>
+      )}
+
+      {/* THE HEADLINE FACT — side-blind, and the faces that make it an invitation. */}
+      {showed && <p className="num mt-1.5 text-[12px] text-[var(--text)]">{showed}</p>}
+      {pc.responders.length > 0 && (
+        <div className="mt-2">
+          <ResponderFaces people={pc.responders} />
+        </div>
+      )}
+
+      {/* THE REVEAL, then the Tribe within it. */}
+      {discovery && <p className="mt-2 text-[12px] leading-snug text-[var(--text-secondary)]">{discovery}</p>}
+      {tribe && <p className="num mt-0.5 text-[11.5px] text-[var(--text-muted)]">{tribe}</p>}
+      {support && <p className="mt-1.5 text-[12px] leading-snug text-[var(--text-muted)]">{support}</p>}
+
+      {/* COLLAPSE THE RECIPIENTS. Individual names belong inside the detail, not in
+          the scannable feed above it. */}
+      {pc.responders.length > 0 && (
+        <>
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            aria-expanded={expanded}
+            className="mt-2 text-[11.5px] text-[var(--text-secondary)] underline-offset-2 hover:text-[var(--text)] hover:underline"
+          >
+            {expanded ? "Hide results" : "View results →"}
+          </button>
+          {expanded && <ResultsDetail pc={pc} />}
+        </>
+      )}
+    </article>
+  );
+}
+
+/** A compact overlapping avatar row for the people who showed up. */
+function ResponderFaces({ people, max = 6 }: { people: readonly PastResponder[]; max?: number }) {
+  const shown = people.slice(0, max);
+  const overflow = Math.max(0, people.length - max);
+  return (
+    <div className="flex flex-wrap items-center gap-y-1">
+      <div className="flex -space-x-1.5">
+        {shown.map((p) => (
+          <PersonAvatar
+            key={p.wallet}
+            wallet={p.wallet}
+            name={p.name}
+            avatarUrl={p.avatarUrl}
+            size={24}
+            className="ring-1 ring-[var(--bg)]"
+          />
+        ))}
+      </div>
+      {overflow > 0 && (
+        <span className="ml-2 text-[11px] text-[var(--text-muted)]">+{overflow}</span>
+      )}
+    </div>
+  );
+}
+
+/**
+ * INSIDE THE ITEM — the people, grouped by which way they went.
+ *
+ * "With you" and "went the other way" both name people, because both showed up
+ * and both took a public position. "Still out" is a COUNT and only a count:
+ * somebody who never answered is not a decision anybody made, and naming them
+ * would be the ledger of who did not turn up this product refuses to keep.
+ */
+function ResultsDetail({ pc }: { pc: PastChallenge }) {
+  const stillOut = pc.waiting + pc.passed;
+  let groups: { label: string; people: PastResponder[] }[];
+
+  if (pc.yourSide) {
+    const away = otherSide(pc.yourSide);
+    const withYou = pc.responders.filter((r) => r.side === pc.yourSide);
+    const other = pc.responders.filter((r) => r.side === away);
+    const noSide = pc.responders.filter((r) => r.side == null);
+    groups = [
+      { label: "With you", people: withYou },
+      { label: "Went the other way", people: other },
+      { label: "Showed up", people: noSide },
+    ];
+  } else {
+    // No side of my own — group by what they took, with no agreement claim.
+    groups = [
+      { label: "Backed YES", people: pc.responders.filter((r) => r.side === "YES") },
+      { label: "Backed NO", people: pc.responders.filter((r) => r.side === "NO") },
+      { label: "Showed up", people: pc.responders.filter((r) => r.side == null) },
+    ];
+  }
+
+  return (
+    <div className="mt-2.5 space-y-3 border-t border-[var(--border)] pt-2.5">
+      {groups
+        .filter((g) => g.people.length > 0)
+        .map((g) => (
+          <div key={g.label}>
+            <p className="text-[11px] font-semibold text-[var(--text-secondary)]">
+              {g.label} · <span className="num text-[var(--text-muted)]">{g.people.length}</span>
+            </p>
+            <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1.5">
+              {g.people.map((p) => (
+                <span key={p.wallet} className="flex items-center gap-1.5">
+                  <PersonAvatar wallet={p.wallet} name={p.name} avatarUrl={p.avatarUrl} size={20} />
+                  <span className="text-[11.5px] text-[var(--text)]">{p.name}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+        ))}
+
+      {/* NOT NAMED, EVER. A pass is a choice about a question, and silence is not a
+          choice at all — both are counted here and neither is a person on a list. */}
+      {stillOut > 0 && (
+        <p className="text-[11px] text-[var(--text-muted)]">
+          <span className="num">{stillOut}</span> {stillOut === 1 ? "hasn't" : "haven't"} shown up
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * WHERE YOU SHOWED UP — the reciprocal, kept compact on purpose.
+ *
+ * This page's spine is the challenges I made; the ones I answered for other people
+ * are one line each, so the record stays complete without competing with the
+ * events the summary counts.
+ */
+function ShowedUpSection({
+  rows,
   onSelect,
   onSelectPerson,
 }: {
-  row: HistoryRow;
+  rows: readonly ShowedUpEntry[];
   onSelect: (marketId: number) => void;
-  onSelectPerson?: () => void;
+  onSelectPerson?: (personWallet: string) => void;
 }) {
-  // WAITING IS QUIETER THAN WHAT HAPPENED. Somebody turning up is the fact worth
-  // reading; a question still open is context. Same tokens the profile's own
-  // history uses, so one row cannot look different on two screens.
-  const waiting = row.direction === "waiting_on_them" || row.direction === "waiting_on_you";
   return (
-    <li className="border-b border-[var(--border)] last:border-b-0">
-      <div className="flex items-baseline gap-3 py-2">
-        {/* NOT ITS OWN BUTTON INSIDE ANOTHER ONE. The person and the question are
-            two destinations, so they are two siblings rather than nested
-            controls — a button inside a button is invalid markup that breaks
-            hydration.
+    <section>
+      <h4 className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
+        Where you showed up
+      </h4>
+      <ul>
+        {rows.map((r) => (
+          <li key={r.marketId} className="border-b border-[var(--border)] py-2 last:border-b-0">
+            <div className="flex items-baseline gap-2">
+              {/* The person and the question are two destinations, so two siblings
+                  rather than nested controls — a button in a button breaks
+                  hydration. Without a person handler the name is plain text. */}
+              {onSelectPerson ? (
+                <button
+                  type="button"
+                  onClick={() => onSelectPerson(r.wallet)}
+                  className="shrink-0 text-[11.5px] text-[var(--text-secondary)] transition-colors hover:text-[var(--text)]"
+                >
+                  {showedUpForLine(r)}
+                </button>
+              ) : (
+                <span className="shrink-0 text-[11.5px] text-[var(--text-secondary)]">
+                  {showedUpForLine(r)}
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={() => onSelect(r.marketId)}
+                className="min-w-0 flex-1 truncate text-left text-[12px] text-[var(--text)] transition-colors hover:text-[var(--text-secondary)]"
+              >
+                {r.title}
+              </button>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
 
-            AND NOT A DISABLED BUTTON EITHER, when there is nowhere to go. A
-            control that cannot be used is still announced as a control, so a
-            screen reader is told about an action that does not exist. Without a
-            destination this is just text, and it renders as text. */}
-        {onSelectPerson ? (
-          <button
-            type="button"
-            onClick={onSelectPerson}
-            className={`${LABEL} transition-colors hover:text-[var(--text)]`}
-            style={{ color: waiting ? "var(--text-muted)" : "var(--text-secondary)" }}
-          >
-            {row.label}
-          </button>
-        ) : (
-          <span
-            className={LABEL}
-            style={{ color: waiting ? "var(--text-muted)" : "var(--text-secondary)" }}
-          >
-            {row.label}
-          </span>
-        )}
-        <button
-          type="button"
-          onClick={() => onSelect(row.marketId)}
-          className="min-w-0 flex-1 truncate text-left text-[12px] text-[var(--text)] transition-colors hover:text-[var(--text-secondary)]"
-        >
-          {row.title}
-        </button>
-      </div>
-    </li>
+/**
+ * A NEW READER SHOULD NEVER SEE AN EMPTY ADMINISTRATIVE PAGE. It says what will
+ * fill this in and points at the one thing that starts it — a market to take a
+ * side in. Closing the sheet returns to exactly that.
+ */
+function EmptyState({ onExplore }: { onExplore: () => void }) {
+  return (
+    <div className="py-8">
+      <p className="text-[13px] font-medium text-[var(--text)]">No past challenges yet.</p>
+      <p className="mt-1 text-[12px] leading-snug text-[var(--text-muted)]">
+        When your challenges finish, you&apos;ll see what your people thought here.
+      </p>
+      <button
+        type="button"
+        onClick={onExplore}
+        className="mt-3 text-[12px] font-medium text-[var(--text)] underline underline-offset-2"
+      >
+        Explore markets →
+      </button>
+    </div>
   );
 }

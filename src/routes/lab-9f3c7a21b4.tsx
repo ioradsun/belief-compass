@@ -66,7 +66,7 @@ import {
   type CallRelationAtTime,
 } from "@/domain/audience";
 import { railSideKey, tableKey } from "@/components/YourTable";
-import { historyKey } from "@/components/ChallengeHistory";
+import { pastKey } from "@/components/ChallengeHistory";
 import { networkQO } from "@/lib/network-query";
 import type { NetworkResponse } from "@/lib/dna.functions";
 
@@ -510,13 +510,13 @@ function seed(world: World, side: "challenged" | "yours"): QueryClient {
    * sheet renders its real empty state instead of the lab's "no fixture" error,
    * which would read as a bug in the sheet rather than a fact about the scenario.
    */
-  qc.setQueryData(historyKey(ME), { entries: [], people: {}, truncated: false });
+  qc.setQueryData(pastKey(ME), { items: [], showedUp: [], truncated: false });
 
   // The fourth person. Unlocked, connected, and reached by none of it.
   qc.setQueryData(tableKey(BYSTANDER), []);
   qc.setQueryData(["challenges", BYSTANDER], []);
   qc.setQueryData(networkQO(BYSTANDER).queryKey, UNLOCKED);
-  qc.setQueryData(historyKey(BYSTANDER), { entries: [], people: {}, truncated: false });
+  qc.setQueryData(pastKey(BYSTANDER), { items: [], showedUp: [], truncated: false });
 
   return qc;
 }
