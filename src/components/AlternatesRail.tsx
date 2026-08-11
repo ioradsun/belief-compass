@@ -46,18 +46,30 @@ export function AlternatesRail() {
     .filter((a) => a.length > 0 && a.toLowerCase() !== q.toLowerCase())
     .slice(0, 3);
 
-  // Nothing to say yet. While the first request is in flight for a real draft,
-  // a single quiet line holds the reader's expectation without the column
-  // flashing empty-then-full — but it never reserves space when idle.
-  if (!enabled) return null;
-  if (alternates.length === 0) {
-    return isFetching ? (
+  // EVERY STAGE IS NARRATED. The heading is permanent so the writer learns the
+  // column exists before it has anything to say, and the line beneath it says
+  // exactly which stage we are in: waiting on words, thinking, or empty-handed.
+  if (!enabled) {
+    return (
       <div>
         <RailHeading />
-        <p className="text-[11.5px] leading-snug text-[var(--text-muted)]">Finding other angles…</p>
+        <p className="text-[11.5px] leading-snug text-[var(--text-muted)]">
+          Write your question and we&apos;ll offer sharper ways to ask it.
+        </p>
       </div>
-    ) : null;
+    );
   }
+  if (alternates.length === 0) {
+    return (
+      <div>
+        <RailHeading />
+        <p className="text-[11.5px] leading-snug text-[var(--text-muted)]">
+          {isFetching ? "Finding other angles…" : "Your wording is already the sharpest we have."}
+        </p>
+      </div>
+    );
+  }
+
 
   return (
     <div>
