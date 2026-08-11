@@ -18,9 +18,29 @@ const code = (p: string) =>
  * CMS instead of a conviction.
  */
 describe("the create surface tells one story, and the rails follow it", () => {
-  it("shows a spark in the right rail while writing, not a recruiting desk", () => {
+  it("shows a spark while writing, not a recruiting desk", () => {
+    /**
+     * THE SPARK MOVED SIDES, AND THE INVARIANT DID NOT. It used to sit in the
+     * right rail; the composer now puts `IdeasRail` on the LEFT — "the everyday
+     * rail steps aside so nothing under the composer shifts while the AI thinks"
+     * — and gives the right to alternates and markets already being debated.
+     *
+     * What this test protects is unchanged and is the second assertion: while a
+     * question is being written, NEITHER rail recruits. Pinning the old side
+     * would have made a deliberate layout decision look like a regression, which
+     * is exactly what it did until this was rewritten.
+     */
     const route = code("src/routes/index.tsx");
     expect(route).toMatch(/createOpen \? \([\s\S]{0,400}?<IdeasRail/);
+    /**
+     * THE SPARK MOVED SIDES AND THE INVARIANT DID NOT. What this protects is not
+     * which rail holds the spark — that changed deliberately — but that while a
+     * question is being written, NEITHER rail recruits.
+     */
+    const composing = route.slice(route.indexOf("createOpen || ideaDue ? ("));
+    const rail = composing.slice(0, composing.indexOf(") : ("));
+    for (const recruiting of ["callReach", "AudiencePreview", "PutOnTable", "Challenge all"])
+      expect(rail, recruiting).not.toContain(recruiting);
   });
 
   it("keeps Challenge out of the composer entirely", () => {
@@ -63,7 +83,6 @@ describe("the idea rail never costs the writer a sentence", () => {
     expect(c).not.toMatch(/Tap a topic above to see ideas\./);
     expect(c).toMatch(/questions…/);
   });
-
 });
 
 describe("category is the system's business, not the creator's", () => {
@@ -108,13 +127,23 @@ describe("the centre stops selling and asks one thing", () => {
   });
 
   it("states the earn once, in the title, and nowhere after", () => {
+    /**
+     * THE NUMBER CHANGED, THE RULE DID NOT. The creator's cut is 1% now, not
+     * 4.5%, and this assertion read as a broken test for several merges because
+     * it pinned the FIGURE rather than the PLACEMENT.
+     *
+     * What it protects is where the claim appears: with the act, once. A fee
+     * repeated after publish turns a completed decision back into a pitch.
+     */
     // The fee is what the act is worth, so it sits with the act. The post-publish
     // moment says one fact — the market is live — and stops.
     expect(code("src/components/CreateMarket.tsx")).toMatch(/Earn 1% on all trading/);
+    // A bare percentage regex would catch `color-mix(... 40%)`, so the post-publish
+    // check looks for the CLAIM rather than the character: an earn, a fee, a cut.
+    for (const f of ["src/domain/post-action.ts", "src/components/PostActionScreen.tsx"])
+      expect(code(f), f).not.toMatch(/\bEarn\b|\bfee\b|\bcut\b|on all trading/i);
     // The post-publish moment is `resolvePostAction`'s create branch now, and it
     // says one fact — the market is live — with no fee repeated after the act.
-    expect(code("src/domain/post-action.ts")).not.toMatch(/4\.5%/);
-    expect(code("src/components/PostActionScreen.tsx")).not.toMatch(/4\.5%/);
   });
 
   it("keeps AI opinion out of the form entirely", () => {
@@ -122,6 +151,12 @@ describe("the centre stops selling and asks one thing", () => {
     // to the right rail so nothing the AI thinks can shift a field.
     const c = code("src/components/CreateMarket.tsx");
     expect(c).not.toMatch(/AI-checked/);
+    /**
+     * AND "POLISH" WENT WITH IT — the form stopped rendering AI feedback
+     * altogether, which is a larger version of the decision that removed the
+     * badge rather than a reversal of it. Scoped to the RENDERED element so a
+     * comment explaining the removal cannot fail the test that asserts it.
+     */
     expect(c).not.toMatch(/>\s*Polish\s*</);
   });
 
@@ -130,6 +165,8 @@ describe("the centre stops selling and asks one thing", () => {
     // button is the one place a reader is deciding rather than being read to.
     const c = code("src/components/CreateMarket.tsx");
     expect(c).not.toMatch(/pov\.co|Exclusive/);
+    // Terms went for the same reason as the positioning copy, and stay reachable
+    // from the app menu. Element-scoped, like Polish above.
     expect(c).not.toMatch(/>\s*Terms/);
   });
 
