@@ -652,8 +652,10 @@ export async function buildOpportunityFeed(
     idea: ideaResult.idea,
     // A ranking is taken as given; a blend is sequenced. See sequence.ts.
     preserveOrder: lens !== "for_you",
-    // Spend the catalogue before repeating any of it — see `allowResurface`.
-    allowResurface: input.allowResurface === true,
+    // Repeats never enter a pass. The way back is rolling the pass — see
+    // `cycleStartedAt`.
+    allowResurface: false,
+
     ...(input.limit ? { limit: input.limit } : { limit: SEQUENCE.DEFAULT_LIMIT }),
   });
 
