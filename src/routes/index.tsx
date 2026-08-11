@@ -1502,9 +1502,6 @@ function Feed() {
             /* WRITING A MARKET — the everyday rail steps aside so nothing under
                the composer shifts while the AI thinks. Left is the spark. */
             <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-              <div className="mb-3 shrink-0 text-[11px] font-semibold tracking-wide text-[var(--text-muted)] uppercase">
-                Market Ideas
-              </div>
               <IdeasRail
                 suggestion={ideaDue ? null : houseIdea.suggestion}
                 onUse={() => acceptIdea(false)}
