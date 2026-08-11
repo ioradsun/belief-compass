@@ -46,22 +46,35 @@ export function AlternatesRail() {
     .filter((a) => a.length > 0 && a.toLowerCase() !== q.toLowerCase())
     .slice(0, 3);
 
-  // Nothing to say yet. While the first request is in flight for a real draft,
-  // a single quiet line holds the reader's expectation without the column
-  // flashing empty-then-full — but it never reserves space when idle.
-  if (!enabled) return null;
-  if (alternates.length === 0) {
-    return isFetching ? (
+  // THE HEADING IS PERMANENT; THE BODY REPORTS THE STAGE. Hiding the panel
+  // until it had rewrites meant a column that appeared and disappeared under a
+  // reader's hand, and left them unable to learn what lives there. It now always
+  // says which of the three states it is in: waiting on words, thinking, or done.
+  if (!enabled)
+    return (
       <div>
         <RailHeading />
-        <p className="text-[11.5px] leading-snug text-[var(--text-muted)]">Finding other angles…</p>
+        <p className="text-[11.5px] leading-snug text-[var(--text-muted)]">
+          Write your question and we&apos;ll offer sharper ways to ask it.
+        </p>
       </div>
-    ) : null;
-  }
+    );
+  if (alternates.length === 0)
+    return (
+      <div>
+        <RailHeading />
+        <p className="text-[11.5px] leading-snug text-[var(--text-muted)]">
+          {isFetching ? "Finding other angles…" : "Nothing better than your own wording."}
+        </p>
+      </div>
+    );
 
   return (
     <div>
       <RailHeading />
+      <p className="mb-2 text-[11.5px] leading-snug text-[var(--text-muted)]">
+        Tap one to swap it into your question.
+      </p>
       <div className="space-y-2">
         {alternates.map((alt) => (
           <button

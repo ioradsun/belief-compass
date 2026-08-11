@@ -73,7 +73,7 @@ export function SimilarMarkets({
   // input for the session and React Query cancels/replaces stale fetches. No
   // second retrieval path — this is the same server function the right rail
   // called, moved rather than reimplemented.
-  const { data } = useQuery({
+  const { data, isFetching } = useQuery({
     queryKey: ["market-suggestions", question.toLowerCase(), probe?.sha256, probe?.linkUrl],
     queryFn: () =>
       suggestExistingMarkets({
@@ -83,31 +83,30 @@ export function SimilarMarkets({
     staleTime: 5 * 60_000,
   });
 
-  // QUIET WHEN NOTHING MATCHES, and quiet is the honest answer most of the time.
-  // A panel that renders "no similar markets" on every keystroke would train the
-  // reader to stop looking at the one time it has something to say.
-  if (!enabled || !data?.length) return null;
+  // THE HEADING STAYS; THE BODY SAYS WHERE THE SEARCH IS. This used to render
+  // nothing until it had a hit, so a creator never knew whether the app had
+  // checked for an existing debate or simply wasn't looking. The states are:
+  // nothing to search on yet, searching, searched and clear, or matches below.
+  if (!enabled || !data?.length)
+    return (
+      <section className="mb-4 shrink-0">
+        <SimilarHeading />
+        <p className="text-[11.5px] leading-snug text-[var(--text-muted)]">
+          {!enabled
+            ? "We'll check whether this debate already exists as you write."
+            : isFetching
+              ? "Searching existing markets…"
+              : "No one is asking this yet — it's yours to start."}
+        </p>
+      </section>
+    );
 
   return (
     <section className="mb-4 shrink-0">
-      <div className="mb-1.5">
-        <div className="flex items-center justify-between">
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-            Already being debated
-          </span>
-          {/* Kept from the right-rail version: consolidation is advice, and a
-              creator who has decided must be able to make it stop. */}
-          <button
-            type="button"
-            onClick={dismissSuggestions}
-            aria-label="Hide similar markets"
-            className="px-1 text-[13px] leading-none text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
-          >
-            ×
-          </button>
-        </div>
-
-      </div>
+      <SimilarHeading />
+      <p className="mb-2 text-[11.5px] leading-snug text-[var(--text-muted)]">
+        Close to what you're writing. Join one instead of splitting the room.
+      </p>
 
       <ul className="space-y-2">
         {data.map((m) => {
@@ -196,5 +195,26 @@ export function SimilarMarkets({
         })}
       </ul>
     </section>
+  );
+}
+
+/** One heading for every state of the panel, dismiss included. */
+function SimilarHeading() {
+  return (
+    <div className="mb-1.5 flex items-center justify-between">
+      <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+        Already being debated
+      </span>
+      {/* Consolidation is advice, and a creator who has decided must be able to
+          make it stop. */}
+      <button
+        type="button"
+        onClick={dismissSuggestions}
+        aria-label="Hide similar markets"
+        className="px-1 text-[13px] leading-none text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
+      >
+        ×
+      </button>
+    </div>
   );
 }
