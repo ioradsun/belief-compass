@@ -171,8 +171,12 @@ export function PostPositionBar({
             className="flex-1 rounded-[12px] bg-[var(--text)] px-3 py-2.5 text-[13px] font-semibold text-[var(--bg)] transition-opacity disabled:opacity-50"
           >
             {next.label} →
+            {counting && (
+              <span className="ml-1 font-normal opacity-70">· moving on</span>
+            )}
           </button>
         )}
+
         {challenge && (
           <button
             type="button"
