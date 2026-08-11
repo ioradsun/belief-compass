@@ -136,7 +136,7 @@ export function useViewerPositions(
     return { positions, simulated: true, raw: sim.data };
   }
   return {
-    positions: ((real.data?.positions ?? []) as ViewerPosition[]) ?? [],
+    positions: (real.data?.positions ?? []) as ViewerPosition[],
     simulated: false,
     raw: real.data,
   };
