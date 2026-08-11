@@ -1824,20 +1824,12 @@ function Feed() {
                 those apart belongs in the tape, which is why the tape is passed
                 in rather than owned here. */}
               {createOpen || ideaDue ? (
-                /* THE RIGHT RAIL WHILE WRITING — rewrites of your own question
-                   first, then a House spark. Alternates take their natural height
-                   on top; the spark fills what's left and self-hides when there is
-                   nothing to suggest, so an untouched form shows an empty column
-                   rather than a padded one. */
+                /* THE RIGHT RAIL WHILE WRITING — other ways to ask the same
+                   question, then the debates that already exist. The House spark
+                   moved to the left rail, so nothing is offered twice. */
                 <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
                   <AlternatesRail />
-                  <IdeasRail
-                    /* Never twice: while the idea itself is on stage the rail
-                       has nothing left to offer. */
-                    suggestion={ideaDue ? null : houseIdea.suggestion}
-                    onUse={() => acceptIdea(false)}
-                    onDismiss={houseIdea.onDismiss}
-                  />
+                  <SimilarMarkets wallet={wallet} onJoin={selectMarket} />
                 </div>
               ) : (
                 <ChallengeRail
