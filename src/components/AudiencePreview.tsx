@@ -93,18 +93,27 @@ export function AudiencePreview({
  * network. Every other rendering bug in this system was found by looking at it,
  * and a component that can only be seen in production is one that will not be.
  */
-export function AudienceGroups({ groups }: { groups: AudienceGroupView[] }) {
+export function AudienceGroups({
+  groups,
+  stacked = false,
+}: {
+  groups: AudienceGroupView[];
+  stacked?: boolean;
+}) {
   return (
-    <div className="mt-2 flex flex-col gap-1.5">
+    <div className={stacked ? "flex flex-col gap-3" : "mt-2 flex flex-col gap-1.5"}>
       {groups.map((g) => (
-        <div key={g.key} className="flex items-center gap-2">
+        <div
+          key={g.key}
+          className={stacked ? "flex flex-col gap-1.5" : "flex items-center gap-2"}
+        >
           {/* A FIXED GUTTER, FOUND BY LOOKING. Sized to a full stack — five faces
               at 22px overlapping by 6, plus the overflow chip — so the three
               labels start at the same x. Rendered without it, a Tribe of three
               and a Rivals of seven pushed their headings to different places and
               the rows stopped reading as one list. `min-w` rather than `w`, so a
               three-digit overflow grows instead of clipping. */}
-          <div className="flex min-w-[102px] shrink-0 -space-x-1.5">
+          <div className="flex min-w-[102px] -space-x-1.5">
             {g.visiblePeople.map((p) => (
               <PersonAvatar
                 key={p.wallet}
