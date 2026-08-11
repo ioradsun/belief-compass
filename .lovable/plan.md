@@ -20,7 +20,27 @@ One sentence, applied everywhere:
 
 Nothing else. No 8h/24h/7d timers, no resurface tier, no mid-pass repeats.
 
+Important: this rule only decides *what is allowed in the feed*. It never decides the order. Order stays with the ranking engine we already have.
+
+## How ranking and freshness combine
+
+Two separate jobs, cleanly split:
+
+```text
+eligibility (the cycle rule)  ->  ranking (score)  ->  sequencing (variety)  ->  the queue
+   "may this market appear?"      "how good for       "what rhythm does
+                                   this person?"       the reader feel?"
+```
+
+- **Ranking is untouched.** The seven-component composite score keeps doing the work: tribe/opposition presence, people you follow in the market, your category and topic affinity, momentum and acceleration, divergence/opportunity, freshness of the question itself. A market you'd love still ranks first — the cycle rule only stops it being shown to you twice in one pass.
+- **Sequencing is untouched.** The personal-match → rising → social → fresh → early → exploration rhythm, plus the category/creator/near-duplicate run limits, still shapes what you actually feel while scrolling.
+- **The candidate pool stays wide.** The eight-slice pool (active, fresh, classified, affinity, etc.) is what guarantees tribe and interest markets are in the running at every depth, not just the loudest markets. Deeper pages keep pulling from the same slices, so page 5 is still ranked for you — it is not a leftovers bin.
+- **The pass roll re-ranks from the top.** When a new cycle begins, everything becomes eligible again and the highest-scoring markets for you now — with today's tribe activity and today's momentum — lead the new pass. A second pass is not a replay of the first.
+
+The one ranking adjustment worth making: while the score already rewards personal signal, deeper pool pages currently risk drifting toward generic activity. We will make the affinity and social components a *floor* on deep pages — a market with tribe or followed people in it can never be outranked by a purely-loud market at the same depth — so the feed stays personal all the way down rather than only at the top.
+
 ## What changes
+
 
 **1. Cycle instead of cooldowns**
 Every viewer gets a current pass ("cycle") with a start time. A market is excluded from the feed if the viewer interacted with it — any kind — since the cycle started. Hidden markets stay the one permanent exception.
