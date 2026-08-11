@@ -27,6 +27,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ChainList } from "@/components/ChainList";
 import { useTable } from "@/components/YourTable";
 import { hideCall, useOpenCalls, type OpenCalls } from "@/lib/open-calls";
+import { ChallengeCardList } from "@/components/ChallengeCardList";
 import { passOnCall } from "@/lib/table.functions";
 import { bestEffort, useWalletSession } from "@/hooks/useWalletSession";
 import { CHALLENGE, type Challenge, type CallerRelation } from "@/domain/challenge";
@@ -239,9 +240,16 @@ export function ChallengeRail({
               merges them by market and lets a single card change colour as the
               reader stops being the one who was asked and becomes the one
               asking. */}
-          <ChainList
+          {/* ONE DURABLE CARD PER RELATIONSHIP. `ChainList` merged incoming
+              calls by market, which was right as far as it went — but a reader
+              who had also put the question up still had a SECOND card for it on
+              the Yours tab, and neither could see the other. `challengeCardsFor`
+              projects both directions into one object with one state, so a card
+              now evolves from "Maya brought you in" through "you showed up" to
+              "Casey kept it moving" without ever becoming two things. */}
+          <ChallengeCardList
             wallet={wallet}
-            incoming={[...open.slice(0, shown), ...recent.slice(0, CHALLENGE.maxRecent)]}
+            limit={shown + CHALLENGE.maxRecent}
             onSelect={onSelect}
             onPass={pass}
           />

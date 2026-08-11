@@ -208,7 +208,7 @@ describe("a failed read is not an empty room", () => {
     // The quiet case renders nothing at all, and the failure sentence sits ABOVE
     // the merged list — never instead of nothing. "Quiet" means nothing waiting
     // AND nothing that recently happened: an outcome on screen is not empty.
-    expect(c.indexOf("failed ?")).toBeLessThan(c.indexOf("<ChainList"));
+    expect(c.indexOf("failed ?")).toBeLessThan(c.indexOf("<ChallengeCardList"));
   });
 
   it("surfaces the error from the shared hook rather than swallowing it", () => {
@@ -272,11 +272,15 @@ describe("an answered card stops asking and stays", () => {
     // took a side stays where it is and changes what it says. Two lists would
     // have re-created the bug: a card vanishing here and reappearing there —
     // which is exactly why the outbound side is merged into the same card now.
-    const c = rail();
-    expect(c).toMatch(
-      /\[\.\.\.open\.slice\(0, shown\), \.\.\.recent\.slice\(0, CHALLENGE\.maxRecent\)\]/,
-    );
-    expect(code("src/components/ChainList.tsx")).toMatch(/key=\{card\.marketId\}/);
+    /**
+     * ONE LIST, KEYED BY MARKET — and now one PROJECTION per market too.
+     * `ChainList` merged incoming calls; a reader who had also put the question
+     * up still carried a second card for it on the Yours tab. The projection
+     * merges both directions, so the row a reader was looking at when they took
+     * a side stays where it is and changes what it says.
+     */
+    expect(rail()).toMatch(/<ChallengeCardList/);
+    expect(code("src/components/ChallengeCardList.tsx")).toMatch(/key=\{p\.marketId\}/);
   });
 
   it("never lets outcomes crowd out the people still waiting", () => {
@@ -284,10 +288,13 @@ describe("an answered card stops asking and stays", () => {
     // outcomes above two people still waiting, and the column stopped reading as
     // "who needs something from me" — the payoff had displaced the request. The
     // rest are one tap away under "See all", which is where a history belongs.
-    expect(rail()).toMatch(/recent\.slice\(0, CHALLENGE\.maxRecent\)/);
+    // The cap travels as a bound on the projection list rather than two slices,
+    // because there is one list now — but the number is unchanged and the rest
+    // are still one tap away under "See all".
+    expect(rail()).toMatch(/limit=\{shown \+ CHALLENGE\.maxRecent\}/);
     // The QUEUE is never capped by the same number: a person waiting on you is
     // not surplus, and `shown` pages through every one of them.
-    expect(rail()).toMatch(/open\.slice\(0, shown\)/);
+    expect(rail()).toMatch(/setShown\(\(n\) => n \+ CHALLENGE\.maxOpen\)/);
   });
 });
 

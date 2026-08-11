@@ -25,7 +25,7 @@ import {
   type Incoming,
   type Outgoing,
 } from "@/domain/challenge-card";
-import { eligibleAudience, type Sb } from "@/lib/challenge.server";
+import { audienceFor } from "@/lib/challenge.server";
 import type { Side } from "@/domain/post-action";
 
 /** Bounds. A living-card reader is not a feed builder. */
@@ -111,6 +111,27 @@ export async function challengeCardsFor(viewer: string): Promise<ChallengeCardPr
    * my question to their own people. Nobody who PASSED is reachable from here:
    * a relay requires an answered call, so every name is a deliberate public act.
    */
+  /**
+   * WHICH CHALLENGES OWN THE CALLS ADDRESSED TO ME — needed for removal.
+   *
+   * Removal stops a branch; it does not delete a chain. A WAITING call whose
+   * parent Challenge has been taken down must stop appearing as a live request,
+   * because nobody is asking any more — but the recipient must NOT become a
+   * passer, and an ANSWERED call survives as history regardless. Without this
+   * read the card could not tell a live call from an abandoned one.
+   */
+  const parentIds = [
+    ...new Set(receivedRows.map((r) => Number(r.challenge_id)).filter(Number.isFinite)),
+  ];
+  const { data: parents } = parentIds.length
+    ? await sb.from("challenges").select("id, closed_at").in("id", parentIds)
+    : { data: [] as { id: number; closed_at: string | null }[] };
+  const closedParents = new Set(
+    ((parents ?? []) as { id: number; closed_at: string | null }[])
+      .filter((c) => c.closed_at != null)
+      .map((c) => Number(c.id)),
+  );
+
   const myCallIds = issuedRows.filter((r) => r.id != null).map((r) => Number(r.id));
   const [{ data: children }, { data: childCalls }, { data: markets }] = await Promise.all([
     myCallIds.length
@@ -158,7 +179,7 @@ export async function challengeCardsFor(viewer: string): Promise<ChallengeCardPr
     const question = titleOf.get(marketId);
     if (!question) continue;
 
-    const incoming = incomingFor(receivedRows, marketId, personOf);
+    const incoming = incomingFor(receivedRows, marketId, personOf, closedParents);
     const outgoing = outgoingFor(
       myChallenges,
       issuedRows,
@@ -176,15 +197,20 @@ export async function challengeCardsFor(viewer: string): Promise<ChallengeCardPr
      */
     const audience =
       incoming?.respondedAtMs != null && capacity.active < capacity.total && !outgoing
-        ? await relayAudienceFor(sb, me, marketId)
-        : 0;
+        ? await relayAudienceFor(me, marketId)
+        : { total: 0, singleRecipientName: null };
 
     const base: Omit<ChallengeCardProjection, "state"> = {
       marketId,
       question,
       incoming,
       outgoing,
-      viewer: { canRelay: audience > 0, relayAudience: audience, capacity },
+      viewer: {
+        canRelay: audience.total > 0,
+        relayAudience: audience.total,
+        relayRecipientName: audience.singleRecipientName,
+        capacity,
+      },
       lineage: lineageFor(receivedRows, myChallenges, marketId, personOf),
       /**
        * NOT IMPLEMENTABLE YET, AND SAID SO RATHER THAN FAKED. Nothing in the
@@ -216,6 +242,7 @@ function incomingFor(
   rows: readonly CallRow[],
   marketId: number,
   personOf: (w: string) => CardPerson,
+  closedParents: ReadonlySet<number>,
 ): Incoming | null {
   const mine = rows
     .filter((r) => Number(r.market_id) === marketId)
@@ -223,8 +250,30 @@ function incomingFor(
   if (mine.length === 0) return null;
 
   const answered = mine.find((r) => r.responded_at);
-  const active = mine.filter((r) => !r.passed_at);
-  const ordered = active.length > 0 ? active : mine;
+  /**
+   * ACTIVE = not passed, and not orphaned by a removal.
+   *
+   * THREE THINGS HAPPEN AT ONCE HERE, and they are the removal contract:
+   *
+   *   a waiting call under a closed Challenge stops being live — nobody is
+   *   asking any more, and the card must not keep requesting an answer for
+   *   somebody who took the question down;
+   *
+   *   that recipient does NOT become a passer — passing is a choice, and the
+   *   ledger is untouched, so nothing here writes or infers one;
+   *
+   *   an ANSWERED call is unaffected. `answered` is found above this filter, so
+   *   a response survives its parent's removal exactly as the relationship
+   *   evidence does.
+   *
+   * AND REMOVING ONE OF SEVERAL CALLERS DOES NOT DELETE THE CARD. The filter
+   * drops that caller's row and the next earliest still-active call is promoted
+   * by the same sort — one rule, no special case.
+   */
+  const active = mine.filter((r) => !r.passed_at && !closedParents.has(Number(r.challenge_id)));
+  // With every caller gone and no answer, there is nothing live to render.
+  if (active.length === 0 && !answered) return null;
+  const ordered = active.length > 0 ? active : mine.filter((r) => r.responded_at);
   const primary = ordered[0];
 
   return {
@@ -330,12 +379,25 @@ function lineageFor(
   return { startedBy, through, depth };
 }
 
-/** The canonical audience, asked only when a relay is actually on the table. */
-async function relayAudienceFor(sb: Sb, me: string, marketId: number): Promise<number> {
-  const res = await eligibleAudience(sb, me, marketId);
-  // A refused read is not an audience of zero — but on this surface the only
-  // consequence is that the offer is withheld, which is the correct silence.
-  return res.status === "ok" ? res.members.length : 0;
+/**
+ * THE CANONICAL AUDIENCE, asked only when a relay is actually on the table.
+ *
+ * `audienceFor` rather than `eligibleAudience` because the BUTTON needs a name
+ * for an audience of one, and names are resolved after membership there. It is
+ * the same membership either way — `audienceFor` calls `eligibleAudience` — so
+ * there is still one definition of who can be asked.
+ *
+ * A refused read is not an audience of zero. On this surface the only
+ * consequence is that the offer is withheld, which is the correct silence.
+ */
+async function relayAudienceFor(
+  me: string,
+  marketId: number,
+): Promise<{ total: number; singleRecipientName: string | null }> {
+  const res = await audienceFor(me, marketId);
+  return res.status === "available"
+    ? { total: res.total, singleRecipientName: res.singleRecipientName }
+    : { total: 0, singleRecipientName: null };
 }
 
 function lastEventMs(p: ChallengeCardProjection): number {

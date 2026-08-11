@@ -102,11 +102,19 @@ describe("one column, no whose-table filter", () => {
     // A reader brought into a question who then relays it used to appear twice
     // in this column with no visible connection between the two cards — the
     // chain passing THROUGH a person was the one thing it could not show.
+    /**
+     * NOW ONE PROJECTION, NOT ONE MERGED LIST. `ChainList` merged the incoming
+     * calls by market, which was right as far as it went — a reader who had ALSO
+     * put the question up still had a second card for it on the Yours tab, and
+     * neither could see the other. `challengeCardsFor` projects both directions
+     * into a single object with a single state.
+     */
     const c = rail();
-    expect(c).toMatch(/<ChainList/);
+    expect(c).toMatch(/<ChallengeCardList/);
     expect(c).not.toMatch(/<ChallengeRow/);
     expect(c).not.toMatch(/<YourTable/);
-    expect(yours()).toMatch(/mergeChain\(/);
+    // The component switches on the server's state and reconstructs nothing.
+    expect(code("src/components/ChallengeCard.tsx")).toMatch(/switch \(p\.state\)/);
   });
 
   it("counts everything live on the tab", () => {
@@ -150,7 +158,9 @@ describe("a pass reaches the server now, and still tells nobody", () => {
 describe("more than fits", () => {
   it("shows a railful and says how many are behind it", () => {
     const c = rail();
-    expect(c).toMatch(/open\.slice\(0, shown\)/);
+    // One list now, bounded by `limit` rather than sliced twice — same railful,
+    // same "N more waiting" underneath, one object per market.
+    expect(c).toMatch(/limit=\{shown \+ CHALLENGE\.maxRecent\}/);
     expect(c).toMatch(/\{open\.length - shown\} more waiting/);
   });
 
@@ -192,5 +202,41 @@ describe("the derived path is gone, not disabled", () => {
     const c = code("src/lib/challenge.server.ts");
     const build = c.slice(c.indexOf("export async function buildChallenges"));
     expect(build).toMatch(/throw new Error\(error\.message\)/);
+  });
+});
+
+/**
+ * THE DURABLE CARD BORROWS RULES; IT DOES NOT INVENT THEM.
+ *
+ * Three ways this surface could quietly grow a second opinion, asserted closed.
+ */
+describe("the durable card reuses the canonical rules", () => {
+  const cardCode = () => code("src/components/ChallengeCard.tsx");
+
+  it("labels the relay button with the closing screen's rules", () => {
+    // It rendered "Challenge all 1" and "Challenge all 2" until it borrowed the
+    // helper: one named person is "Challenge Maya", two is "Challenge both".
+    const c = cardCode();
+    expect(c).toMatch(/challengeLabel\(/);
+    expect(c).not.toMatch(/Challenge all \{/);
+  });
+
+  it("celebrates a response in a colour that takes no side", () => {
+    /**
+     * A `--yes` highlight turns "somebody showed up" into a YES-coded event even
+     * when they answered NO. Showing Up is side-blind everywhere else, and a
+     * tint that agrees with one side is the same claim made in colour.
+     */
+    const fresh = cardCode().slice(cardCode().indexOf("borderColor: fresh"));
+    const block = fresh.slice(0, fresh.indexOf("}"));
+    expect(block).not.toMatch(/--yes|--no/);
+  });
+
+  it("confirms a removal transiently, and never from the projection", () => {
+    // "Off the table" is a fact about a press, not about the market. A reader
+    // arriving fresh must not be told about a removal they did not perform.
+    expect(cardCode()).toMatch(/justRemoved/);
+    expect(code("src/domain/challenge-card.ts")).not.toMatch(/justRemoved/);
+    expect(code("src/components/ChallengeCardList.tsx")).toMatch(/setJustRemoved/);
   });
 });

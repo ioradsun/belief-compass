@@ -63,7 +63,12 @@ const card = (over: Partial<ChallengeCardProjection> = {}): ChallengeCardProject
     question: "Will AI replace most software engineers?",
     incoming: null,
     outgoing: null,
-    viewer: { canRelay: false, relayAudience: 0, capacity: { active: 0, total: 3 } },
+    viewer: {
+      canRelay: false,
+      relayAudience: 0,
+      relayRecipientName: null,
+      capacity: { active: 0, total: 3 },
+    },
     lineage: { startedBy: null, through: null, depth: 0 },
     marketClosed: false,
     ...over,
@@ -380,7 +385,12 @@ describe("words this surface must never use", () => {
               incoming: inc,
               outgoing: o,
               marketClosed: closed,
-              viewer: { canRelay: true, relayAudience: 13, capacity: { active: 1, total: 3 } },
+              viewer: {
+                canRelay: true,
+                relayAudience: 13,
+                relayRecipientName: null,
+                capacity: { active: 1, total: 3 },
+              },
               lineage: { startedBy: "Maya", through: "Sundeep", depth: 3 },
             }),
           );

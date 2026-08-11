@@ -105,6 +105,16 @@ export interface ViewerFacts {
   canRelay: boolean;
   /** The audience a relay would reach. Zero when `canRelay` is false. */
   relayAudience: number;
+  /**
+   * THE ONE NAME THE RELAY BUTTON MAY USE, and it comes from the AUDIENCE.
+   *
+   * Null unless the audience is exactly one person with a resolved profile. It
+   * exists so this surface can call the SAME `challengeLabel` the closing screen
+   * uses instead of inventing a second labelling rule — the durable card was
+   * rendering "Challenge all 1" and "Challenge all 2" where the canonical rules
+   * say "Challenge Maya" and "Challenge both".
+   */
+  relayRecipientName: string | null;
   capacity: { active: number; total: number };
 }
 
