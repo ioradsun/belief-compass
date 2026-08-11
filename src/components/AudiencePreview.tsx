@@ -143,10 +143,9 @@ export function AudienceGroups({
                 do — it would be filler wearing a person's shape. */}
             {g.overflow > 0 && (
               <span
-                className={cn(
-                  "flex items-center justify-center rounded-full px-1 font-medium ring-1 ring-[var(--bg)]",
+                className={`flex items-center justify-center rounded-full px-1 font-medium ring-1 ring-[var(--bg)] ${
                   stacked ? "h-[32px] min-w-[32px] text-[12px]" : "h-[22px] min-w-[22px] text-[10px]"
-                )}
+                }`}
                 style={{
                   background: "color-mix(in oklab, var(--text-muted) 16%, transparent)",
                   color: "var(--text-secondary)",
