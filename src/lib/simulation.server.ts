@@ -501,6 +501,33 @@ async function quoteBuy(sb: Sb, marketId: number, yes: boolean, amountCc: number
   return { shares, feeCc: 0, priceUsd: price } satisfies Quote;
 }
 
+/**
+ * THE ASK, CAPPED AT WHAT IS ACTUALLY HELD — but only when it is dust apart.
+ *
+ * A rounding artifact (a few billionths of a share, introduced by the wei
+ * conversion the ticket sizes with) is clamped silently. A genuinely oversized
+ * ask is left alone so the ledger still refuses it.
+ */
+async function clampToHolding(
+  sb: Sb,
+  wallet: string,
+  marketId: number,
+  yes: boolean,
+  shares: number,
+): Promise<number> {
+  const { data } = await sb
+    .from("simulation_positions")
+    .select("yes_shares, no_shares")
+    .eq("wallet", wallet)
+    .eq("onchain_id", marketId)
+    .maybeSingle();
+  const row = (data ?? null) as { yes_shares: unknown; no_shares: unknown } | null;
+  if (row == null) return shares;
+  const held = num(yes ? row.yes_shares : row.no_shares);
+  if (!(held > 0) || shares <= held) return shares;
+  return shares - held <= Math.max(held, 1) * 1e-6 ? held : shares;
+}
+
 async function quoteSell(sb: Sb, marketId: number, yes: boolean, shares: number, ethUsd: number) {
   if (!(shares > 0)) throw new QuoteUnavailable();
   const price = await spotPrice(sb, marketId, yes, ethUsd);
