@@ -376,15 +376,12 @@ export async function buildOpportunityFeed(
   const sessionSeen = new Set<number>(input.seenIds ?? []);
   const sessionQueued = new Set<number>(input.queuedIds ?? []);
   /**
-   * WHICH SIGHTING WAS OLDEST. `seenIds` arrives in the order the reader saw
-   * them, so the index is the only recency signal the wire carries — and the
-   * resurface tier needs exactly that to decide which repeat to offer first.
-   * Built once here rather than per market, which is what makes it a lookup
-   * instead of an O(n²) scan. See EligibilityInput.sessionSeenRank.
+   * THE PASS BOUNDARY. Contact older than this belongs to a spent pass and no
+   * longer excludes anything; zero means the reader has never rolled, so every
+   * recorded contact still counts.
    */
-  const sessionSeenRank = new Map<number, number>(
-    (input.seenIds ?? []).map((id, i) => [Number(id), i]),
-  );
+  const cycleStartedAt = Math.max(0, Math.trunc(input.cycleStartedAt ?? 0));
+
   // A rotating epoch keeps the exploration slot moving without reshuffling the
   // rest of the feed between polls.
   const epoch = Math.floor(now / 3_600_000);
