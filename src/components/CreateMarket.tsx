@@ -158,18 +158,27 @@ export function CreateMarket({
       amount,
       category,
       type: attachment ? "media" : "text",
-      attachment: attachment
-        ? { kind: "link", url: attachment.media.url, embed: attachment.media }
-        : null,
+      attachment:
+        attachment == null
+          ? null
+          : attachment.kind === "embed"
+            ? { kind: "link", url: attachment.media.url, embed: attachment.media }
+            : {
+                kind: "image",
+                file: attachment.file,
+                previewUrl: attachment.previewUrl,
+                sha256: attachment.sha256 ?? null,
+              },
     });
   }, [question, side, amount, attachment, category]);
   useEffect(() => {
     setProbe({
       question: debounced,
-      sha256: null,
-      linkUrl: attachment?.media.url ?? null,
+      sha256: attachment?.kind === "file" ? (attachment.sha256 ?? null) : null,
+      linkUrl: attachment?.kind === "embed" ? attachment.media.url : null,
     });
   }, [debounced, attachment]);
+
   useEffect(() => () => setProbe(null), []);
 
   const { data: review } = useQuery({
