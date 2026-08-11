@@ -12,6 +12,7 @@ import {
   isCaughtUp,
   emptyQueue,
   appendOrder,
+  HISTORY,
   type FeedQueue,
 } from "./feed-queue";
 
@@ -344,24 +345,41 @@ describe("appendOrder", () => {
   });
 
   /**
-   * THE ONE THAT MADE `appended` A FIELD. `commit` replaces the order with the
-   * newest ranking, and that ranking is of page ONE — so without this the feed
-   * silently truncated back to its first page on every poll the reader accepted.
+   * A PAGED QUEUE KEEPS ITS PATH.
+   *
+   * `incoming` is a re-ranking of page ONE, which is all the base query returns.
+   * Adopting it for a reader four pages in reorders ground they already walked
+   * and — the defect below — buries whatever is new behind them.
    */
-  it("survives a commit of a re-ranked first page", () => {
+  it("holds its order against a re-ranked first page", () => {
     let q = initQueue([1, 2, 3]);
     q = appendOrder(q, [10, 11]);
-    q = receiveOrder(q, [3, 2, 1]);
-    q = commit(q);
-    expect(q.order).toEqual([3, 2, 1, 10, 11]);
+    q = commit(receiveOrder(q, [3, 2, 1]));
+    expect(q.order).toEqual([1, 2, 3, 10, 11]);
   });
 
-  it("does not re-add a paged market the new ranking promoted", () => {
+  it("does not move a paged market the new ranking promoted", () => {
     let q = initQueue([1, 2, 3]);
     q = appendOrder(q, [10]);
-    // 10 scored its way onto page one this time.
+    // 10 scored its way onto page one this time. Its place is where the reader
+    // already saw it; a ranking of page one does not get to relocate page two.
     q = commit(receiveOrder(q, [10, 1, 2, 3]));
-    expect(q.order).toEqual([10, 1, 2, 3]);
+    expect(q.order).toEqual([1, 2, 3, 10]);
+  });
+
+  /**
+   * THE DEFECT THIS WAS WRITTEN FOR, measured on the real reducer before the
+   * fix: reader at index 4 of a paged queue, a poll carrying three genuinely new
+   * markets committed them to indices 0, 1 and 2. Behind the reader, in a
+   * forward-only queue — which is not a re-rank, it is a delete.
+   */
+  it("puts genuinely new markets AHEAD of a reader who has paged", () => {
+    let q = initQueue([1, 2, 3]);
+    q = appendOrder(q, [10, 11, 12]);
+    q = jumpTo(q, 11, { admit: true });
+    q = commit(receiveOrder(q, [90, 91, 92]));
+    const at = q.order.indexOf(11);
+    expect(q.order.slice(at + 1)).toEqual([12, 90, 91, 92]);
   });
 
   it("keeps the active market even when it is in neither list", () => {
@@ -372,5 +390,95 @@ describe("appendOrder", () => {
     expect(q.order).toContain(999);
     expect(q.order).toContain(10);
     expect(q.activeId).toBe(999);
+  });
+});
+
+/**
+ * BOUNDED HISTORY — why the feed stopped growing at its own end.
+ *
+ * `order` travels to the server as `queuedIds` so a page can mean "the next
+ * markets, not these", and that field is capped. An unbounded order outgrew the
+ * cap, the ids that fell out were the OLDEST — exactly what the resurface tier
+ * offers first — so the server returned markets the client still held,
+ * `appendOrder` dropped them as duplicates, and the refill asked the same
+ * question every ten seconds while Up Next sat empty.
+ */
+describe("history is bounded", () => {
+  const walk = (n: number) => Array.from({ length: n }, (_, i) => i + 1);
+
+  it("forgets consumed markets past HISTORY", () => {
+    let q = initQueue(walk(HISTORY + 20));
+    q = jumpTo(q, HISTORY + 18, { admit: true });
+    const wasAt = activeIndex(q);
+    q = appendOrder(q, [500, 501]);
+    // The invariant: exactly HISTORY markets remain behind the reader.
+    expect(activeIndex(q)).toBe(HISTORY);
+    expect(wasAt).toBeGreaterThan(HISTORY);
+    // History + the reader + what was already ahead + the page just added.
+    expect(q.order.length).toBe(HISTORY + 1 + 2 + 2);
+  });
+
+  it("never drops the active market or anything ahead of it", () => {
+    let q = initQueue(walk(HISTORY + 20));
+    q = jumpTo(q, HISTORY + 10, { admit: true });
+    q = appendOrder(q, [500]);
+    expect(q.activeId).toBe(HISTORY + 10);
+    // Everything the reader had left is still there, in the same sequence.
+    const at = activeIndex(q);
+    expect(q.order.slice(at + 1)).toEqual([...walk(HISTORY + 20).slice(HISTORY + 10), 500]);
+  });
+
+  it("keeps short queues completely intact", () => {
+    const q = appendOrder(initQueue([1, 2, 3]), [4]);
+    expect(q.order).toEqual([1, 2, 3, 4]);
+  });
+
+  /**
+   * A forgotten market has to leave `appended` too, or the next commit would
+   * faithfully restore the history this just spent effort forgetting.
+   */
+  it("forgets a paged market completely, so commit cannot resurrect it", () => {
+    let q = initQueue(walk(HISTORY + 20));
+    q = appendOrder(q, [500]);
+    q = jumpTo(q, 500, { admit: true }); // walk to the very end
+    q = appendOrder(q, [501, 502]);
+    expect(q.order).not.toContain(1);
+    // A commit that does NOT re-offer 1: if `appended` still remembered it, the
+    // paged branch would put it back from memory alone.
+    q = commit(receiveOrder(q, [800, 801]));
+    expect(q.order).not.toContain(1);
+    expect(q.order.slice(-2)).toEqual([800, 801]);
+  });
+
+  /**
+   * A market the reader never saw is NOT history. Trimming forgets what is
+   * behind them; if the base query still offers it, it is new supply and comes
+   * back at the end like any other page.
+   */
+  it("re-admits a forgotten market the server still offers", () => {
+    let q = initQueue(walk(HISTORY + 20));
+    q = appendOrder(q, [500]);
+    q = jumpTo(q, 500, { admit: true });
+    q = appendOrder(q, [501]);
+    expect(q.order).not.toContain(1);
+    q = commit(receiveOrder(q, [1, 2]));
+    expect(q.order.slice(-2)).toEqual([1, 2]);
+  });
+
+  /**
+   * THE POINT OF ALL OF IT: the order stays inside the id cap the page request
+   * is allowed to carry, so the server can exclude everything the client holds
+   * and a resurfaced market is one the reader genuinely no longer has.
+   */
+  it("stays small enough for the whole order to be sent as queuedIds", () => {
+    let q = initQueue(walk(48));
+    for (let page = 0; page < 12; page += 1) {
+      q = jumpTo(q, q.order[q.order.length - 1]!, { admit: true });
+      q = appendOrder(
+        q,
+        Array.from({ length: 48 }, (_, i) => 1000 + page * 48 + i),
+      );
+      expect(q.order.length).toBeLessThanOrEqual(200);
+    }
   });
 });
