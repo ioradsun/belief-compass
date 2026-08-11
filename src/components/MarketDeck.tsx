@@ -473,63 +473,48 @@ export function MarketDeck({
     );
   }
 
-  // A completed BUY takes over the whole center: the Conviction Reveal — the same
-  // story engine + component the mobile game uses. The trade was only the unlock.
-  if (trade.isSuccess && side != null && !dock.isSelling) {
-    const reveal = getConvictionReveal(
-      assembleRevealInput({
-        side,
+  /**
+   * A COMPLETED BUY DOES NOT TAKE OVER ANYTHING.
+   *
+   * It used to replace the entire center with a confirmation surface, which made
+   * a purchase feel like a page change and pushed the market — the thing the
+   * reader just committed to — off screen. The market now stays exactly where it
+   * is and the ORDER BAR transforms in place: what happened, then Challenge and
+   * Next Market. Same region, second state.
+   *
+   * `resolvePostAction` still owns every word and both controls; `variant="bar"`
+   * only chooses where they are drawn.
+   */
+  const posted = trade.isSuccess && side != null && !dock.isSelling;
+  const postedBar = posted ? (
+    <PostAction
+      variant="bar"
+      kind="buy"
+      wallet={viewerWallet}
+      mode={sim ? "SIMULATION" : "REAL"}
+      act={{
         marketId,
-        believersYes: evidence?.believersYes ?? row.believers_yes ?? 0,
-        believersNo: evidence?.believersNo ?? row.believers_no ?? 0,
-        believers: holders,
-        people: net?.people ?? [],
-        housePredicted: houseRead?.predicted ?? houseRead?.preview ?? null,
-        surpriseStreak: houseRead?.record?.surpriseStreak ?? 0,
-        momentum: (rr.opportunity_type as string | null) === "hot" ? "accelerating" : null,
-        creatorName: cm?.creator?.name ?? null,
-      }),
-    );
-    /**
-     * ONE OWNER FOR THE CLOSING MOMENT. This used to render `ConvictionReveal`
-     * directly, which meant the reveal chose the navigation while
-     * `KeepChainMoving` decided independently whether a relay was on offer and
-     * the route decided separately what "done" meant.
-     *
-     * Now the reveal is a SLOT: `resolvePostAction` decides whether the personal
-     * story is the strongest thing left to say, and passing it here is not the
-     * same as showing it — with an answered call or a live branch it is not
-     * rendered at all, because somebody else's fact outranks it.
-     */
-    return (
-      <PostAction
-        kind="buy"
-        wallet={viewerWallet}
-        mode={sim ? "SIMULATION" : "REAL"}
-        act={{
-          marketId,
-          side,
-          authored: authoredByViewer,
-          after: shift.after,
-          before: shift.before,
-          /**
-           * NEVER THE FIRST BELIEVER FROM SIMULATION. `believersYes` counts real
-           * money-backed believers, and a simulated position adds nothing to it —
-           * so a Simulation order on an empty side would read the count as 1 and
-           * claim a place in the real market that was never taken.
-           */
-          firstBeliever:
-            !sim && (side === "YES" ? evidence?.believersYes : evidence?.believersNo) === 1,
-        }}
-        onNextQuestion={() => {
-          void bal.refetch();
-          onSkip();
-        }}
-        onStay={() => void bal.refetch()}
-        reveal={<ConvictionReveal story={reveal} side={side} />}
-      />
-    );
-  }
+        side,
+        authored: authoredByViewer,
+        after: shift.after,
+        before: shift.before,
+        /**
+         * NEVER THE FIRST BELIEVER FROM SIMULATION. `believersYes` counts real
+         * money-backed believers, and a simulated position adds nothing to it —
+         * so a Simulation order on an empty side would read the count as 1 and
+         * claim a place in the real market that was never taken.
+         */
+        firstBeliever:
+          !sim && (side === "YES" ? evidence?.believersYes : evidence?.believersNo) === 1,
+      }}
+      onNextQuestion={() => {
+        void bal.refetch();
+        onSkip();
+      }}
+      onStay={() => void bal.refetch()}
+    />
+  ) : null;
+
 
   // The neutral market content — the middle of the mobile case carousel, and the
   // whole scroll area otherwise. Kept in one place so both paths render the same.
