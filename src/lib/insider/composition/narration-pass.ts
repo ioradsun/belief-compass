@@ -39,6 +39,7 @@ import {
   type HoldingRung,
 } from "@/domain/conviction-cohort";
 import type { Momentum } from "@/lib/insider/source.server";
+import { relFromStoredPct } from "@/domain/price-move";
 
 type NetLabel = "twin" | "tribe" | "opp" | "inverse";
 
@@ -247,10 +248,10 @@ export function runNarrationPass<R extends LiveRow>({
          capital_held_* columns which are ETH. No conversion here. */
       const deltaUsd = typeof delta === "number" && Number.isFinite(delta) ? delta : null;
       /* The YES-referenced price move, re-pointed at this row's side. */
-      const yesMove =
-        typeof mkt?.yesPriceChange24h === "number" && Number.isFinite(mkt.yesPriceChange24h)
-          ? mkt.yesPriceChange24h
-          : null;
+      /* market_state stores this as a PERCENT (-12.1 = down 12.1%), the same
+         number the market panel prints. The copy layer speaks in fractions, so
+         convert once here rather than printing a hundredfold move. */
+      const yesMove = relFromStoredPct(mkt?.yesPriceChange24h);
       const modern = composeTransition({
         type: p.type ?? null,
         side: r.side === "YES" || r.side === "NO" ? r.side : null,
