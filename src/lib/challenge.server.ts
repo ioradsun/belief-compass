@@ -23,6 +23,7 @@
 import { serviceClient } from "@/lib/supabase-clients";
 import { aliasFor } from "@/lib/wallet-identity";
 import type { RecordMode } from "@/domain/simulation";
+import { PROFILE_TARGET } from "@/domain/beliefs";
 import { CLOSEST_MIN_SHARED } from "@/domain/dna/config";
 import {
   composeChallenges,
@@ -775,14 +776,22 @@ export async function eligibleAudience(
     /**
      * THE INTERSECTION: who can actually ANSWER in this ledger.
      *
-     * `state = 'ACTIVE'` and nothing looser. A GRADUATING account is finished —
-     * it may still read its receipt but may not place another order — so
-     * including one would ask somebody for a thing they are forbidden from
-     * giving. EXITED and GRADUATED are excluded by the same predicate rather
-     * than by three separate conditions a future edit could forget one of.
+     * It asks the product's real question — "could this person place a
+     * Simulation order right now?" — rather than reading the stored state alone.
+     * Those differ: the state is written by the order transaction, so somebody
+     * whose tenth conviction arrived from OUTSIDE Simulation (a real position the
+     * indexer wrote, a belief recorded elsewhere) is still stored ACTIVE until
+     * something reconciles them. The count is checked alongside the state so a
+     * finished person is never asked in that window.
+     *
+     * EXITED, GRADUATED and GRADUATING all fall out of the same predicate rather
+     * than three conditions a future edit could forget one of.
      */
     mode === "SIMULATION"
-      ? sb.from("simulation_accounts").select("wallet").eq("state", "ACTIVE").in("wallet", wallets)
+      ? sb.rpc("simulation_reachable_wallets", {
+          p_wallets: wallets,
+          p_target: PROFILE_TARGET,
+        })
       : Promise.resolve({ data: null, error: null }),
     /**
      * ALREADY ANSWERED THIS MARKET — IN THIS LEDGER.
@@ -840,8 +849,11 @@ export async function eligibleAudience(
   if (mode === "SIMULATION") {
     // INTERSECT, not replace. Everybody who was qualified stays qualified; the
     // audience is narrowed to those who can actually answer in this ledger.
+    // The RPC returns bare wallets, not rows.
     const active = new Set(
-      ((simulators.data ?? []) as { wallet: string }[]).map((r) => r.wallet.toLowerCase()),
+      ((simulators.data ?? []) as (string | { wallet: string })[]).map((r) =>
+        String(typeof r === "string" ? r : r.wallet).toLowerCase(),
+      ),
     );
     members = members.filter((c) => active.has(c.wallet));
   }

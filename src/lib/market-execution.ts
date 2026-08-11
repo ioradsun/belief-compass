@@ -23,10 +23,23 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useTrade, useTradeReady } from "@/lib/chain-trade";
 import { useSimulationMode } from "@/lib/simulation-mode";
 import { useWalletSession } from "@/hooks/useWalletSession";
-import { placeSimulationOrder, type SimulationOrderResult } from "@/lib/simulation.functions";
-import { simulationPositionKey, simulationPositionsKey } from "@/lib/simulation-query";
+import {
+  getSimulationRouting,
+  placeSimulationOrder,
+  type SimulationOrderResult,
+} from "@/lib/simulation.functions";
+import {
+  simulationPositionKey,
+  simulationPositionsKey,
+  simulationRoutingKey,
+} from "@/lib/simulation-query";
 import { weiToEth } from "@/domain/money";
-import { ORDER_FAILED, type SimulationMode } from "@/domain/simulation";
+import {
+  ORDER_FAILED,
+  routingPermitsRealOrder,
+  SIMULATION_COPY,
+  type SimulationMode,
+} from "@/domain/simulation";
 import type { OrderSide } from "@/domain/order";
 
 /**
@@ -277,7 +290,7 @@ function useSimulationTrade(
  * surface renders its confirm disabled while `resolved` is false — belt and
  * braces, because a disabled button is a rendering decision and this is not.
  */
-const UNRESOLVED_TRADE: TradeLike = Object.freeze({
+export const UNRESOLVED_TRADE: TradeLike = Object.freeze({
   buy: () => Promise.reject(new Error("Still checking which account this order belongs to.")),
   sell: () => Promise.reject(new Error("Still checking which account this order belongs to.")),
   isSubmitting: false,
@@ -287,6 +300,59 @@ const UNRESOLVED_TRADE: TradeLike = Object.freeze({
   error: null,
   reset: () => {},
 });
+
+/**
+ * WHICH OF THE THREE, AS A FUNCTION RATHER THAN A TERNARY IN A HOOK.
+ *
+ * `resolved` is tested FIRST and on its own. A condition that led with
+ * `simulated` would read an unresolved mode as "not simulated" and hand back the
+ * real executor — the original defect, exactly. Pulled out here because it is
+ * the single decision this whole module exists to get right, and a decision
+ * worth that much should be runnable in a test rather than only greppable.
+ */
+export function executorFor(input: {
+  resolved: boolean;
+  simulated: boolean;
+  simulation: TradeLike;
+  real: TradeLike;
+}): TradeLike {
+  if (!input.resolved) return UNRESOLVED_TRADE;
+  return input.simulated ? input.simulation : input.real;
+}
+
+/**
+ * THE LAST THING CHECKED BEFORE REAL MONEY MOVES.
+ *
+ * The routing fact is cached, and a cache cannot be the final authority for a
+ * real order — Simulation is WALLET-GLOBAL on the server, so a second tab (or
+ * another device) can activate it while this one is still inside its fresh
+ * window. `refetchOnWindowFocus: "always"` and a short staleTime narrow that
+ * window; they cannot close it, because "narrow" is not a property anybody
+ * should be trusting with somebody's money.
+ *
+ * So the real adapter re-reads the routing fact from the SERVER immediately
+ * before delegating, and refuses if this wallet is simulating. It is one request
+ * on the path of a real trade — the same path that already re-reads the contract
+ * quote at signing time for exactly the same reason: the number on screen is old
+ * by the time somebody presses the button.
+ *
+ * THE GUARD LIVES HERE, NOT IN `chain-trade.ts`. That module is the real
+ * execution path and knows nothing about Simulation; teaching it would be the
+ * branch this whole facade exists to avoid.
+ */
+function useRealGuard(wallet: string | undefined) {
+  const qc = useQueryClient();
+  return useCallback(async () => {
+    if (!wallet) return;
+    const fresh = await getSimulationRouting({ data: { wallet } });
+    // The fresh answer is worth keeping — the rest of the app was about to act
+    // on a staler one.
+    qc.setQueryData(simulationRoutingKey(wallet), fresh);
+    if (!routingPermitsRealOrder(fresh.state)) {
+      throw new Error(SIMULATION_COPY.realBlocked);
+    }
+  }, [qc, wallet]);
+}
 
 /**
  * THE FACADE. One call, and the surface above it stops caring which ledger it is
@@ -305,6 +371,27 @@ export function useMarketExecution(input: {
   const realTrade = useTrade();
   const realReady = useTradeReady();
   const simTrade = useSimulationTrade(input.viewerWallet, input.ethUsd);
+  const assertRealAllowed = useRealGuard(input.viewerWallet);
+
+  /**
+   * The real executor, with the preflight welded to its two write methods. Its
+   * STATE is passed through untouched — the guard decides whether a write may
+   * start, not what the ticket renders while one is in flight.
+   */
+  const guardedReal = useMemo<TradeLike>(
+    () => ({
+      ...realTrade,
+      buy: async (marketId, yes, ethWei, quotedTokens) => {
+        await assertRealAllowed();
+        return realTrade.buy(marketId, yes, ethWei, quotedTokens);
+      },
+      sell: async (marketId, yes, tokenAmount, quotedProceeds) => {
+        await assertRealAllowed();
+        return realTrade.sell(marketId, yes, tokenAmount, quotedProceeds);
+      },
+    }),
+    [realTrade, assertRealAllowed],
+  );
 
   return useMemo(
     () => ({
@@ -312,11 +399,10 @@ export function useMarketExecution(input: {
       simulated,
       resolved,
       /**
-       * ONE OF THREE, AND THE THIRD IS A REFUSAL. `resolved` is checked FIRST:
-       * an unresolved mode is not "not simulated", and reading it as such is
-       * exactly how the real executor used to be handed out by default.
+       * ONE OF THREE, AND THE THIRD IS A REFUSAL. The real one is always the
+       * GUARDED real one — the unguarded adapter is never handed to a surface.
        */
-      trade: !resolved ? UNRESOLVED_TRADE : simulated ? simTrade : realTrade,
+      trade: executorFor({ resolved, simulated, simulation: simTrade, real: guardedReal }),
       sim: simulated ? { balanceCc, canOrder, verifying: simTrade.verifying } : null,
       ready: simulated
         ? { connected: !!input.viewerWallet, onBase: true }
@@ -328,7 +414,7 @@ export function useMarketExecution(input: {
       simulated,
       resolved,
       simTrade,
-      realTrade,
+      guardedReal,
       balanceCc,
       canOrder,
       realReady.connected,

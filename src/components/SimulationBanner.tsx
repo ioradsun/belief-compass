@@ -44,10 +44,26 @@ export function SimulationBanner() {
   const graduated = sim.mode === "GRADUATING";
   const progress = `${sim.profileProgress.count} / ${sim.profileProgress.target} convictions`;
 
+  /**
+   * TWO ACTS, AND THEY MUST NOT SHARE A HANDLER.
+   *
+   * `finish` is the graduation — the primary thing to do at ten, and a one-way
+   * door the SERVER CAN REFUSE. `leave` is the reversible exit, which it never
+   * refuses.
+   *
+   * They were one function branching on `graduated`, so at ten there was no way
+   * to leave at all: every control ran the graduation. Combined with a refusal —
+   * a conviction lost after GRADUATING was written — that left somebody who
+   * could not finish, could not order, and could not leave either. An exit that
+   * can be refused is not an exit.
+   */
+  const finish = () => {
+    setOpen(false);
+    sim.continueAfterGraduation();
+  };
   const leave = () => {
     setOpen(false);
-    if (graduated) sim.continueAfterGraduation();
-    else sim.exit();
+    sim.exit();
   };
 
   return (
@@ -103,8 +119,25 @@ export function SimulationBanner() {
             </span>
           </button>
 
-          <div className="shrink-0 self-start sm:self-auto">
-            <ExitAction graduated={graduated} pending={sim.pending} onClick={leave} />
+          <div className="flex shrink-0 items-center gap-2 self-start sm:self-auto">
+            {/* AT GRADUATION THE REVERSIBLE EXIT SURVIVES, quietly, beside the
+                primary action. Continue can be refused; this cannot, so it is
+                the control that guarantees nobody is ever stuck on this screen. */}
+            {graduated && (
+              <button
+                type="button"
+                onClick={leave}
+                disabled={sim.pending}
+                className="h-8 whitespace-nowrap rounded-full px-2 text-[12px] font-medium text-[var(--text-muted)] transition-colors hover:text-[var(--text)] disabled:opacity-50"
+              >
+                Exit
+              </button>
+            )}
+            <ExitAction
+              graduated={graduated}
+              pending={sim.pending}
+              onClick={graduated ? finish : leave}
+            />
           </div>
         </div>
 
