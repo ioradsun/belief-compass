@@ -16,6 +16,7 @@ import { z } from "zod";
 import type { CallReach, Challenge, NamedPerson } from "@/domain/challenge";
 import type { AudienceResult } from "@/domain/audience";
 import type { ChallengeCardProjection } from "@/domain/challenge-card";
+import type { ChallengeChainProjection } from "@/domain/challenge-chain";
 import type {
   ChainContext,
   ChallengeHistory,
@@ -192,4 +193,22 @@ export const getChallengeCards = createServerFn({ method: "GET" })
     if (!data.wallet) return [];
     const { challengeCardsFor } = await import("@/lib/challenge-card.server");
     return challengeCardsFor(data.wallet);
+  });
+
+/**
+ * HOW ONE QUESTION TRAVELLED — the chain view's only read.
+ *
+ * Unsigned like every other read here, and safe to be: the projection carries
+ * names ONLY for the viewer's own route and their own branch. Everything beyond
+ * that is aggregate, so there is nothing in the payload that could identify
+ * somebody who was merely asked in a stranger's branch.
+ */
+export const getChallengeChain = createServerFn({ method: "GET" })
+  .inputValidator((raw: unknown) =>
+    z.object({ wallet: WALLET.nullish(), marketId: z.number().int().nonnegative() }).parse(raw),
+  )
+  .handler(async ({ data }): Promise<ChallengeChainProjection | null> => {
+    if (!data.wallet) return null;
+    const { challengeChainFor } = await import("@/lib/challenge-chain.server");
+    return challengeChainFor(data.wallet, data.marketId);
   });
