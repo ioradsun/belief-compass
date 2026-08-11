@@ -24,7 +24,7 @@ import { RELAY_COST } from "@/domain/chain";
  * helper — a second labelling rule for the same button.
  */
 import { challengeLabel } from "@/domain/post-action";
-import { REMOVED_HEADLINE, REMOVED_SUPPORT } from "@/domain/challenge-card";
+import { REMOVED_HEADLINE, REMOVED_SUPPORT, relayPeople } from "@/domain/challenge-card";
 import {
   RELAY_TITLE,
   broughtYouIn,
@@ -242,9 +242,12 @@ export function ChallengeCard({
           <Faces people={out.responders} />
         </div>
       )}
+      {/* PEOPLE, NOT ACTS. `relayers` lists relay acts and one person can hold
+          several of them, so a face row built straight from it would show the
+          same person twice. See `relayPeople`. */}
       {p.state === "chain_moving" && out && out.relayers.length > 0 && (
         <div className="mt-2">
-          <Faces people={out.relayers} />
+          <Faces people={relayPeople(out.relayers)} />
         </div>
       )}
 

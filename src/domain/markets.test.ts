@@ -31,7 +31,13 @@ const outgoing = (over: Partial<Outgoing> = {}): Outgoing => ({
 });
 
 const person = (name: string) => ({ wallet: `0x${name}`, name, avatarUrl: null });
-const relayer = (name: string, atMs = 1, reach = 0) => ({ ...person(name), atMs, reach });
+let nextChallengeId = 100;
+const relayer = (name: string, atMs = 1, reach = 0) => ({
+  ...person(name),
+  challengeId: nextChallengeId++,
+  atMs,
+  reach,
+});
 
 const projection = (over: Partial<ChallengeCardProjection> = {}): ChallengeCardProjection => {
   const base: Omit<ChallengeCardProjection, "state"> = {

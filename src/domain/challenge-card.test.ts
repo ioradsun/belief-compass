@@ -6,6 +6,7 @@ import {
   cardVocabulary,
   completionFor,
   keptItMovingHeadline,
+  relayPeople,
   keptItMovingLine,
   lineageLine,
   progressLine,
@@ -29,8 +30,10 @@ const person = (name: string): CardPerson => ({
   avatarUrl: null,
 });
 
+let nextChallengeId = 100;
 const relayer = (name: string, atMs = 1, reach = 0): CardRelayer => ({
   ...person(name),
+  challengeId: nextChallengeId++,
   atMs,
   reach,
 });
@@ -325,18 +328,42 @@ describe("counts never claim more than the ledger holds", () => {
   });
 
   it("distinguishes people who relayed from the tables they reached", () => {
-    expect(keptItMovingHeadline([person("Casey")])).toBe("Casey kept it moving");
-    expect(keptItMovingLine([person("Casey")], 8)).toBe("The question is now on 8 more tables.");
-    expect(keptItMovingHeadline([person("Casey"), person("Alex"), person("Nia")])).toBe(
-      "Your Challenge is traveling",
-    );
-    expect(keptItMovingLine([person("Casey"), person("Alex"), person("Nia")], 42)).toBe(
-      "3 people kept it moving.",
-    );
+    const three = [relayer("Casey"), relayer("Alex"), relayer("Nia")];
+    expect(keptItMovingHeadline([relayer("Casey")])).toBe("Casey kept it moving");
+    expect(keptItMovingLine([relayer("Casey")], 8)).toBe("The question is now on 8 more tables.");
+    expect(keptItMovingHeadline(three)).toBe("Your Challenge is traveling");
+    expect(keptItMovingLine(three, 42)).toBe("3 people kept it moving.");
     // 42 opportunities must never be reported as 42 people.
-    expect(keptItMovingLine([person("Casey"), person("Alex"), person("Nia")], 42)).not.toContain(
-      "42",
-    );
+    expect(keptItMovingLine(three, 42)).not.toContain("42");
+  });
+
+  /**
+   * ACTS ARE NOT PEOPLE, AND THE CARD COUNTS PEOPLE.
+   *
+   * `relayers` is a list of relay ACTS because one person can put a question up,
+   * take it down and put it up again — `challenges_active_market_idx` is unique
+   * only `WHERE closed_at IS NULL`. Counting acts here would tell the creator
+   * that two people carried their question when one person carried it twice.
+   */
+  it("counts one person who relayed twice as one person", () => {
+    const twice = [relayer("Casey", 2, 5), relayer("Casey", 1, 3)];
+    expect(relayPeople(twice).map((p) => p.name)).toEqual(["Casey"]);
+    expect(keptItMovingHeadline(twice)).toBe("Casey kept it moving");
+    expect(keptItMovingLine(twice, 8)).toBe("The question is now on 8 more tables.");
+    expect(keptItMovingLine(twice, 8)).not.toContain("2 people");
+  });
+
+  it("still counts two people as two, however many times each acted", () => {
+    const mixed = [relayer("Casey", 3, 5), relayer("Casey", 2, 3), relayer("Alex", 1, 4)];
+    expect(relayPeople(mixed).map((p) => p.name)).toEqual(["Casey", "Alex"]);
+    expect(keptItMovingLine(mixed, 12)).toBe("2 people kept it moving.");
+  });
+
+  /** A relay act is still enough for the chain to be moving. */
+  it("reads a single repeated relayer as a moving chain", () => {
+    expect(
+      card({ outgoing: outgoing({ relayers: [relayer("Casey"), relayer("Casey")] }) }).state,
+    ).toBe("chain_moving");
   });
 });
 

@@ -1499,7 +1499,58 @@ the order of every entry around it.
 
 **Whose reach.** `relayReach` is the sum across every relayer on the branch.
 Spending the whole total on one person's row credits them with tables two other
-people opened. `CardRelayer.reach` is that person's own.
+people opened. `CardRelayer.reach` is that act's own.
+
+### The wallet-keyed version was wrong, and the schema says why
+
+The first cut of this merged child Challenges BY WALLET — latest timestamp, summed
+reach. That is only safe if a person can relay a market once. Review asked for
+that assumption to be proved or removed. It does not hold:
+
+```sql
+CREATE UNIQUE INDEX challenges_active_market_idx
+  ON challenges (challenger_wallet, market_id)
+  WHERE closed_at IS NULL;          -- ← only while OPEN
+```
+
+Three independent confirmations. The index constrains SIMULTANEOUS Challenges
+only. `put_on_table` refuses just `already_up`, which is itself scoped to
+`closed_at IS NULL`. And the children read in `challengeCardsFor` selects every
+challenge whose `parent_call` is one of my calls, with no closed filter — while
+`put_on_table` never checks whether a `parent_call` has already been relayed
+from. So John can put the question up, take it down, and put it up again.
+
+Merged by wallet, that produces:
+
+> JOHN KEPT IT MOVING
+> The question is now on 11 more tables.
+
+dated this morning, when eight of those tables opened last week. **Two human
+actions folded into one event carrying cumulative reach at the wrong moment** —
+the small, checkable-looking sentence that is not checkable.
+
+So `CardRelayer` is an ACT: its own `challengeId`, its own time, its own reach.
+
+### The same bug had a second home downstream
+
+Splitting the projection is not enough, because `collapseEvents` keys by
+`(marketId, actor.wallet)` and would have re-merged the two acts one layer
+later — taking `Math.max` of the timestamps and the first non-null reach, which
+silently DROPS one act's tables rather than summing them. Worse than the
+original.
+
+`ChallengeEventInput.actKey` fixes it at the source. Unset, the key is exactly
+what it was and a trade still collapses into the answer stamp it produced —
+which is what the collapse exists for. Set, two decisions by one person stay two
+events. Relays carry `relay:<childChallengeId>`.
+
+### Counting people is now a decision with one home
+
+The card counts PEOPLE: "3 people kept it moving", a face row. Counting acts
+there would tell a creator two people carried their question when one person
+carried it twice. `relayPeople()` dedupes by wallet, and `keptItMovingHeadline`
+and `keptItMovingLine` call it INTERNALLY rather than trusting the call site —
+so the dedupe cannot be forgotten by the next surface that needs a count.
 
 ### The selection is a domain module, not a loop in the loader
 

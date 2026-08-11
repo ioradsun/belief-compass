@@ -60,12 +60,18 @@ describe("Insider names actors and nobody else", () => {
       expect(input, forbidden).not.toContain(forbidden);
   });
 
+  /**
+   * ONE PERSON'S ONE ACT IS ONE EVENT — and the key has to say "act", not
+   * "person". Keyed by (market, actor) alone, two relays by the same person
+   * merge into one row carrying both reaches at the later timestamp, which the
+   * schema permits: `challenges_active_market_idx` is unique only
+   * `WHERE closed_at IS NULL`.
+   */
   it("collapses mechanical writes rather than reporting each one", () => {
     const events = code("src/domain/insider/challenge-events.ts");
     expect(events).toMatch(/export function collapseEvents/);
-    // Keyed by market AND actor: one person's one act in one market is one event.
     expect(events).toMatch(
-      /const key = `\$\{i\.marketId\}\|\$\{i\.actor\.wallet\.toLowerCase\(\)\}`/,
+      /const key = `\$\{i\.marketId\}\|\$\{i\.actor\.wallet\.toLowerCase\(\)\}\|\$\{i\.actKey \?\? ""\}`/,
     );
   });
 });

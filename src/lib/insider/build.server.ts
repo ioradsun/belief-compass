@@ -1095,7 +1095,9 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
       const when = new Date(e.atMs).toISOString();
       if (!title) continue;
       material.push({
-        id: `challenge:${e.kind}:${e.marketId}:${e.actorWallet}:${e.atMs}`,
+        // KEYED BY THE ACT. Two relays by one person on one market are two
+        // rows, so a key of (kind, market, wallet) would silently drop one.
+        id: `challenge:${e.actKey ?? `${e.kind}:${e.marketId}:${e.actorWallet}`}:${e.atMs}`,
         kind: e.kind === "relay" ? "challenge_relay" : "challenge_complete",
         marketId: String(e.marketId),
         marketTitle: title,

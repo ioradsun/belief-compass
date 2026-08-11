@@ -79,11 +79,19 @@ export function lifecycleEvents(
         actor: { wallet: r.wallet, name: r.name },
         atMs: r.atMs,
         /**
-         * THEIR REACH, NOT THE BRANCH TOTAL. `relayReach` sums every relayer's
-         * tables; spending it on one person's row credits them with tables two
-         * other people opened.
+         * THIS ACT'S REACH, NOT THE BRANCH TOTAL and not the person's lifetime
+         * total. `relayReach` sums every relayer's tables; spending it on one
+         * row credits somebody with tables other people opened.
          */
         relayReach: r.reach,
+        /**
+         * ONE ROW PER ACT, AND THE COLLAPSE MUST AGREE. `collapseEvents` keys by
+         * (market, actor), which is right for a trade and its answer stamp and
+         * wrong here: a person who put the question up, took it down and put it
+         * up again did two things on two days. Merged, they would read as one
+         * relay carrying both reaches at the later timestamp.
+         */
+        actKey: `relay:${r.challengeId}`,
       });
     }
 
@@ -106,6 +114,9 @@ export function lifecycleEvents(
       actor: { wallet: me, name: "You" },
       atMs: doneAt,
       completion: { showedUp: o.showedUp, reached: o.reached },
+      // One per Challenge, and named so it can never merge with a relay the
+      // reader happened to make on their own branch.
+      actKey: `complete:${o.challengeId}`,
     });
   }
   return out;

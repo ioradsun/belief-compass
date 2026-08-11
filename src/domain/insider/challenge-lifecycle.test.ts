@@ -13,10 +13,17 @@ const HOUR = 60 * 60 * 1000;
 const NOW = 1_000 * HOUR;
 const FRESH = NOW - 72 * HOUR;
 
-const relayer = (name: string, atMs: number, reach: number): CardRelayer => ({
+let nextChallengeId = 100;
+const relayer = (
+  name: string,
+  atMs: number,
+  reach: number,
+  challengeId = nextChallengeId++,
+): CardRelayer => ({
   wallet: `0x${name.toLowerCase()}`,
   name,
   avatarUrl: null,
+  challengeId,
   atMs,
   reach,
 });
@@ -121,6 +128,69 @@ describe("a relay is a thing that happened, and the tape could not say so", () =
     expect(
       kinds([card({ outgoing: outgoing({ relayers: [relayer("John", FRESH + 1, 8)] }) })]),
     ).toEqual(["relay"]);
+  });
+
+  /**
+   * TWO ACTS BY ONE PERSON ARE TWO EVENTS, AND THE SCHEMA IS WHY.
+   *
+   * `challenges_active_market_idx` is unique on `(challenger_wallet, market_id)
+   * WHERE closed_at IS NULL` — it prevents two SIMULTANEOUS Challenges and
+   * nothing else. `put_on_table` refuses only `already_up`, the children read
+   * carries no closed filter, and a `parent_call` may be relayed from again. So
+   * John really can put the question up, take it down, and put it up again.
+   *
+   * Keyed by wallet, those two would become "11 more tables" dated this morning
+   * when eight of them opened last week: two human actions folded into one
+   * event carrying cumulative reach at the wrong moment.
+   */
+  it("keeps two relay acts by one person as two events", () => {
+    const inputs = lifecycleEvents(
+      [
+        card({
+          state: "chain_moving",
+          outgoing: outgoing({
+            relayers: [relayer("John", NOW - HOUR, 3, 51), relayer("John", NOW - 40 * HOUR, 8, 42)],
+            relayReach: 11,
+          }),
+        }),
+      ],
+      ctx,
+    );
+    expect(inputs.map((e) => e.relayReach)).toEqual([3, 8]);
+
+    // And the collapse must agree, or the split above is undone downstream.
+    const events = semanticEvents(inputs);
+    expect(events).toHaveLength(2);
+    expect(events.map((e) => e.support)).toEqual([
+      "The question is now on 3 more tables.",
+      "The question is now on 8 more tables.",
+    ]);
+    // Neither row carries the other's tables, and neither carries the total.
+    for (const e of events) expect(e.support).not.toContain("11");
+    // Each keeps its own moment rather than both taking the later one.
+    expect(new Set(events.map((e) => e.atMs)).size).toBe(2);
+  });
+
+  it("still collapses a trade and the answer stamp it produced", () => {
+    // The act key is opt-in: rows without one behave exactly as before.
+    const merged = semanticEvents([
+      {
+        kind: "new_believer",
+        marketId: 1,
+        actor: { wallet: "0xc", name: "Casey" },
+        atMs: 1,
+        side: "NO",
+      },
+      {
+        kind: "challenge_response",
+        marketId: 1,
+        actor: { wallet: "0xc", name: "Casey" },
+        atMs: 1,
+        answeredCaller: { wallet: "0xj", name: "John" },
+      },
+    ]);
+    expect(merged).toHaveLength(1);
+    expect(merged[0].headline).toBe("CASEY BACKED NO");
   });
 
   it("says tables, never people, once composed", () => {
