@@ -328,6 +328,32 @@ export function CreateMarket({
     chainError ??
     (submit.error instanceof Error ? submit.error.message.split("\n")[0] : null);
 
+  /**
+   * DROP AN IMAGE. Accepted locally and previewed instantly from an object URL —
+   * nothing is uploaded until the draft exists at publish, so an abandoned form
+   * never leaves bytes behind. The fingerprint is computed in the background and
+   * feeds the duplicate probe.
+   */
+  const takeFile = (file: File | null | undefined) => {
+    if (!file) return;
+    if (kindForMime(file.type) !== "image") {
+      setLocalError("Images only — JPG, PNG, WEBP, AVIF or GIF.");
+      return;
+    }
+    if (file.size > MEDIA_LIMITS.image.bytes) {
+      setLocalError("That image is over 10MB.");
+      return;
+    }
+    setLocalError(null);
+    setLinkOpen(false);
+    const previewUrl = URL.createObjectURL(file);
+    setAttachment({ kind: "file", file, previewUrl, sha256: null });
+    void hashFile(file).then((sha256) =>
+      setAttachment((a) => (a?.kind === "file" && a.file === file ? { ...a, sha256 } : a)),
+    );
+  };
+
+
   return (
     <div className="relative mx-auto flex h-full min-h-0 w-full max-w-[600px] flex-col justify-center">
       {/* 1 · THE TITLE NAMES THE ACT, AND STOPS SELLING.
