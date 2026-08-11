@@ -31,7 +31,6 @@ import { useQuery } from "@tanstack/react-query";
 import { networkQO } from "@/lib/network-query";
 import { MyConvictions } from "@/components/MyConvictions";
 import { MARKETS_TAB } from "@/domain/markets";
-import { MarketsPanel } from "@/components/MarketsPanel";
 import { NetworkPanel } from "@/components/NetworkPanel";
 import { presentRelationship } from "@/domain/relationship";
 import { type MarketRow } from "@/components/MarketCard";
