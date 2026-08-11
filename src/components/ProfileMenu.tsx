@@ -9,6 +9,8 @@
  * account switcher, no multiple profiles, no advanced wallet management.
  */
 import { Suspense, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+
 import { lazyRetry } from "@/lib/lazy-retry";
 import { useAccount } from "wagmi";
 import { useQuery } from "@tanstack/react-query";
