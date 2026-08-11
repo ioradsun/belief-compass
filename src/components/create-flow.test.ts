@@ -54,9 +54,17 @@ describe("the idea rail never costs the writer a sentence", () => {
     expect(action.indexOf("onUse")).toBeGreaterThan(action.indexOf("Keep your own question"));
   });
 
-  it("renders nothing rather than padding the column", () => {
-    expect(code("src/components/IdeasRail.tsx")).toMatch(/if \(!suggestion\) return null;/);
+  it("always gives a blank composer somewhere to start", () => {
+    // The old rule was "no House spark, no column". Most sessions never earn a
+    // spark, so the hardest screen in the product got the emptiest rail. Topics
+    // are always offered; only the generation waits for a press.
+    const c = code("src/components/IdeasRail.tsx");
+    expect(c).toMatch(/TOPICS/);
+    expect(c).not.toMatch(/if \(!suggestion\) return null;/);
+    // Topic ideas adopt in place — they never reset a draft mid-sentence.
+    expect(c).toMatch(/adoptQuestion\(idea\)/);
   });
+
 });
 
 describe("category is the system's business, not the creator's", () => {
