@@ -130,6 +130,37 @@ export interface OpportunityFeedInput extends FeedSessionState {
 
 type Row = Record<string, unknown> & { onchain_id: number };
 
+/**
+ * PERSONAL SIGNAL DOES NOT THIN OUT WITH DEPTH.
+ *
+ * Page zero is dense with markets that are loud AND relevant, so the composite
+ * score sorts them fine. Deeper pages are the tail of every ordering, where the
+ * loudest thing left is usually loud and nothing else — and a market with the
+ * reader's tribe, rivals or followed people in it would lose to it on volume
+ * alone. That is the drift the pass rule would otherwise expose: the further a
+ * reader gets, the less the feed looks like theirs.
+ *
+ * So connection is given a bounded lift that GROWS WITH DEPTH and stops. It
+ * cannot invent relevance (a market with nobody in it gains nothing) and it
+ * cannot run away with the ranking — three points per depth, capped, on a 0..100
+ * scale.
+ */
+const DEEP_PAGE_LIFT = 3;
+const DEEP_PAGE_MAX_LIFT = 12;
+
+function deepPagePersonalFloor(
+  scored: ScoredMarket,
+  s: FeedMarketSignals,
+  poolPage: number,
+): ScoredMarket {
+  if (poolPage <= 0) return scored;
+  const connected = s.followedHere > 0 || s.tribeCount > 0 || s.oppCount > 0;
+  if (!connected) return scored;
+  const lift = Math.min(DEEP_PAGE_MAX_LIFT, poolPage * DEEP_PAGE_LIFT);
+  return { ...scored, score: Math.min(100, scored.score + lift) };
+}
+
+
 const num = (v: unknown): number => {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
