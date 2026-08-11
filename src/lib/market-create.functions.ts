@@ -66,6 +66,15 @@ export const suggestAlternateQuestions = createServerFn({ method: "POST" })
     return { alternates: await alternateQuestions(data.question) };
   });
 
+/** Four fresh question sparks inside a topic the reader picked. */
+export const suggestTopicIdeas = createServerFn({ method: "POST" })
+  .inputValidator((data: { topic: string }) => ({ topic: clean(data.topic, 60) }))
+  .handler(async ({ data }) => {
+    if (!data.topic) return { ideas: [] as string[] };
+    const { topicIdeas } = await import("@/lib/market-create.server");
+    return { ideas: await topicIdeas(data.topic) };
+  });
+
 /**
  * Ranked "you might rather back this" suggestions for the right rail.
  * Advisory only — creation stays permissionless, so this never gates anything.
