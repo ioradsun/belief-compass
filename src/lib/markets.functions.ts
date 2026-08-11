@@ -17,7 +17,7 @@ import { swrCache } from "@/lib/server-cache";
 import { rankMarkets } from "@/domain/market-search";
 import { availableModes, type FeedMode } from "@/domain/feed/mode";
 import { loadWindowChanges, pricePct } from "@/lib/window-change.server";
-import { buildPool, POOL, type PoolSlice } from "@/domain/feed/pool";
+import { buildPool, pageRange, POOL, type PoolSlice } from "@/domain/feed/pool";
 import { classifyMomentum, NO_MOMENTUM, type MomentumFacts } from "@/domain/feed/momentum";
 import { currencyDrift } from "@/domain/market-change";
 import { weiToEth } from "@/domain/money";
@@ -152,9 +152,26 @@ async function poolRows(
    * participants row-lookup, which genuinely depends on it, waits.
    */
   participationP: PromiseLike<{ data: unknown }>,
+  /**
+   * HOW DEEP INTO THE CATALOGUE — 0 is the top of every ordering.
+   *
+   * The pool was a fixed window of 240 and the feed treated running out of it as
+   * running out of markets, which on a platform of ~2,800 meant handing back
+   * repeats with thousands of untouched questions behind them. A page moves the
+   * window instead of widening it: same eight orderings, same quotas, same 240
+   * rows, offset by one page each time. Every cost downstream — the window
+   * volume aggregate, the baseline RPC, the viewer overlay, the response payload
+   * — is identical to what it was, because the SIZE never changed.
+   *
+   * And a page is still viewer-independent, which is what keeps it cacheable:
+   * "the next 240 by activity" is the same question for everyone who asks it.
+   */
+  page = 0,
 ) {
   const q = () => sb.from("market_state").select(FEED_COLUMNS);
   const sinceActive = new Date(Date.now() - POOL_ACTIVE_MS).toISOString();
+  /** See @/domain/feed/pool#pageRange — the window moves, it does not widen. */
+  const at = (n: number) => pageRange(n, page);
 
   const [active, fresh, classified, believed, deep, capital, moving, participationRes] =
     await Promise.all([
@@ -163,33 +180,33 @@ async function poolRows(
       q()
         .gte("last_trade_at", sinceActive)
         .order("last_trade_at", { ascending: false, nullsFirst: false })
-        .limit(POOL.slices.active.fetch),
+        .range(...at(POOL.slices.active.fetch)),
       // What is new. Structurally impossible to reach through a volume ordering.
       q()
         .order("market_created_at", { ascending: false, nullsFirst: false })
-        .limit(POOL.slices.fresh.fetch),
+        .range(...at(POOL.slices.fresh.fetch)),
       // What the opportunity engine already flagged — output the pool that
       // consumes it was mostly excluding.
       q()
         .not("opportunity_type", "is", null)
         .order("opportunity_score", { ascending: false, nullsFirst: false })
-        .limit(POOL.slices.classified.fetch),
+        .range(...at(POOL.slices.classified.fetch)),
       // Where people actually are — the substrate every social signal needs.
       q()
         .gt("directional_believers", 0)
         .order("directional_believers", { ascending: false, nullsFirst: false })
-        .limit(POOL.slices.believed.fetch),
+        .range(...at(POOL.slices.believed.fetch)),
       // The old pool, kept whole: a big book is still a real reason to look.
       q()
         .order("volume_total_usd", { ascending: false, nullsFirst: false })
-        .limit(POOL.slices.deep.fetch),
+        .range(...at(POOL.slices.deep.fetch)),
       // WHERE THE MONEY IS STANDING — what "Most Capital" promises. `capital_usd`
       // is the stored sum of the two sides (PostgREST cannot order on an
       // expression); see the migration for why it is a generated column. Volume is
       // NOT a substitute: the top forty by each share only five markets.
       q()
         .order("capital_usd", { ascending: false, nullsFirst: false })
-        .limit(POOL.slices.capital.fetch),
+        .range(...at(POOL.slices.capital.fetch)),
       // WHAT IS ACTUALLY MOVING — what the "Moving" lens promises. `active` is
       // not a substitute: it orders by WHEN a market last traded, this orders by
       // HOW MUCH it traded today. Forty trades this morning and none since noon
@@ -197,7 +214,7 @@ async function poolRows(
       q()
         .gt("trade_count_24h", 0)
         .order("trade_count_24h", { ascending: false, nullsFirst: false })
-        .limit(POOL.slices.moving.fetch),
+        .range(...at(POOL.slices.moving.fetch)),
       participationP,
     ]);
 
@@ -215,7 +232,9 @@ async function poolRows(
   const participation = (participationRes.data ?? []) as ParticipationRow[];
   const topParticipantIds = [...participation]
     .sort((a, b) => Number(b.participants) - Number(a.participants) || a.onchain_id - b.onchain_id)
-    .slice(0, POOL.slices.participants.fetch)
+    // Not a query: `market_participation()` already returned every market, so
+    // this page is a slice of an array rather than a second round trip.
+    .slice(page * POOL.slices.participants.fetch, (page + 1) * POOL.slices.participants.fetch)
     .map((p) => Number(p.onchain_id));
 
   const participants = topParticipantIds.length
@@ -289,12 +308,16 @@ async function poolRows(
  * the pool read and the per-window aggregate scans on every request. Throws
  * on a hard market_state error so a failure is never cached.
  */
-async function sharedFeedData(win: VolumeWindow) {
+async function sharedFeedData(win: VolumeWindow, page = 0) {
   const sb = serviceClient();
   // ONE participation read for the whole build. Started here, awaited inside
   // poolRows alongside the slice queries, and returned so the reach lookup below
   // reuses it instead of asking the same question a second time.
-  const { rows, slicesById, participation } = await poolRows(sb, sb.rpc("market_participation"));
+  const { rows, slicesById, participation } = await poolRows(
+    sb,
+    sb.rpc("market_participation"),
+    page,
+  );
 
   const ms = VOLUME_WINDOWS[win];
   const since = ms == null ? null : new Date(Date.now() - ms).toISOString();
@@ -440,17 +463,20 @@ async function sharedFeedData(win: VolumeWindow) {
 }
 
 export const listFeed = createServerFn({ method: "GET" })
-  .inputValidator((d?: { wallet?: string; window?: VolumeWindow }) =>
+  .inputValidator((d?: { wallet?: string; window?: VolumeWindow; poolPage?: number }) =>
     z
       .object({
         wallet: z.string().min(3).optional(),
         window: z.enum(["1h", "24h", "7d", "30d", "all"]).optional(),
+        /** How deep into the catalogue to retrieve — see `poolRows`. */
+        poolPage: z.number().int().min(0).max(POOL.maxPages).optional(),
       })
       .parse(d ?? {}),
   )
   .handler(async ({ data: input }) => {
     const win: VolumeWindow = input?.window ?? "24h";
     const viewer = input?.wallet?.toLowerCase() ?? null;
+    const poolPage = Math.min(Math.max(0, input?.poolPage ?? 0), POOL.maxPages);
 
     // The heavy, viewer-independent work is cached per window (SWR). EVERY viewer
     // — anon or connected — reads a warm snapshot instead of re-running the
@@ -458,8 +484,11 @@ export const listFeed = createServerFn({ method: "GET" })
     // small per-viewer DNA overlay below runs fresh.
     let shared: Awaited<ReturnType<typeof sharedFeedData>>;
     try {
-      shared = await swrCache(`feed:shared:${win}`, { ttlMs: ANON_FEED_TTL_MS }, () =>
-        sharedFeedData(win),
+      // KEYED BY DEPTH TOO. A page is viewer-independent, so every reader who
+      // has walked this far shares one warm snapshot exactly as they shared
+      // page zero — deepening costs a cache entry, not a query per reader.
+      shared = await swrCache(`feed:shared:${win}:${poolPage}`, { ttlMs: ANON_FEED_TTL_MS }, () =>
+        sharedFeedData(win, poolPage),
       );
     } catch (e) {
       return {
@@ -1196,7 +1225,6 @@ export const getWarmDeckCore = createServerFn({ method: "GET" })
     return (await warmDeckCore(data.ids ?? [])) ?? null;
   });
 
-
 /** One window's authoritative believers/capital/price as of its opening boundary. */
 export interface WindowBaseline {
   believersYes: number | null;
@@ -1252,7 +1280,6 @@ export const getMarketBaselines = createServerFn({ method: "GET" })
       }
     });
   });
-
 
 /**
  * Per-market pulse strips: the most recent real trade events for each of the

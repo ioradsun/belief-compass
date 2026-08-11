@@ -37,6 +37,8 @@ const input = z.object({
   originMarketId: z.number().int().nonnegative().nullish(),
   seenIds: z.array(z.number().int().nonnegative()).max(200).optional(),
   queuedIds: z.array(z.number().int().nonnegative()).max(200).optional(),
+  /** How deep into the catalogue to retrieve — see @/domain/feed/pool. */
+  poolPage: z.number().int().min(0).max(64).optional(),
   cardsViewed: z.number().int().nonnegative().max(10_000).optional(),
   cardsSinceIdea: z.number().int().nonnegative().max(10_000).optional(),
   ideasShownThisSession: z.number().int().nonnegative().max(100).optional(),
