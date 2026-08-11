@@ -72,8 +72,27 @@ export function PostActionScreen({
     x.consequence === "branch_live" || x.consequence === "challenge_live";
 
   return (
-    <section className="flex min-h-0 w-full flex-col gap-3 p-4" data-post-action={x.copyCategory}>
-      {/* MARKET MAKER FIRST. A creator who also backed their question is both,
+    /**
+     * HEIGHT IS A CONSTRAINT, NOT AN ASSUMPTION.
+     *
+     * This screen used to be one column that grew as tall as its content and
+     * trusted the viewport to be tall enough. On a short window — a laptop with
+     * browser chrome, a phone in landscape, a split screen — the story ran past
+     * the bottom and took the ONE thing the screen exists for with it: the way
+     * out. A confirmation whose button is below the fold is a dead end.
+     *
+     * So the moment is split into two jobs. The story SCROLLS in whatever room
+     * there is (`min-h-0` is what actually lets a flex child shrink below its
+     * content), and the actions are PINNED to the bottom of the panel where they
+     * are reachable at any height. Nothing is hidden, nothing is truncated, and
+     * the exit is always one press away.
+     */
+    <section
+      className="flex h-full min-h-0 w-full flex-col"
+      data-post-action={x.copyCategory}
+    >
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-contain p-4">
+        {/* MARKET MAKER FIRST. A creator who also backed their question is both,
           and the authorship is the larger fact — this badge is the one place the
           screen refuses to reduce them to a believer. */}
       {x.identity && (
@@ -162,36 +181,41 @@ export function PostActionScreen({
           )}
         </div>
       )}
+      </div>
 
-      <div className="mt-1 flex flex-col items-start gap-1.5">
-        <button
-          type="button"
-          /**
-           * NEVER RENDERED DISABLED. A CTA that cannot be used is a smaller
-           * version of a promise that cannot be kept — the resolver returns the
-           * strongest action that is actually available, so there is nothing to
-           * grey out. `pending` dims an in-flight press and nothing else.
-           */
-          disabled={pending}
-          onClick={() => onAct(x.primary)}
-          className="rounded-lg bg-[var(--text)] px-3 py-1.5 text-[13px] font-medium text-[var(--bg)] transition-opacity disabled:opacity-50"
-        >
-          {x.primary.label}
-        </button>
-        {/* WHAT IT COSTS, said plainly — and only beside an offer that spends
-            one. Not a balance to watch run down. */}
-        {x.primary.kind === "challenge" && (
-          <p className="text-[11px] text-[var(--text-muted)]">{RELAY_COST}</p>
-        )}
-        {x.secondary && (
+      {/* THE WAY OUT, ALWAYS ON SCREEN. Pinned outside the scroller so the
+          height of the story can never decide whether the reader can leave. */}
+      <div className="shrink-0 border-t border-[var(--border)] bg-[var(--panel,var(--bg))] px-4 py-3">
+        <div className="flex flex-col items-start gap-1.5">
           <button
             type="button"
-            onClick={() => onAct(x.secondary as Cta)}
-            className="text-[12px] text-[var(--text-muted)] underline transition-colors hover:text-[var(--text)]"
+            /**
+             * NEVER RENDERED DISABLED. A CTA that cannot be used is a smaller
+             * version of a promise that cannot be kept — the resolver returns the
+             * strongest action that is actually available, so there is nothing to
+             * grey out. `pending` dims an in-flight press and nothing else.
+             */
+            disabled={pending}
+            onClick={() => onAct(x.primary)}
+            className="rounded-lg bg-[var(--text)] px-3 py-1.5 text-[13px] font-medium text-[var(--bg)] transition-opacity disabled:opacity-50"
           >
-            {x.secondary.label}
+            {x.primary.label}
           </button>
-        )}
+          {/* WHAT IT COSTS, said plainly — and only beside an offer that spends
+              one. Not a balance to watch run down. */}
+          {x.primary.kind === "challenge" && (
+            <p className="text-[11px] text-[var(--text-muted)]">{RELAY_COST}</p>
+          )}
+          {x.secondary && (
+            <button
+              type="button"
+              onClick={() => onAct(x.secondary as Cta)}
+              className="text-[12px] text-[var(--text-muted)] underline transition-colors hover:text-[var(--text)]"
+            >
+              {x.secondary.label}
+            </button>
+          )}
+        </div>
       </div>
     </section>
   );

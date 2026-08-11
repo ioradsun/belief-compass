@@ -64,11 +64,16 @@ function Faces({ faces, overflow }: { faces: RevealFace[]; overflow: number }) {
 
 function Card({ card }: { card: RevealCard }) {
   return (
-    <div className="rounded-2xl px-5 py-4 text-center" style={{ background: "var(--surface)" }}>
+    <div
+      // Padding is part of the height budget too: on a short window five
+      // stacked cards of fixed padding are what pushes the story off screen.
+      className="rounded-2xl px-5 py-[clamp(8px,1.8vh,16px)] text-center"
+      style={{ background: "var(--surface)" }}
+    >
       <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">
         <span aria-hidden>{card.icon}</span> {card.title}
       </div>
-      <p className="mt-1.5 text-[clamp(15px,3.6vw,17px)] leading-snug text-[var(--text)]">
+      <p className="mt-1.5 text-[clamp(13px,min(3.6vw,2.2vh),17px)] leading-snug text-[var(--text)]">
         {card.body}
       </p>
       <Faces faces={card.faces} overflow={card.overflow} />
@@ -108,13 +113,23 @@ export function ConvictionReveal({
   const ctaDelay = cardBase + Math.max(1, story.cards.length) * cardStep + 40;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-4 py-6">
-      <div className="flex w-full max-w-[440px] flex-col gap-5">
+    /**
+     * FLUID IN BOTH DIRECTIONS.
+     *
+     * The type here was already fluid across WIDTH and completely blind to
+     * HEIGHT, so a 30px headline, 9mm of gaps and two cards read beautifully on
+     * a tall screen and collided on a short one. Every vertical measurement —
+     * type size, gaps, padding, the tick — is now the smaller of a width rule
+     * and a height rule, so the story compresses instead of overflowing, and
+     * `justify-center` only centres when there is genuinely spare room.
+     */
+    <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-4 py-[clamp(8px,2.5vh,24px)]">
+      <div className="flex w-full max-w-[440px] flex-col gap-[clamp(10px,2.2vh,20px)]">
         {/* ✓ — the transaction was only the unlock. */}
         <Beat delay={0}>
           <div className="flex items-center justify-center">
             <span
-              className="grid h-9 w-9 place-items-center rounded-full text-[16px] font-bold text-[var(--bg)]"
+              className="grid h-[clamp(26px,4vh,36px)] w-[clamp(26px,4vh,36px)] place-items-center rounded-full text-[clamp(13px,2vh,16px)] font-bold text-[var(--bg)]"
               style={{ background: sideColor }}
               aria-hidden
             >
@@ -127,7 +142,7 @@ export function ConvictionReveal({
         <Beat delay={120}>
           <div className="text-center">
             <h2
-              className="text-[clamp(22px,6vw,30px)] font-semibold leading-tight tracking-[-0.02em]"
+              className="text-[clamp(18px,min(6vw,4.4vh),30px)] font-semibold leading-tight tracking-[-0.02em]"
               style={{ color: toneColor(story.tone) }}
             >
               {story.tone === "house" && <span aria-hidden>🏠 </span>}
