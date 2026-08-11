@@ -1207,10 +1207,8 @@ function Feed() {
           lens: lensRef.current,
           originMarketId: originRef.current,
           poolPage,
-          // Repeats only once every depth has been asked for fresh markets and
-          // come back empty — see `resurfacingRef`.
-          allowResurface: resurfacingRef.current,
           ...feedSession(),
+
           /**
            * THE WHOLE ORDER, not the part ahead of the reader.
            *
