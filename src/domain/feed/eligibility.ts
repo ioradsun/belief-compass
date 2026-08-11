@@ -62,6 +62,8 @@ export type ExclusionReason =
 export interface ViewerMarketState {
   /** Holds YES or NO right now. */
   activePosition?: boolean;
+  /** When that position was last traded — which pass it belongs to. */
+  positionAt?: string | null;
   /** ISO timestamps of the viewer's last interaction of each kind. */
   passedAt?: string | null;
   passCount?: number;
@@ -72,35 +74,17 @@ export interface ViewerMarketState {
 }
 
 /**
- * Which pool a (viewer, market) pair belongs in. See the module doc: the split
- * between `resurfaced` and `blocked` is the difference between "we showed you
- * this" and "you told us something".
- */
-export type FeedTier = "fresh" | "resurfaced" | "blocked";
-
-/**
- * The reasons that mean "shown, not decided" — the resurfaceable set.
+ * Which pool a (viewer, market) pair belongs in.
  *
- * `recently_opened` is here and it is the borderline one, so the reasoning is
- * written down: opening a market is engagement, not a verdict. Someone who read
- * a case file and neither backed nor passed has told us they were interested and
- * nothing else. It ranks LAST within the tier (its 24h cooldown is the longest
- * of the three, and the tier orders on exactly that), so it is only ever reached
- * when the alternative is an empty feed.
- *
- * `queued_this_session` is deliberately NOT here: it is not a history signal at
- * all but a de-duplication constraint, and resurfacing a market that is already
- * sitting further down the same queue would put it on screen twice.
+ * `resurfaced` is retained as a value the sequencer still understands, but the
+ * gate no longer produces it: under the pass rule a market is either untouched
+ * in this pass or it is out of it, and repeats arrive by ROLLING THE PASS
+ * rather than by a second tier inside one.
  */
-const RESURFACEABLE: ReadonlySet<ExclusionReason> = new Set<ExclusionReason>([
-  "seen_this_session",
-  "recently_viewed",
-  "recently_opened",
-]);
+export type FeedTier = "fresh" | "blocked" | "resurfaced";
 
 export function tierFor(reason: ExclusionReason | null): FeedTier {
-  if (reason == null) return "fresh";
-  return RESURFACEABLE.has(reason) ? "resurfaced" : "blocked";
+  return reason == null ? "fresh" : "blocked";
 }
 
 export interface EligibilityInput {
@@ -111,40 +95,27 @@ export interface EligibilityInput {
   /** Market ids already queued later in this session. */
   sessionQueued: ReadonlySet<number>;
   /**
-   * Where each session-seen market sits in the order it was seen — 0 is the one
-   * shown LONGEST ago. Optional, and its absence costs only ordering: the
-   * resurface tier still works, it just cannot tell two session-seen markets
-   * apart and falls back to score.
-   *
-   * WHY A RANK AND NOT A TIMESTAMP. `seen_this_session` is the client's own
-   * record and carries no clock — the wire format is an array of ids. The array
-   * is already in the order they were seen, so its INDEX is the only recency
-   * signal that exists, and it is enough to answer the one question the tier
-   * asks: which of these did we show them furthest back.
+   * WHEN THE CURRENT PASS BEGAN, in epoch ms. Contact older than this belongs
+   * to a spent pass and stops excluding anything. Absent means "the pass has
+   * always been running", i.e. every recorded contact still counts.
    */
-  sessionSeenRank?: ReadonlyMap<number, number>;
+  cycleStartedAt?: number;
   now: number;
 }
 
 export interface Eligibility {
-  /** `tier === "fresh"` — may this enter the fresh pool. */
+  /** `tier === "fresh"` — may this enter the pool for the current pass. */
   eligible: boolean;
   /** Which pool this belongs in. See `FeedTier`. */
   tier: FeedTier;
   reason: ExclusionReason | null;
-  /** When the cooldown lifts (null = eligible now, or never). */
-  availableAt: number | null;
   /**
-   * THE RESURFACE ORDERING KEY — lower is shown sooner. Null outside the
-   * `resurfaced` tier.
-   *
-   * Deliberately a separate field from `availableAt`, which answers a different
-   * question ("when does this become FRESH again") and must keep answering it
-   * honestly. For a cooldown the two happen to coincide, because a cooldown that
-   * lifts sooner is a market seen longer ago. For `seen_this_session` there is no
-   * cooldown to lift at all, so this is synthesised from the seen rank —
-   * comparable within the tier, and never mistaken for a real expiry.
+   * When this becomes available again. Always null now: the answer is "when the
+   * pass rolls", which is an event rather than a time, and inventing a clock for
+   * it would be the cooldown model coming back through the side door.
    */
+  availableAt: number | null;
+  /** Legacy resurface ordering key. Always null — see `FeedTier`. */
   resurfaceAt: number | null;
 }
 
@@ -154,97 +125,59 @@ const ago = (iso: string | null | undefined, now: number): number | null => {
   return Number.isFinite(t) ? now - t : null;
 };
 
-/** Is a timestamped interaction still inside its cooldown? */
-function cooling(
-  iso: string | null | undefined,
-  windowMs: number | null,
-  now: number,
-): { active: boolean; until: number | null } {
-  if (!iso) return { active: false, until: null };
-  const t = Date.parse(iso);
-  if (!Number.isFinite(t)) return { active: false, until: null };
-  if (windowMs == null) return { active: true, until: null };
-  const until = t + windowMs;
-  return { active: until > now, until };
+/** Build the answer for one reason. Every exclusion is a blocked one. */
+function verdict(reason: ExclusionReason): Eligibility {
+  return { eligible: false, tier: "blocked", reason, availableAt: null, resurfaceAt: null };
 }
 
-/**
- * Build the answer for one reason, deriving the tier from the reason itself.
- *
- * The tier is NEVER passed in at a call site. `RESURFACEABLE` is the single
- * place the "shown vs decided" line is drawn, so adding an exclusion reason
- * later cannot accidentally create a fourth policy — it lands in `blocked`
- * unless someone deliberately says otherwise.
- */
-function verdict(
-  reason: ExclusionReason,
-  availableAt: number | null,
-  resurfaceAt: number | null,
-): Eligibility {
-  const tier = tierFor(reason);
-  return {
-    eligible: false,
-    tier,
-    reason,
-    availableAt,
-    resurfaceAt: tier === "resurfaced" ? resurfaceAt : null,
-  };
-}
 
 /**
- * The one eligibility decision. Order matters: the strongest signal about what
- * the person already told us wins, so the exclusion reason is always the honest
- * one (diagnostics show it verbatim).
+ * THE ONE ELIGIBILITY DECISION — one rule, applied to every kind of contact.
  *
- * The DECISIONS are tested first and the SIGHTINGS last, which is the same order
- * as before and now also means the tier degrades monotonically — a market that
- * was passed is blocked even though it was obviously also seen, because the pass
- * is the stronger statement and the reason must name it.
+ * "Did the viewer touch this market during the current pass?" If yes, it is out
+ * until the pass rolls; if no, it is in. No per-reason cooldowns, no tiers, no
+ * repeats offered while untouched markets remain. `hidden` is the single
+ * permanent exception, because that one IS a standing instruction.
+ *
+ * Order still matters, but only for the LABEL: the strongest statement the
+ * reader made is the reason diagnostics print.
  */
 export function eligibilityFor(input: EligibilityInput): Eligibility {
   const s = input.state ?? {};
-  const now = input.now;
+  /**
+   * WHEN THE CURRENT PASS BEGAN. Everything before it belongs to a spent pass
+   * and no longer excludes anything — that is what makes the feed cyclical
+   * instead of monotonically shrinking. Zero (the default) means "this viewer
+   * has always been in the same pass", which is the correct reading for a
+   * session that has never rolled.
+   */
+  const since = input.cycleStartedAt ?? 0;
+  /** Did this contact happen inside the current pass? */
+  const inCycle = (iso: string | null | undefined): boolean => {
+    if (!iso) return false;
+    const t = Date.parse(iso);
+    return Number.isFinite(t) ? t >= since : false;
+  };
 
-  if (s.hiddenAt) return verdict("hidden", null, null);
-  if (s.activePosition) return verdict("active_position", null, null);
-
-  const repeat = (s.passCount ?? 0) > 1;
-  const pass = cooling(s.passedAt, repeat ? COOLDOWNS.PASS_REPEAT_MS : COOLDOWNS.PASS_MS, now);
-  if (pass.active) return verdict(repeat ? "passed_repeat" : "passed", pass.until, null);
-
-  const sold = cooling(s.soldAt, COOLDOWNS.SOLD_MS, now);
-  if (sold.active) return verdict("sold_out", sold.until, null);
-
-  // From here down the reader has told us NOTHING — these are our own records of
-  // what we put in front of them. Each carries the moment it becomes the least
-  // objectionable thing left to show, which is what orders the resurface tier.
-  const opened = cooling(s.openedAt, COOLDOWNS.OPENED_MS, now);
-  if (opened.active) return verdict("recently_opened", opened.until, opened.until);
-
-  const viewed = cooling(s.viewedAt, COOLDOWNS.VIEWED_MS, now);
-  if (viewed.active) return verdict("recently_viewed", viewed.until, viewed.until);
-
-  if (input.sessionSeen.has(input.onchainId)) {
-    /**
-     * No cooldown to lift and no timestamp to read — see `sessionSeenRank`. So
-     * the key is synthesised at the PESSIMISTIC end of the viewed window, as
-     * though the sighting had happened this instant, and tie-broken by rank.
-     *
-     * Pessimistic because that is what the signal actually supports. All this
-     * says is "some time during this tab's life"; for a connected wallet it also
-     * implies the server-side view event has not landed yet, which makes it a
-     * sighting from the last few seconds rather than the last few hours. Ordering
-     * it as though it were about to expire would put the market the reader just
-     * scrolled past ahead of one they saw this morning — the exact inversion the
-     * tier exists to avoid.
-     */
-    const rank = input.sessionSeenRank?.get(input.onchainId) ?? 0;
-    return verdict("seen_this_session", null, now + COOLDOWNS.VIEWED_MS + rank);
-  }
-  if (input.sessionQueued.has(input.onchainId)) return verdict("queued_this_session", null, null);
+  if (s.hiddenAt) return verdict("hidden");
+  // A position TAKEN in this pass is out of it. One held since before the pass
+  // began is fair to offer again — the reader is being asked what they think
+  // now, and their own market is a legitimate thing to be shown.
+  if (s.activePosition && (s.positionAt == null || inCycle(s.positionAt)))
+    return verdict("active_position");
+  if (inCycle(s.passedAt)) return verdict((s.passCount ?? 0) > 1 ? "passed_repeat" : "passed");
+  if (inCycle(s.soldAt)) return verdict("sold_out");
+  if (inCycle(s.openedAt)) return verdict("recently_opened");
+  if (inCycle(s.viewedAt)) return verdict("recently_viewed");
+  // The client's own record of this pass, for sightings the server ledger has
+  // not caught up with (and for viewers with no wallet, where it is the only
+  // record there is).
+  if (input.sessionSeen.has(input.onchainId)) return verdict("seen_this_session");
+  if (input.sessionQueued.has(input.onchainId)) return verdict("queued_this_session");
 
   return { eligible: true, tier: "fresh", reason: null, availableAt: null, resurfaceAt: null };
 }
+
 
 /** Live signals that can justify bringing an acted-on market back. */
 export interface MaterialSignals {

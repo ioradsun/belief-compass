@@ -254,7 +254,10 @@ export async function loadViewerSignals(
     const open = Number(b.yes_shares ?? 0) > 0 || Number(b.no_shares ?? 0) > 0;
     if (open) {
       held.add(id);
-      put(id, { activePosition: true });
+      // The trade time says which PASS this position belongs to — a position
+      // taken long ago stops excluding the market once the pass rolls.
+      put(id, { activePosition: true, positionAt: b.last_trade_at ?? null });
+
     } else if (b.last_trade_at) {
       // Traded here before but holds nothing now — a fully-sold position.
       put(id, { soldAt: states.get(id)?.soldAt ?? b.last_trade_at });

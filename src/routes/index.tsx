@@ -16,6 +16,8 @@ import { getOpportunityFeed, getWarmFeed } from "@/lib/opportunity-feed.function
 import {
   feedSession,
   feedSessionVersion,
+  rollFeedCycle,
+
   ideaGateOpen,
   resetFeedSession,
   subscribeFeedSession,
@@ -1002,10 +1004,13 @@ function Feed() {
    * and a page with nothing fresh means "look deeper" rather than "you are
    * finished" — which is what stops a reader being handed markets they have seen
    * while thousands sit untouched behind the pool's ceiling. Only when a depth
-   * comes back with no markets AT ALL has the catalogue actually run out, and
-   * only then does the dig start again from the top with repeats allowed.
+   * comes back with no markets AT ALL has the catalogue actually run out — and
+   * that is when the PASS ROLLS: contact resets, the dig starts from the top,
+   * and the platform is ranked fresh. This flag exists so a roll that changes
+   * nothing is read as a genuinely empty platform rather than looping.
    */
-  const resurfacingRef = useRef(false);
+  const rolledRef = useRef(false);
+
   const queueRef = useRef<FeedQueue>(queue);
   queueRef.current = queue;
   const serverOrder = items.flatMap((it) => (it.kind === "market" ? [it.onchainId] : []));
@@ -1207,10 +1212,8 @@ function Feed() {
           lens: lensRef.current,
           originMarketId: originRef.current,
           poolPage,
-          // Repeats only once every depth has been asked for fresh markets and
-          // come back empty — see `resurfacingRef`.
-          allowResurface: resurfacingRef.current,
           ...feedSession(),
+
           /**
            * THE WHOLE ORDER, not the part ahead of the reader.
            *
@@ -1286,20 +1289,37 @@ function Feed() {
       const depth = poolPageRef.current;
       try {
         const got = await fetchPage(q, depth);
-        if (got === "more") return;
+        if (got === "more") {
+          // Material arrived, so this pass is alive again — a future dry spell
+          // is allowed its own roll rather than being read as the end.
+          rolledRef.current = false;
+          return;
+        }
+
         if (got === "bottom") {
-          // THE CATALOGUE IS SPENT. On the first pass that is not the end of
-          // the feed, it is the moment repeats become the best thing left: the
-          // dig restarts from the top with them allowed. On the second pass
-          // there is genuinely nothing, and only then is the feed over.
-          if (resurfacingRef.current) {
+          /**
+           * THE CATALOGUE IS SPENT — ROLL THE PASS.
+           *
+           * Not an ending. Every market the reader touched during this pass
+           * stops excluding anything, the depth resets, and the next request is
+           * ranked from the top of the platform again with today's signal —
+           * today's tribe activity, today's momentum — so a second pass is a
+           * new running order rather than a replay of the last one.
+           *
+           * The one true ending is a rolled pass that STILL comes back empty:
+           * that means the platform itself has nothing, not that the reader has
+           * been through it.
+           */
+          if (rolledRef.current) {
             setPagedOut(true);
             return;
           }
-          resurfacingRef.current = true;
+          rolledRef.current = true;
+          rollFeedCycle();
           poolPageRef.current = 0;
           continue;
         }
+
         // Picked clean, but the catalogue goes deeper. Advance and ask again.
         poolPageRef.current = depth + 1;
       } catch {
@@ -1368,7 +1388,7 @@ function Feed() {
     setCaughtUp(false);
     setPagedOut(false);
     poolPageRef.current = 0;
-    resurfacingRef.current = false;
+    rolledRef.current = false;
     navigate({ search: (prev: Search) => ({ ...prev, m: undefined }) });
   };
 
@@ -1404,7 +1424,7 @@ function Feed() {
     setCaughtUp(false);
     setPagedOut(false);
     poolPageRef.current = 0;
-    resurfacingRef.current = false;
+    rolledRef.current = false;
     resetFeedSession();
     // Starting over drops the thread. Everything else keeps it: walking the
     // queue and switching perspective are both "keep exploring from here",

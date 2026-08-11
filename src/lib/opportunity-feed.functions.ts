@@ -35,12 +35,13 @@ const input = z.object({
   momentum: z.array(z.string().max(20)).max(12).optional(),
   sensitivity: z.string().max(20).optional(),
   originMarketId: z.number().int().nonnegative().nullish(),
-  seenIds: z.array(z.number().int().nonnegative()).max(200).optional(),
+  seenIds: z.array(z.number().int().nonnegative()).max(500).optional(),
   queuedIds: z.array(z.number().int().nonnegative()).max(200).optional(),
   /** How deep into the catalogue to retrieve — see @/domain/feed/pool. */
   poolPage: z.number().int().min(0).max(64).optional(),
-  /** Repeat markets already seen — only once the catalogue is spent. */
-  allowResurface: z.boolean().optional(),
+  /** When the reader's current pass began, epoch ms — see the eligibility gate. */
+  cycleStartedAt: z.number().int().nonnegative().max(1e15).optional(),
+
   cardsViewed: z.number().int().nonnegative().max(10_000).optional(),
   cardsSinceIdea: z.number().int().nonnegative().max(10_000).optional(),
   ideasShownThisSession: z.number().int().nonnegative().max(100).optional(),

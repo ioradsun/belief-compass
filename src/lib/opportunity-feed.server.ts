@@ -8,7 +8,13 @@
  */
 import { COPY_VERSION } from "@/domain/copy-version";
 import { eligibilityFor, reentryFor, type ViewerMarketState } from "@/domain/feed/eligibility";
-import { scoreMarket, type FeedAiAnalysis, type FeedMarketSignals } from "@/domain/feed/score";
+import {
+  scoreMarket,
+  type FeedAiAnalysis,
+  type FeedMarketSignals,
+  type ScoredMarket,
+} from "@/domain/feed/score";
+
 import { reasonFor } from "@/domain/feed/reasons";
 import {
   sequenceFeed,
@@ -116,25 +122,50 @@ export interface OpportunityFeedInput extends FeedSessionState {
    */
   poolPage?: number;
   /**
-   * MAY THIS BUILD OFFER MARKETS THE READER HAS ALREADY SEEN? Default NO.
+   * WHEN THE READER'S CURRENT PASS BEGAN, epoch ms.
    *
-   * The catalogue has to be spent before anything is repeated. A pool page is a
-   * window of 240 on some 2,800 markets, so "this page has nothing fresh" and
-   * "this platform has nothing fresh" are wildly different statements, and the
-   * server can only ever observe the first. Answering the first with repeats is
-   * how a reader saw the same markets again with thousands untouched behind
-   * them.
-   *
-   * So the default is the honest one: return nothing rather than a repeat, which
-   * the client reads as "dig one page deeper". Only when it has reached a depth
-   * with no markets at all — the real bottom — does it come back asking for
-   * this, and only then is a repeat the best thing left.
+   * One rule replaces every per-reason cooldown: a market the reader touched
+   * during this pass is out of it, and nothing else is. The client owns the
+   * boundary because the client is the only party that knows when the pass ran
+   * out of material — see `exhausted`, which is its cue to roll.
    */
-  allowResurface?: boolean;
+  cycleStartedAt?: number;
+
   limit?: number;
 }
 
 type Row = Record<string, unknown> & { onchain_id: number };
+
+/**
+ * PERSONAL SIGNAL DOES NOT THIN OUT WITH DEPTH.
+ *
+ * Page zero is dense with markets that are loud AND relevant, so the composite
+ * score sorts them fine. Deeper pages are the tail of every ordering, where the
+ * loudest thing left is usually loud and nothing else — and a market with the
+ * reader's tribe, rivals or followed people in it would lose to it on volume
+ * alone. That is the drift the pass rule would otherwise expose: the further a
+ * reader gets, the less the feed looks like theirs.
+ *
+ * So connection is given a bounded lift that GROWS WITH DEPTH and stops. It
+ * cannot invent relevance (a market with nobody in it gains nothing) and it
+ * cannot run away with the ranking — three points per depth, capped, on a 0..100
+ * scale.
+ */
+const DEEP_PAGE_LIFT = 3;
+const DEEP_PAGE_MAX_LIFT = 12;
+
+function deepPagePersonalFloor(
+  scored: ScoredMarket,
+  s: FeedMarketSignals,
+  poolPage: number,
+): ScoredMarket {
+  if (poolPage <= 0) return scored;
+  const connected = s.followedHere > 0 || s.tribeCount > 0 || s.oppCount > 0;
+  if (!connected) return scored;
+  const lift = Math.min(DEEP_PAGE_MAX_LIFT, poolPage * DEEP_PAGE_LIFT);
+  return { ...scored, score: Math.min(100, scored.score + lift) };
+}
+
 
 const num = (v: unknown): number => {
   const n = Number(v);
@@ -382,15 +413,12 @@ export async function buildOpportunityFeed(
   const sessionSeen = new Set<number>(input.seenIds ?? []);
   const sessionQueued = new Set<number>(input.queuedIds ?? []);
   /**
-   * WHICH SIGHTING WAS OLDEST. `seenIds` arrives in the order the reader saw
-   * them, so the index is the only recency signal the wire carries — and the
-   * resurface tier needs exactly that to decide which repeat to offer first.
-   * Built once here rather than per market, which is what makes it a lookup
-   * instead of an O(n²) scan. See EligibilityInput.sessionSeenRank.
+   * THE PASS BOUNDARY. Contact older than this belongs to a spent pass and no
+   * longer excludes anything; zero means the reader has never rolled, so every
+   * recorded contact still counts.
    */
-  const sessionSeenRank = new Map<number, number>(
-    (input.seenIds ?? []).map((id, i) => [Number(id), i]),
-  );
+  const cycleStartedAt = Math.max(0, Math.trunc(input.cycleStartedAt ?? 0));
+
   // A rotating epoch keeps the exploration slot moving without reshuffling the
   // rest of the feed between polls.
   const epoch = Math.floor(now / 3_600_000);
@@ -488,15 +516,20 @@ export async function buildOpportunityFeed(
     });
     const ai = aiOf(analyses.get(s.onchainId));
     const state: ViewerMarketState | undefined = signals.states.get(s.onchainId);
-    const scored = scoreMarket({ signals: s, ai, viewer: signals.profile, now, epoch });
+    const scored = deepPagePersonalFloor(
+      scoreMarket({ signals: s, ai, viewer: signals.profile, now, epoch }),
+      s,
+      poolPage,
+    );
     const eligibility = eligibilityFor({
       onchainId: s.onchainId,
       state,
       sessionSeen,
       sessionQueued,
-      sessionSeenRank,
+      cycleStartedAt,
       now,
     });
+
     const holds = signals.held.has(s.onchainId);
     const reentry = eligibility.eligible
       ? null
@@ -619,8 +652,10 @@ export async function buildOpportunityFeed(
     idea: ideaResult.idea,
     // A ranking is taken as given; a blend is sequenced. See sequence.ts.
     preserveOrder: lens !== "for_you",
-    // Spend the catalogue before repeating any of it — see `allowResurface`.
-    allowResurface: input.allowResurface === true,
+    // Repeats never enter a pass. The way back is rolling the pass — see
+    // `cycleStartedAt`.
+    allowResurface: false,
+
     ...(input.limit ? { limit: input.limit } : { limit: SEQUENCE.DEFAULT_LIMIT }),
   });
 
