@@ -1,7 +1,7 @@
 /**
  * THE OPEN CALLS — one source, read by everything that shows a count.
  *
- * Two surfaces need to know how many people are waiting on this reader: the
+ * Two surfaces need to know how many questions are waiting on this reader: the
  * Challenge rail itself, and the mobile menu item that leads to it. If each
  * derived its own number they would drift the moment a card is dismissed — the
  * menu would say 3 while the rail shows 2, and the badge would stop being worth
@@ -93,15 +93,15 @@ export function useHiddenCalls(): ReadonlySet<string> {
 
 export interface OpenCalls {
   lock: ReturnType<typeof challengeLock>;
-  /** The queue: people actually waiting on this reader, and nothing else. */
+  /** The queue: questions still waiting on this reader, and nothing else. */
   open: Challenge[];
   /**
    * WHAT RECENTLY BECAME OF THE ONES THAT WERE WAITING.
    *
    * Somebody showed up, or this reader passed. Kept apart from `open` rather than
    * mixed into it because the count on the tab and the badge in the mobile menu
-   * must keep meaning "people are waiting on you" — an outcome asks for nothing,
-   * and badging it would turn the payoff into another chore.
+   * must keep meaning "something is waiting on you" — an outcome asks for
+   * nothing, and badging it would turn the payoff into another chore.
    */
   recent: Challenge[];
   /**
@@ -141,7 +141,20 @@ export interface OpenCalls {
  * The open queue for a wallet.
  *
  * The count follows the LIST rather than the payload, so a badge always equals
- * what is on screen — three means three people are actually waiting.
+ * what is on screen — three rows, three on the badge, no drift between them.
+ *
+ * IT COUNTS CHALLENGES, NOT PEOPLE, AND THIS COMMENT USED TO SAY OTHERWISE. It
+ * claimed "three means three people are actually waiting", which
+ * `composeChallenges` cannot deliver: it keeps ONE card per market
+ * (`new Map<number, Challenge>()` keyed by marketId), so one person calling you
+ * into two markets is two rows and one human, and two people calling you into
+ * one market is one row and two humans. Measured against production the two
+ * numbers diverged for EVERY responder with an open call — 14 open markets
+ * across 7 open callers.
+ *
+ * The distinction matters because it is the number a sentence gets built from.
+ * "3 people are waiting on you" is a claim about three humans; "3 open
+ * Challenges" is a claim about the queue, and only the second one is true.
  */
 export function useOpenCalls(wallet?: string): OpenCalls {
   // The same cached observer DnaFirstReveal uses — the lock costs no round trip.
