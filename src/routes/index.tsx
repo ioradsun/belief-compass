@@ -1541,13 +1541,9 @@ function Feed() {
                 onOpenDashboard={openDashboard}
                 initialNetwork={Boolean(selectedPerson || dnaOpen)}
                 onOpenFeedTab={closeCase}
-                /* LAUNCH MODE — "should I join one of these instead?", asked in
-                   the column that already answers "where should I go". It self-
-                   hides unless a draft is being written and something is
-                   actually similar. Join is `selectMarket`, which clears
-                   `?create` on its way to `?m`, so accepting the advice exits
-                   the composer and lands on the existing debate. */
-                launchPanel={<SimilarMarkets wallet={wallet} onJoin={selectMarket} />}
+                /* SimilarMarkets moved to the right rail while writing — the
+                   whole left column steps aside in create mode. */
+                launchPanel={null}
                 feedList={
                   <div className="flex min-h-0 flex-1 flex-col">
                     {/* FIRST TEN CONVICTIONS — the brief owns this slot until
