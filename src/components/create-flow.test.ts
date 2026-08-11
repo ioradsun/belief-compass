@@ -20,7 +20,7 @@ const code = (p: string) =>
 describe("the create surface tells one story, and the rails follow it", () => {
   it("shows a spark in the right rail while writing, not a recruiting desk", () => {
     const route = code("src/routes/index.tsx");
-    expect(route).toMatch(/createOpen \|\| ideaDue \? \([\s\S]{0,400}?<IdeasRail/);
+    expect(route).toMatch(/createOpen \? \([\s\S]{0,400}?<IdeasRail/);
   });
 
   it("keeps Challenge out of the composer entirely", () => {
@@ -110,27 +110,27 @@ describe("the centre stops selling and asks one thing", () => {
   it("states the earn once, in the title, and nowhere after", () => {
     // The fee is what the act is worth, so it sits with the act. The post-publish
     // moment says one fact — the market is live — and stops.
-    expect(code("src/components/CreateMarket.tsx")).toMatch(/4\.5%/);
+    expect(code("src/components/CreateMarket.tsx")).toMatch(/Earn 1% on all trading/);
     // The post-publish moment is `resolvePostAction`'s create branch now, and it
     // says one fact — the market is live — with no fee repeated after the act.
     expect(code("src/domain/post-action.ts")).not.toMatch(/4\.5%/);
     expect(code("src/components/PostActionScreen.tsx")).not.toMatch(/4\.5%/);
   });
 
-  it("drops the badge that congratulated the system", () => {
-    // "✓ AI-checked" gave the reader no decision and spent the gain colour on
-    // housekeeping. The one affordance with an action behind it survives.
+  it("keeps AI opinion out of the form entirely", () => {
+    // "✓ AI-checked" gave the reader no decision, and the inline rewrite moved
+    // to the right rail so nothing the AI thinks can shift a field.
     const c = code("src/components/CreateMarket.tsx");
     expect(c).not.toMatch(/AI-checked/);
-    expect(c).toMatch(/Polish/);
+    expect(c).not.toMatch(/>\s*Polish\s*</);
   });
 
-  it("leaves only the legal line under the primary action", () => {
-    // Positioning copy directly beneath the commit button is the one place a
-    // reader is deciding rather than being persuaded.
+  it("leaves nothing but the action under the primary action", () => {
+    // Positioning copy — and the legal line — directly beneath the commit
+    // button is the one place a reader is deciding rather than being read to.
     const c = code("src/components/CreateMarket.tsx");
     expect(c).not.toMatch(/pov\.co|Exclusive/);
-    expect(c).toMatch(/Terms/);
+    expect(c).not.toMatch(/>\s*Terms/);
   });
 
   it("keeps the link secondary, inside the field", () => {
