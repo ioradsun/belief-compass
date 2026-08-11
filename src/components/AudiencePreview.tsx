@@ -107,13 +107,23 @@ export function AudienceGroups({
           key={g.key}
           className={stacked ? "flex flex-col gap-1.5" : "flex items-center gap-2"}
         >
+          {stacked ? (
+            <div className="min-w-0">
+              <p className="text-[12.5px] font-semibold leading-snug text-[var(--text)]">
+                {g.label}
+                <span className="ml-1 font-normal text-[var(--text-muted)]">{g.count}</span>
+              </p>
+              <p className="text-[11.5px] leading-snug text-[var(--text-muted)]">{g.note}</p>
+            </div>
+          ) : null}
+
           {/* A FIXED GUTTER, FOUND BY LOOKING. Sized to a full stack — five faces
               at 22px overlapping by 6, plus the overflow chip — so the three
               labels start at the same x. Rendered without it, a Tribe of three
               and a Rivals of seven pushed their headings to different places and
               the rows stopped reading as one list. `min-w` rather than `w`, so a
               three-digit overflow grows instead of clipping. */}
-          <div className="flex min-w-[102px] -space-x-1.5">
+          <div className="flex min-w-[102px] shrink-0 -space-x-1.5">
             {g.visiblePeople.map((p) => (
               <PersonAvatar
                 key={p.wallet}
@@ -139,13 +149,16 @@ export function AudienceGroups({
               </span>
             )}
           </div>
-          <div className="min-w-0">
-            <p className="truncate text-[11.5px] font-medium leading-snug text-[var(--text)]">
-              {g.label}
-              <span className="ml-1 font-normal text-[var(--text-muted)]">{g.count}</span>
-            </p>
-            <p className="truncate text-[11px] leading-snug text-[var(--text-muted)]">{g.note}</p>
-          </div>
+
+          {!stacked ? (
+            <div className="min-w-0">
+              <p className="truncate text-[11.5px] font-medium leading-snug text-[var(--text)]">
+                {g.label}
+                <span className="ml-1 font-normal text-[var(--text-muted)]">{g.count}</span>
+              </p>
+              <p className="truncate text-[11px] leading-snug text-[var(--text-muted)]">{g.note}</p>
+            </div>
+          ) : null}
         </div>
       ))}
     </div>
