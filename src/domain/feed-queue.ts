@@ -90,6 +90,44 @@ export interface FeedQueue {
 
 const EMPTY: readonly number[] = [];
 
+/**
+ * How many consumed markets stay in the order behind the reader.
+ *
+ * A FORWARD QUEUE DOES NOT NEED AN INFINITE MEMORY, and letting it keep one had
+ * a consequence that only appeared at the very end of the feed. `order` is sent
+ * to the server as `queuedIds` so a page can mean "the next markets, not these";
+ * that field is capped at 200, so an order longer than the cap stopped covering
+ * itself. The markets that fell out of the cap were the OLDEST — which is
+ * exactly what the resurface tier offers first — so at the end of the feed the
+ * server returned markets the client was still holding, `appendOrder` dropped
+ * them as duplicates, and the low-water refill re-asked the same question every
+ * ten seconds forever while Up Next sat empty.
+ *
+ * Forty, against a page of 48: the order can hold this much history plus two
+ * unread pages and still fit inside the cap with room to spare. The only thing
+ * it costs is how far back `retreat` can walk, and forty markets is further back
+ * than a reader has ever wanted to go.
+ */
+export const HISTORY = 40;
+
+/**
+ * Forget consumed markets past `HISTORY`. Nothing visible moves: the trim is
+ * entirely behind the reader, and the panel renders only what is ahead.
+ */
+function trim(q: FeedQueue): FeedQueue {
+  const at = q.activeId == null ? -1 : q.order.indexOf(q.activeId);
+  if (at <= HISTORY) return q;
+  const cut = at - HISTORY;
+  const dropped = new Set(q.order.slice(0, cut));
+  return {
+    ...q,
+    order: q.order.slice(cut),
+    // A forgotten market must leave `appended` too, or `commit` would faithfully
+    // restore the history this just spent effort forgetting.
+    appended: q.appended.filter((id) => !dropped.has(id)),
+  };
+}
+
 const same = (a: readonly number[], b: readonly number[]): boolean =>
   a.length === b.length && a.every((x, i) => x === b[i]);
 
@@ -155,7 +193,7 @@ export function appendOrder(q: FeedQueue, more: readonly number[]): FeedQueue {
   const known = new Set(q.order);
   const add = unique(more).filter((id) => !known.has(id));
   if (add.length === 0) return q;
-  return { ...q, order: [...q.order, ...add], appended: [...q.appended, ...add] };
+  return trim({ ...q, order: [...q.order, ...add], appended: [...q.appended, ...add] });
 }
 
 /**
@@ -204,16 +242,38 @@ export function arrivalCount(q: FeedQueue): number {
  */
 export function commit(q: FeedQueue): FeedQueue {
   if (!q.incoming) return q;
-  const next = [...q.incoming];
   /**
-   * PAGE TWO SURVIVES A RE-RANK OF PAGE ONE. `incoming` is the newest ranking of
-   * the FIRST page — the base feed query — so adopting it verbatim would drop
-   * every market the reader paged in and hand them a queue that ends where it
-   * ended an hour ago. They are re-appended in the order they were fetched,
-   * which is where they already are on screen.
+   * ONCE THE READER HAS PAGED, `order` IS A PATH AND NOT A RANKING.
+   *
+   * `incoming` is the newest ranking of the FIRST page — that is all the base
+   * query ever returns — and adopting it wholesale for a reader who is now four
+   * pages in does the opposite of what it was written to do. Measured on the
+   * real reducer: with the reader at index 4 of a paged queue, a poll carrying
+   * three genuinely new markets committed them to indices 0, 1 and 2. Behind
+   * the reader. In a forward-only queue that is not a re-rank, it is a delete.
+   *
+   * So a paged queue keeps its path and takes only what is NEW, at the end,
+   * where the reader will actually reach it — the same treatment `appendOrder`
+   * gives a page, because by this point that is what an arrival is. They join
+   * `appended` for the same reason: the path has to survive the next commit too.
+   *
+   * A queue that has not paged is untouched, and keeps the original contract in
+   * full. That is the case the rule was written for — a single page, short
+   * enough that re-ranking it under a reader is a kindness rather than a loss.
    */
-  const inNext = new Set(next);
-  for (const id of q.appended) if (!inNext.has(id)) next.push(id);
+  if (q.appended.length > 0) {
+    const held = new Set(q.order);
+    const add = q.incoming.filter((id) => !held.has(id));
+    if (add.length === 0) return { ...q, incoming: null };
+    return trim({
+      ...q,
+      order: [...q.order, ...add],
+      appended: [...q.appended, ...add],
+      incoming: null,
+    });
+  }
+
+  const next = [...q.incoming];
   const active = q.activeId;
   if (active != null && !next.includes(active)) {
     const wasAt = q.order.indexOf(active);

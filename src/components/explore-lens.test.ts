@@ -318,7 +318,10 @@ describe("the continuation state", () => {
 
   it("keeps the market on screen when a chosen lens ends", () => {
     // "Caught up" takes over the centre, and its copy is only true for For You.
-    expect(idx).toMatch(/lens === "for_you" && stableFeed\?\.exhausted === true/);
+    // `pagedOut` joined the condition when paging arrived: the base query's
+    // `exhausted` is computed without `queuedIds`, so it answers a different
+    // question and never turns true for a reader who has paged.
+    expect(idx).toMatch(/lens === "for_you" && \(pagedOut \|\| stableFeed\?\.exhausted === true\)/);
   });
 
   /**

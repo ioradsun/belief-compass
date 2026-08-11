@@ -971,12 +971,25 @@ function Feed() {
   // URL — one source of truth for "what is in the centre" — and the queue is
   // told about it, never the reverse.
   const [queue, setQueue] = useState<FeedQueue>(emptyQueue);
+  /**
+   * PAGING HAS RUN OUT — the verdict of the last `fetchMore`, which is the only
+   * request that knows. Cleared whenever the base feed lands a different order
+   * (markets were created, a cooldown lifted), so a session that reached the end
+   * at nine o'clock recovers on its own rather than staying ended.
+   */
+  const [pagedOut, setPagedOut] = useState(false);
   const queueRef = useRef<FeedQueue>(queue);
   queueRef.current = queue;
   const serverOrder = items.flatMap((it) => (it.kind === "market" ? [it.onchainId] : []));
   const serverOrderKey = serverOrder.join(",");
   useEffect(() => {
     if (serverOrder.length === 0) return;
+    // A DIFFERENT BASE ORDER IS NEW SUPPLY, so "paging ran out" stops being
+    // true. This effect only fires when the order changed by VALUE, which is
+    // exactly the evidence needed: a market was created, or a cooldown lifted.
+    // It is what lets a session that reached the end recover on its own instead
+    // of staying ended until the reader hits Refresh.
+    setPagedOut(false);
     // A ranked lens admits nothing it has not ranked — see feed-queue#jumpTo.
     setQueue((q) => receiveOrder(q, serverOrder, { admit: lensRef.current === "for_you" }));
     // serverOrderKey identifies the order by value: a poll that returns the same
@@ -1078,7 +1091,7 @@ function Feed() {
    * mistake in the other direction. Loading and error have their own states in
    * this panel and neither of them wants a tail.
    */
-  const moreBelow = !feedEnded && !isFeedError && stableFeed !== undefined;
+  const moreBelow = !feedEnded && !pagedOut && !isFeedError && stableFeed !== undefined;
 
   const ids = rows.map((r) => Number(r.onchain_id));
   const { data: pulseData } = useQuery(pulsesQO(ids));
@@ -1141,8 +1154,8 @@ function Feed() {
    * poll already filled is underneath it.
    */
   useEffect(() => {
-    if (caughtUp && stableFeed?.exhausted === false) setCaughtUp(false);
-  }, [caughtUp, stableFeed?.exhausted]);
+    if (caughtUp && !pagedOut && stableFeed?.exhausted === false) setCaughtUp(false);
+  }, [caughtUp, pagedOut, stableFeed?.exhausted]);
 
   /**
    * ASK FOR MORE — the one throttled entry point, shared by both callers.
@@ -1181,7 +1194,6 @@ function Feed() {
     if (at - refillAtRef.current < FEED_REFILL_MS) return;
     refillAtRef.current = at;
     const q = queueRef.current;
-    const from = q.activeId == null ? 0 : Math.max(0, q.order.indexOf(q.activeId));
     try {
       const page = await getOpportunityFeed({
         data: {
@@ -1196,14 +1208,28 @@ function Feed() {
           lens: lensRef.current,
           originMarketId: originRef.current,
           ...feedSession(),
-          // MAX_QUEUED matches the request schema's own cap; the tail is taken
-          // from the reader forward because that is the part a duplicate would
-          // actually land in.
-          queuedIds: q.order.slice(from, from + MAX_QUEUED),
+          /**
+           * THE WHOLE ORDER, not the part ahead of the reader.
+           *
+           * It was the forward tail, on the reasoning that a duplicate could
+           * only land there. That was wrong at the one moment it mattered: the
+           * resurface tier offers the OLDEST sighting first, which is the front
+           * of this order — behind the reader, outside the window, and so not
+           * excluded. The server returned markets the client was already
+           * holding, `appendOrder` dropped them, and the refill asked again
+           * every ten seconds forever. The queue is bounded by HISTORY now, so
+           * the whole of it fits inside the cap this slice guards.
+           */
+          queuedIds: q.order.slice(-MAX_QUEUED),
         },
       });
       if ((page.lens ?? "for_you") !== lensRef.current) return;
+      // THE PAGE'S OWN VERDICT, which nothing was reading. The low-water gate
+      // consulted the BASE query's `exhausted` — computed without `queuedIds`,
+      // so it answers a different question and never turns true for a reader who
+      // has paged. This is the only response that knows paging has run out.
       const ids = page.items.flatMap((it) => (it.kind === "market" ? [it.onchainId] : []));
+      setPagedOut(page.exhausted === true || ids.length === 0);
       if (ids.length === 0) return;
       for (const [id, row] of Object.entries(page.rows ?? {})) {
         if (row) knownRowsRef.current[Number(id)] = row as unknown as MarketRow;
@@ -1251,7 +1277,7 @@ function Feed() {
      * does what the low-water refill does: asks for more and stays put on the
      * market the reader is already looking at.
      */
-    if (lens === "for_you" && stableFeed?.exhausted === true) {
+    if (lens === "for_you" && (pagedOut || stableFeed?.exhausted === true)) {
       setCaughtUp(true);
       return;
     }
@@ -1275,6 +1301,7 @@ function Feed() {
     repinRef.current = true;
     setOriginMarket(null);
     setCaughtUp(false);
+    setPagedOut(false);
     navigate({ search: (prev: Search) => ({ ...prev, m: undefined }) });
   };
 
@@ -1308,6 +1335,7 @@ function Feed() {
   // refresh is the clearest possible statement that a rearrangement is welcome.
   const refreshFeed = () => {
     setCaughtUp(false);
+    setPagedOut(false);
     resetFeedSession();
     // Starting over drops the thread. Everything else keeps it: walking the
     // queue and switching perspective are both "keep exploring from here",
@@ -1522,14 +1550,14 @@ function Feed() {
     return idx >= 0 ? queue.order.length - idx - 1 : queue.order.length;
   })();
   useEffect(() => {
-    if (stableFeed?.exhausted) return;
+    if (stableFeed?.exhausted || pagedOut) return;
     if (remainingAhead > FEED_LOW_WATER) return;
     if (arrivalCount(queue) > 0) {
       setQueue((q) => commit(q));
       return;
     }
     refillNow();
-  }, [remainingAhead, queue, stableFeed?.exhausted, refillNow]);
+  }, [remainingAhead, queue, stableFeed?.exhausted, pagedOut, refillNow]);
 
   const viewedId = currentRow ? Number(currentRow.onchain_id) : null;
   useEffect(() => {
