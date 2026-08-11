@@ -247,7 +247,6 @@ export function PostActionScreen({
               <button
                 key={c.kind}
                 type="button"
-                disabled={pending && c.kind === "challenge"}
                 onClick={() => onAct(c)}
                 className="rounded-lg border border-[var(--border)] px-3.5 py-2 text-[13px] font-medium text-[var(--text)] transition-colors hover:border-[var(--text-muted)] disabled:opacity-50"
               >
