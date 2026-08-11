@@ -23,7 +23,7 @@ import { positionSummaryQO } from "@/lib/positions-query";
 import { simulationPositionQO } from "@/lib/simulation-query";
 import { useSimulationMode } from "@/lib/simulation-mode";
 import { useSellQuote, type useTradeReady } from "@/lib/chain-trade";
-import { fmtShares, sharesForPct, type OrderSide } from "@/domain/order";
+import { fmtShares, sharesForPct, usdToWei, type OrderSide } from "@/domain/order";
 import {
   ownedPositions,
   sellStep,
@@ -162,11 +162,25 @@ export function useOwnedDock({
   const worthUsd = sellHeld?.worthUsd ?? null;
   const sellTokens = sellHeld?.tokens ?? 0n;
   const sellShares = sellHeld && sellPct != null ? sharesForPct(sellHeld.tokens, sellPct) : 0n;
-  const { proceeds, isLoading: sellQuoting } = useSellQuote(
+  /**
+   * A SIMULATED SELL IS NOT QUOTED ON THE CURVE. Simulated shares were never
+   * minted, so `getSellProceeds` on that amount is a read the contract cannot
+   * answer — it reverted, the quote stayed null, and the ticket sat on
+   * "Calculating…" forever. The simulated proceeds are the marked value of the
+   * slice being sold, at the same spot price the server settles against.
+   */
+  const { proceeds: chainProceeds, isLoading: chainQuoting } = useSellQuote(
     marketId,
     sellSide === "YES",
-    sellShares,
+    simulated ? 0n : sellShares,
   );
+  const simProceeds =
+    worthUsd != null && sellPct != null && sellPct > 0 && ethUsd > 0
+      ? usdToWei((worthUsd * sellPct) / 100, ethUsd)
+      : null;
+  const proceeds = simulated ? simProceeds : chainProceeds;
+  const sellQuoting = simulated ? false : chainQuoting;
+
 
   /** Tapping SELL: one side owned goes straight there; both asks which. */
   const openSell = () => {
