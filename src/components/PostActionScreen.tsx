@@ -183,36 +183,41 @@ export function PostActionScreen({
           )}
         </div>
       )}
+      </div>
 
-      <div className="mt-1 flex flex-col items-start gap-1.5">
-        <button
-          type="button"
-          /**
-           * NEVER RENDERED DISABLED. A CTA that cannot be used is a smaller
-           * version of a promise that cannot be kept — the resolver returns the
-           * strongest action that is actually available, so there is nothing to
-           * grey out. `pending` dims an in-flight press and nothing else.
-           */
-          disabled={pending}
-          onClick={() => onAct(x.primary)}
-          className="rounded-lg bg-[var(--text)] px-3 py-1.5 text-[13px] font-medium text-[var(--bg)] transition-opacity disabled:opacity-50"
-        >
-          {x.primary.label}
-        </button>
-        {/* WHAT IT COSTS, said plainly — and only beside an offer that spends
-            one. Not a balance to watch run down. */}
-        {x.primary.kind === "challenge" && (
-          <p className="text-[11px] text-[var(--text-muted)]">{RELAY_COST}</p>
-        )}
-        {x.secondary && (
+      {/* THE WAY OUT, ALWAYS ON SCREEN. Pinned outside the scroller so the
+          height of the story can never decide whether the reader can leave. */}
+      <div className="shrink-0 border-t border-[var(--border)] bg-[var(--panel,var(--bg))] px-4 py-3">
+        <div className="flex flex-col items-start gap-1.5">
           <button
             type="button"
-            onClick={() => onAct(x.secondary as Cta)}
-            className="text-[12px] text-[var(--text-muted)] underline transition-colors hover:text-[var(--text)]"
+            /**
+             * NEVER RENDERED DISABLED. A CTA that cannot be used is a smaller
+             * version of a promise that cannot be kept — the resolver returns the
+             * strongest action that is actually available, so there is nothing to
+             * grey out. `pending` dims an in-flight press and nothing else.
+             */
+            disabled={pending}
+            onClick={() => onAct(x.primary)}
+            className="rounded-lg bg-[var(--text)] px-3 py-1.5 text-[13px] font-medium text-[var(--bg)] transition-opacity disabled:opacity-50"
           >
-            {x.secondary.label}
+            {x.primary.label}
           </button>
-        )}
+          {/* WHAT IT COSTS, said plainly — and only beside an offer that spends
+              one. Not a balance to watch run down. */}
+          {x.primary.kind === "challenge" && (
+            <p className="text-[11px] text-[var(--text-muted)]">{RELAY_COST}</p>
+          )}
+          {x.secondary && (
+            <button
+              type="button"
+              onClick={() => onAct(x.secondary as Cta)}
+              className="text-[12px] text-[var(--text-muted)] underline transition-colors hover:text-[var(--text)]"
+            >
+              {x.secondary.label}
+            </button>
+          )}
+        </div>
       </div>
     </section>
   );
