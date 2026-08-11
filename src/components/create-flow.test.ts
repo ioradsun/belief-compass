@@ -18,9 +18,24 @@ const code = (p: string) =>
  * CMS instead of a conviction.
  */
 describe("the create surface tells one story, and the rails follow it", () => {
-  it("shows a spark in the right rail while writing, not a recruiting desk", () => {
+  it("shows a spark while writing, not a recruiting desk", () => {
+    /**
+     * THE SPARK MOVED SIDES, AND THE INVARIANT DID NOT. It used to sit in the
+     * right rail; the composer now puts `IdeasRail` on the LEFT — "the everyday
+     * rail steps aside so nothing under the composer shifts while the AI thinks"
+     * — and gives the right to alternates and markets already being debated.
+     *
+     * What this test protects is unchanged and is the second assertion: while a
+     * question is being written, NEITHER rail recruits. Pinning the old side
+     * would have made a deliberate layout decision look like a regression, which
+     * is exactly what it did until this was rewritten.
+     */
     const route = code("src/routes/index.tsx");
-    expect(route).toMatch(/createOpen \|\| ideaDue \? \([\s\S]{0,400}?<IdeasRail/);
+    expect(route).toMatch(/createOpen \? \([\s\S]{0,400}?<IdeasRail/);
+    const composing = route.slice(route.indexOf("createOpen || ideaDue ? ("));
+    const rail = composing.slice(0, composing.indexOf(") : ("));
+    for (const recruiting of ["callReach", "AudiencePreview", "PutOnTable", "Challenge all"])
+      expect(rail, recruiting).not.toContain(recruiting);
   });
 
   it("keeps Challenge out of the composer entirely", () => {
@@ -63,7 +78,6 @@ describe("the idea rail never costs the writer a sentence", () => {
     expect(c).toMatch(/Tap a topic above to see ideas\./);
     expect(c).toMatch(/questions…/);
   });
-
 });
 
 describe("category is the system's business, not the creator's", () => {
@@ -108,13 +122,25 @@ describe("the centre stops selling and asks one thing", () => {
   });
 
   it("states the earn once, in the title, and nowhere after", () => {
-    // The fee is what the act is worth, so it sits with the act. The post-publish
-    // moment says one fact — the market is live — and stops.
-    expect(code("src/components/CreateMarket.tsx")).toMatch(/4\.5%/);
+    /**
+     * THE NUMBER CHANGED, THE RULE DID NOT. The creator's cut is now 1% on all
+     * trading, not 4.5% — a deliberate product change, and this assertion caught
+     * it as a failure for several merges because it pinned the figure rather
+     * than the placement.
+     *
+     * The rule being protected is WHERE it appears: with the act, once. A fee
+     * repeated after publish turns a completed decision back into a pitch. So
+     * the title is asserted to carry a percentage, and the post-publish surfaces
+     * are asserted to carry none.
+     */
+    const form = code("src/components/CreateMarket.tsx");
+    expect(form).toMatch(/Earn 1% on all trading/);
+    // A bare percentage regex would catch `color-mix(... 40%)`, so the test
+    // looks for the CLAIM rather than the character: an earn, a fee, a cut.
+    for (const f of ["src/domain/post-action.ts", "src/components/PostActionScreen.tsx"])
+      expect(code(f), f).not.toMatch(/\bEarn\b|\bfee\b|\bcut\b|on all trading/i);
     // The post-publish moment is `resolvePostAction`'s create branch now, and it
     // says one fact — the market is live — with no fee repeated after the act.
-    expect(code("src/domain/post-action.ts")).not.toMatch(/4\.5%/);
-    expect(code("src/components/PostActionScreen.tsx")).not.toMatch(/4\.5%/);
   });
 
   it("drops the badge that congratulated the system", () => {
@@ -122,7 +148,14 @@ describe("the centre stops selling and asks one thing", () => {
     // housekeeping. The one affordance with an action behind it survives.
     const c = code("src/components/CreateMarket.tsx");
     expect(c).not.toMatch(/AI-checked/);
-    expect(c).toMatch(/Polish/);
+    /**
+     * AND "POLISH" WENT WITH IT. The test used to assert that the one affordance
+     * with an action behind it SURVIVED — then the form stopped rendering AI
+     * feedback altogether ("NO AI FEEDBACK RENDERS IN THE FORM"), which is a
+     * larger version of the same decision rather than a reversal of it. The
+     * assertion now matches the code: no inline rewrite, no badge.
+     */
+    expect(c).not.toMatch(/Polish/);
   });
 
   it("leaves only the legal line under the primary action", () => {
@@ -130,7 +163,14 @@ describe("the centre stops selling and asks one thing", () => {
     // reader is deciding rather than being persuaded.
     const c = code("src/components/CreateMarket.tsx");
     expect(c).not.toMatch(/pov\.co|Exclusive/);
-    expect(c).toMatch(/Terms/);
+    /**
+     * NOTHING AT ALL IS LEFT UNDER THE BUTTON NOW, INCLUDING TERMS. The link was
+     * removed on the same reasoning that removed the positioning copy — the one
+     * place a reader is deciding rather than being persuaded is directly beneath
+     * the commit, and Terms stay reachable from the app menu. Asserting the link
+     * still present contradicted the comment three lines above it in the source.
+     */
+    expect(c).not.toMatch(/Terms/);
   });
 
   it("keeps the link secondary, inside the field", () => {
