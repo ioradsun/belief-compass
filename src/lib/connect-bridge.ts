@@ -105,28 +105,32 @@ export function clearDisconnectedWalletFromUrl(wallet?: string): boolean {
   return true;
 }
 
-/** Forget wallet sessions, wallet links and the persisted query cache. */
+/** Forget wallet sessions, wallet links, connector state and cached data. */
 function clearIdentityStorage() {
-  try {
-    const ls = window.localStorage;
-    const doomed: string[] = [];
-    for (let i = 0; i < ls.length; i++) {
-      const k = ls.key(i);
-      if (!k) continue;
-      if (
-        k.startsWith("conviction:wallet-session:") ||
-        k.startsWith("conviction:linked-wallet:") ||
-        k === "conviction:qcache:v1" ||
-        k.startsWith("wagmi.")
-      ) {
-        doomed.push(k);
+  const doomed = (k: string) =>
+    k.startsWith("conviction:wallet-session:") ||
+    k.startsWith("conviction:linked-wallet:") ||
+    k.startsWith("conviction:qcache") ||
+    k.startsWith("wagmi") ||
+    k.startsWith("rk-") ||
+    k.startsWith("wc@") ||
+    k.startsWith("walletconnect") ||
+    k.startsWith("-walletlink") ||
+    k.startsWith("WALLETCONNECT");
+  for (const store of [window.localStorage, window.sessionStorage]) {
+    try {
+      const keys: string[] = [];
+      for (let i = 0; i < store.length; i++) {
+        const k = store.key(i);
+        if (k && doomed(k)) keys.push(k);
       }
+      for (const k of keys) store.removeItem(k);
+    } catch {
+      /* storage unavailable — the reload still clears in-memory state */
     }
-    for (const k of doomed) ls.removeItem(k);
-  } catch {
-    /* storage unavailable — the reload still clears in-memory state */
   }
 }
+
 
 /**
  * Ask the connected provider (Coinbase, MetaMask, …) to reopen its own account
