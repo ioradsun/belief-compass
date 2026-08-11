@@ -31,6 +31,34 @@ import {
   type HouseRecord,
 } from "@/domain/house";
 
+/**
+ * WHICH LEDGER'S ROUND. The real one is consumed by a mined transaction; the
+ * Simulation one by a settled Simulation order. They are stored apart so neither
+ * can close, reveal or score the other.
+ */
+export type HouseMode = "REAL" | "SIMULATION";
+
+/** The Simulation round for one wallet and market, or nothing yet. */
+interface SimulationRound {
+  actual_action: BeliefAction | null;
+  finalized_via: "bet" | "pass" | null;
+  revealed_at: string | null;
+}
+
+async function simulationRound(
+  sb: SupabaseClient,
+  wallet: string,
+  marketId: number,
+): Promise<SimulationRound | null> {
+  const { data } = await sb
+    .from("simulation_house_rounds")
+    .select("actual_action, finalized_via, revealed_at")
+    .eq("wallet", wallet)
+    .eq("onchain_id", marketId)
+    .maybeSingle();
+  return (data ?? null) as SimulationRound | null;
+}
+
 export interface HouseReadView {
   marketId: number;
   connected: boolean;
@@ -274,6 +302,17 @@ function recordFor(history: AnswerRow[]): HouseRecord {
 export async function loadHouseRead(
   walletRaw: string | null,
   marketId: number,
+  /**
+   * WHICH ROUND THIS IS.
+   *
+   * The PREDICTION is shared: the House's read of a person is the same read
+   * whichever ledger they are trading in, and merely looking at it consumes
+   * nothing. The ROUND is not — a reveal is a one-time unlock per wallet and
+   * market, and a simulated position must never spend the real one. In
+   * SIMULATION the round is overlaid from `simulation_house_rounds` and
+   * `house_predictions.actual_action` is neither read as closed nor written.
+   */
+  mode: HouseMode = "REAL",
 ): Promise<HouseReadView> {
   const sb = serviceClient();
   const wallet = walletRaw ? walletRaw.toLowerCase() : null;
@@ -372,10 +411,24 @@ export async function loadHouseRead(
     }
   }
 
+  /**
+   * THE ROUND, FROM WHICHEVER LEDGER OWNS IT.
+   *
+   * In SIMULATION the real round is deliberately ignored — not merged, not
+   * consulted as a fallback. A wallet with an unopened real round on this market
+   * still has one after simulating it, and a wallet that already revealed the
+   * real one does not get told, in Simulation, that it is already closed.
+   */
+  const simRound = mode === "SIMULATION" ? await simulationRound(sb, wallet, marketId) : null;
+
   // Normalize any legacy SKIP/skip tokens on the locked row (pre-backfill).
   const predictedAction = normAction(row.predicted_action);
-  const actualAction = normAction(row.actual_action);
-  const finalizedVia = normVia(row.finalized_via);
+  const actualAction = normAction(
+    mode === "SIMULATION" ? (simRound?.actual_action ?? null) : row.actual_action,
+  );
+  const finalizedVia = normVia(
+    mode === "SIMULATION" ? (simRound?.finalized_via ?? null) : row.finalized_via,
+  );
 
   // The pick unlocks ONLY on a verified bet. A pass closes the round but keeps
   // the House's directional pick sealed — the FOMO is the point.
@@ -417,7 +470,14 @@ export async function loadHouseRead(
     closed,
     finalizedVia,
     actual: actualAction,
-    outcome: row.outcome,
+    // Scored live in Simulation rather than read off the real row: the stored
+    // outcome belongs to the real round and would be somebody else's answer.
+    outcome:
+      mode === "SIMULATION"
+        ? actualAction
+          ? scoreHouse(predictedAction, actualAction)
+          : null
+        : row.outcome,
     headline,
     record: recordFor(history),
     category,
@@ -460,7 +520,6 @@ async function verifyBetTransaction(
     throw new Error("That transaction isn't a belief-market trade.");
   if (!tx.from || tx.from.toLowerCase() !== wallet.toLowerCase())
     throw new Error("That buy was sent from a different wallet.");
-
 
   let decoded: { functionName: string; args?: readonly unknown[] };
   try {
@@ -533,6 +592,87 @@ export async function finalizeHouseBet(
   }
 
   return loadHouseRead(wallet, marketId);
+}
+
+/**
+ * FINALIZE A SIMULATION ROUND WITH A SETTLED ORDER — the mirror of the real path.
+ *
+ * The proof is different in kind but not in strength: a real reveal requires a
+ * mined transaction sent from this wallet, and this requires a settled Simulation
+ * order belonging to this wallet, on this market, on this side, that is a buy.
+ * Both are verified server-side; neither is taken on the client's word.
+ *
+ * What it emphatically does NOT do is touch `house_predictions.actual_action`.
+ * The real round for this wallet and market is left exactly as it was — unopened
+ * if it was unopened — because a simulated position must not spend a real
+ * reveal.
+ */
+export async function finalizeSimulationBet(
+  walletRaw: string,
+  marketId: number,
+  side: BeliefAction,
+  simulationOrderId: number,
+): Promise<HouseReadView> {
+  if (side !== "YES" && side !== "NO") throw new Error("A bet must be YES or NO.");
+  const sb = serviceClient();
+  const wallet = walletRaw.toLowerCase();
+  // Lock the prediction first, exactly as the real path does — the read must
+  // exist before it can be revealed, or the reveal would create it after the fact.
+  await loadHouseRead(wallet, marketId, "SIMULATION");
+
+  const { verifySimulationOrder } = await import("@/lib/simulation.server");
+  const proven = await verifySimulationOrder({
+    wallet,
+    marketId,
+    side,
+    orderId: simulationOrderId,
+  });
+  if (!proven) throw new Error("That Simulation position didn't settle on this market.");
+
+  // Idempotent: the first settled order opens the round, and a second one on the
+  // same market changes nothing already recorded.
+  await sb.from("simulation_house_rounds").upsert(
+    {
+      wallet,
+      onchain_id: marketId,
+      actual_action: side,
+      finalized_via: "bet",
+      simulation_order_id: simulationOrderId,
+      revealed_at: new Date().toISOString(),
+    },
+    { onConflict: "wallet,onchain_id", ignoreDuplicates: true },
+  );
+
+  return loadHouseRead(wallet, marketId, "SIMULATION");
+}
+
+/**
+ * A SIMULATION PASS. Free, exactly as the real one is — it uses no CC, and there
+ * is nothing to spend on walking away. It closes the SIMULATION round only; the
+ * real round for this market stays open for the day this person backs it with
+ * money.
+ */
+export async function finalizeSimulationPass(
+  walletRaw: string,
+  marketId: number,
+): Promise<HouseReadView> {
+  const sb = serviceClient();
+  const wallet = walletRaw.toLowerCase();
+  await loadHouseRead(wallet, marketId, "SIMULATION");
+  await sb.from("simulation_house_rounds").upsert(
+    {
+      wallet,
+      onchain_id: marketId,
+      actual_action: "PASS",
+      finalized_via: "pass",
+      revealed_at: new Date().toISOString(),
+    },
+    { onConflict: "wallet,onchain_id", ignoreDuplicates: true },
+  );
+  // A decided market leaves discovery in either mode: the reader has answered
+  // this question and should not be shown it again this session.
+  await recordViewerDecision(wallet, marketId, "PASS");
+  return loadHouseRead(wallet, marketId, "SIMULATION");
 }
 
 /**

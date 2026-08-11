@@ -11,6 +11,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Search } from "lucide-react";
 import { getTable } from "@/lib/table.functions";
+import type { RecordMode } from "@/domain/simulation";
 import { searchMarkets } from "@/lib/markets.functions";
 
 
@@ -37,7 +38,8 @@ export function SideWord({ text }: { text: string }) {
   );
 }
 
-export const tableKey = (wallet?: string) => ["table", wallet ?? null] as const;
+export const tableKey = (wallet?: string, mode: RecordMode = "REAL") =>
+  ["table", wallet ?? null, mode] as const;
 
 /**
  * WHICH SIDE THE RAIL IS SHOWING — a handoff, not a fetch.
@@ -50,10 +52,17 @@ export const tableKey = (wallet?: string) => ["table", wallet ?? null] as const;
 export const railSideKey = ["challenge-side"] as const;
 
 /** What is on this wallet's table right now — the count the capacity line reads. */
-export function useTable(wallet?: string) {
+/**
+ * WHAT IS ON SOMEBODY'S TABLE, in the ledger they are currently in.
+ *
+ * Capacity is per mode, so the key is too: three Simulation Challenges must not
+ * make a real table read as full, and a real one must not be counted against
+ * somebody's Simulation slots.
+ */
+export function useTable(wallet?: string, mode: RecordMode = "REAL") {
   return useQuery({
-    queryKey: tableKey(wallet),
-    queryFn: () => getTable({ data: { wallet: wallet ?? null } }),
+    queryKey: tableKey(wallet, mode),
+    queryFn: () => getTable({ data: { wallet: wallet ?? null, mode } }),
     enabled: !!wallet,
     staleTime: 30_000,
   });

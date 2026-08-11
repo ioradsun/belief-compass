@@ -26,16 +26,26 @@ import type {
 } from "@/lib/challenge.server";
 
 const WALLET = z.string().min(3).max(80);
+/**
+ * WHICH LEDGER A CHALLENGE READ BELONGS TO.
+ *
+ * Defaulting to REAL is what keeps every existing caller meaning exactly what it
+ * meant: a Challenge is a social record, so it stays in one table with a mode
+ * stamp, and REAL is what was there before there was a second one.
+ */
+const MODE = z.enum(["REAL", "SIMULATION"]).default("REAL");
 
 /** Open calls: someone you trust took a side and you have not answered. */
 export const getChallenges = createServerFn({ method: "GET" })
-  .inputValidator((raw: unknown) => z.object({ wallet: WALLET.nullish() }).parse(raw ?? {}))
+  .inputValidator((raw: unknown) =>
+    z.object({ wallet: WALLET.nullish(), mode: MODE }).parse(raw ?? {}),
+  )
   .handler(async ({ data }): Promise<Challenge[]> => {
     // Signed out there is no "you" for anything to be addressed to, and an empty
     // array is the honest answer rather than a fallback list of popular markets.
     if (!data.wallet) return [];
     const { buildChallenges } = await import("@/lib/challenge.server");
-    return buildChallenges(data.wallet);
+    return buildChallenges(data.wallet, data.mode);
   });
 
 /**
@@ -123,13 +133,17 @@ export const getCallReach = createServerFn({ method: "GET" })
 export const getAudience = createServerFn({ method: "GET" })
   .inputValidator((raw: unknown) =>
     z
-      .object({ wallet: WALLET.nullish(), marketId: z.number().int().nonnegative().nullish() })
+      .object({
+        wallet: WALLET.nullish(),
+        marketId: z.number().int().nonnegative().nullish(),
+        mode: MODE,
+      })
       .parse(raw ?? {}),
   )
   .handler(async ({ data }): Promise<AudienceResult> => {
     if (!data.wallet || data.marketId == null) return { status: "none" };
     const { audienceFor } = await import("@/lib/challenge.server");
-    return audienceFor(data.wallet, data.marketId);
+    return audienceFor(data.wallet, data.marketId, data.mode);
   });
 
 /**

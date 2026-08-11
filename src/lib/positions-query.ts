@@ -28,8 +28,10 @@
  * The staleTimes stay: they are what makes switching tabs or reopening a panel
  * reuse the cache instead of paying for pov.co again.
  */
-import { queryOptions } from "@tanstack/react-query";
+import { queryOptions, useQuery } from "@tanstack/react-query";
 import { getWallet, getPositionSummary, type VolumeWindow } from "@/lib/markets.functions";
+import { simulationPositionsQO } from "@/lib/simulation-query";
+import { useSimulationMode } from "@/lib/simulation-mode";
 
 export const POSITIONS_STALE_MS = 60_000;
 
@@ -63,4 +65,76 @@ export function positionSummaryQO(wallet: string | undefined, marketId: number) 
     enabled: !!wallet,
     staleTime: POSITIONS_STALE_MS,
   });
+}
+
+/* ── The mode-aware layer ────────────────────────────────────────────────────
+ *
+ * ABOVE the two query families, never inside them. The real queries are
+ * untouched — a Simulation branch inside `myConvictionsQO` would put a mode check
+ * on the path of every real portfolio read, and the first one anybody forgot
+ * would show simulated holdings as money.
+ *
+ * THERE IS NO COMBINED PORTFOLIO. This selects, it does not merge: while
+ * Simulation is active the real positions are not read into the panel at all, and
+ * the moment it ends they return whole. A reader is always looking at exactly one
+ * ledger, which is the only way the totals on screen mean anything.
+ */
+
+/**
+ * A held position in the shape the portfolio surfaces already read.
+ *
+ * The Simulation holdings are mapped INTO this shape rather than the panel
+ * learning a second one, and they can be because CC uses the same numeric
+ * convention a USD-marked position does — so `positionValueUsd`, `positionPnl`,
+ * the return maths and the story all work unchanged. ONLY THE FORMATTER differs,
+ * which is exactly the amount of difference there actually is.
+ */
+export interface ViewerPosition {
+  onchain_id: number;
+  yes_shares: number | null;
+  no_shares: number | null;
+  yes_cost?: number | null;
+  no_cost?: number | null;
+  markets?: { title?: string | null } | null;
+  state?: { yes_price_usd: number | null; no_price_usd: number | null } | null;
+  yes_value_usd?: number | null;
+  no_value_usd?: number | null;
+}
+
+export interface ViewerPositions {
+  /** The active ledger's holdings. Never a union of both. */
+  positions: ViewerPosition[];
+  /** These are CC-denominated Simulation holdings. */
+  simulated: boolean;
+}
+
+/** What the viewer holds, in whichever ledger they are currently in. */
+export function useViewerPositions(
+  wallet: string | undefined,
+  win: VolumeWindow,
+): ViewerPositions & { raw: unknown } {
+  const { active } = useSimulationMode();
+
+  const real = useQuery({ ...myConvictionsQO(wallet, win), enabled: !!wallet && !active });
+  const sim = useQuery({ ...simulationPositionsQO(wallet), enabled: !!wallet && active });
+
+  if (active) {
+    const positions: ViewerPosition[] = (sim.data ?? []).map((h) => ({
+      onchain_id: h.onchainId,
+      yes_shares: h.yesShares,
+      no_shares: h.noShares,
+      yes_cost: h.yesCostCc,
+      no_cost: h.noCostCc,
+      markets: { title: h.title },
+      state: { yes_price_usd: h.yesPriceUsd, no_price_usd: h.noPriceUsd },
+      yes_value_usd: h.yesValueCc,
+      no_value_usd: h.noValueCc,
+    }));
+    return { positions, simulated: true, raw: sim.data };
+  }
+  return {
+    positions: ((real.data?.positions ?? []) as ViewerPosition[]) ?? [],
+    simulated: false,
+    raw: real.data,
+  };
 }

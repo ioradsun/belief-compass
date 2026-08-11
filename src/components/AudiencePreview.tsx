@@ -16,6 +16,7 @@
  * makes its own decision about whether it can still be made honestly.
  */
 import { useQuery } from "@tanstack/react-query";
+import type { RecordMode } from "@/domain/simulation";
 import { getAudience } from "@/lib/challenge.functions";
 import { PersonAvatar } from "@/components/PersonAvatar";
 import {
@@ -25,13 +26,23 @@ import {
   type AudienceResult,
 } from "@/domain/audience";
 
-export const audienceKey = (wallet?: string, marketId?: number) =>
-  ["audience", wallet ?? null, marketId ?? null] as const;
+/**
+ * THE MODE IS IN THE KEY.
+ *
+ * A Simulation audience is a strict subset of the real one — the same
+ * relationships, narrowed to people who can actually answer in that ledger — so
+ * the two answers for one market are genuinely different lists. Sharing a cache
+ * entry would let a real audience be rendered as the Simulation reach, and the
+ * count under a Challenge button is a promise about that many real people.
+ */
+export const audienceKey = (wallet?: string, marketId?: number, mode: RecordMode = "REAL") =>
+  ["audience", wallet ?? null, marketId ?? null, mode] as const;
 
-export function useAudience(wallet?: string, marketId?: number) {
+export function useAudience(wallet?: string, marketId?: number, mode: RecordMode = "REAL") {
   return useQuery<AudienceResult>({
-    queryKey: audienceKey(wallet, marketId),
-    queryFn: () => getAudience({ data: { wallet: wallet ?? null, marketId: marketId ?? null } }),
+    queryKey: audienceKey(wallet, marketId, mode),
+    queryFn: () =>
+      getAudience({ data: { wallet: wallet ?? null, marketId: marketId ?? null, mode } }),
     enabled: !!wallet && marketId != null,
     staleTime: 60_000,
   });
@@ -46,12 +57,15 @@ export function AudiencePreview({
    * empty-state paragraphs stacked is worse than either alone.
    */
   showColdStart = false,
+  /** Which ledger's reach to preview. The write uses the same value. */
+  mode = "REAL",
 }: {
   wallet?: string;
   marketId?: number;
   showColdStart?: boolean;
+  mode?: RecordMode;
 }) {
-  const { data } = useAudience(wallet, marketId);
+  const { data } = useAudience(wallet, marketId, mode);
   if (!data) return null;
 
   if (data.status === "none" && showColdStart) {

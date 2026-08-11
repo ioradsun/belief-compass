@@ -325,8 +325,13 @@ describe("who can be asked is decided once", () => {
 
   it("resolves the audience through one shared function", () => {
     expect(server()).toMatch(/export async function eligibleAudience/);
-    // The write path calls it rather than assembling its own set.
-    expect(code("src/lib/table.server.ts")).toMatch(/await eligibleAudience\(sb, me, marketId\)/);
+    // The write path calls it rather than assembling its own set. The mode
+    // argument narrows WHO is reachable (a Simulation Challenge reaches only
+    // active Simulation users); it does not introduce a second definition of who
+    // qualifies, which is what this test exists to protect.
+    expect(code("src/lib/table.server.ts")).toMatch(
+      /await eligibleAudience\(sb, me, marketId(, mode)?\)/,
+    );
     expect(code("src/lib/table.server.ts")).not.toMatch(/await qualifiedCallers\(/);
   });
 

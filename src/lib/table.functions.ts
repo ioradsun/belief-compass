@@ -19,14 +19,18 @@ import type { PutResult, TableCandidate, TableRow } from "@/lib/table.server";
 
 const WALLET = z.string().min(3).max(80);
 const SESSION = z.string().min(8).max(4000);
+/** Which ledger. REAL by default, so every existing caller is unchanged. */
+const MODE = z.enum(["REAL", "SIMULATION"]).default("REAL");
 
 /** What is on my table, with what became of each one. */
 export const getTable = createServerFn({ method: "GET" })
-  .inputValidator((raw: unknown) => z.object({ wallet: WALLET.nullish() }).parse(raw ?? {}))
+  .inputValidator((raw: unknown) =>
+    z.object({ wallet: WALLET.nullish(), mode: MODE }).parse(raw ?? {}),
+  )
   .handler(async ({ data }): Promise<TableRow[]> => {
     if (!data.wallet) return [];
     const { tableFor } = await import("@/lib/table.server");
-    return tableFor(data.wallet);
+    return tableFor(data.wallet, data.mode);
   });
 
 /**
@@ -57,6 +61,7 @@ export const putOnTable = createServerFn({ method: "POST" })
         marketId: z.number().int().nonnegative(),
         /** The call this relay continues, when it continues one. */
         parentCall: z.number().int().positive().nullish(),
+        mode: MODE,
       })
       .parse(raw),
   )
@@ -64,7 +69,7 @@ export const putOnTable = createServerFn({ method: "POST" })
     const { assertWalletOwnership } = await import("@/lib/wallet-session.server");
     const actor = await assertWalletOwnership(data.wallet, data.session);
     const { putOnTable: put } = await import("@/lib/table.server");
-    return put(actor, data.marketId, data.parentCall ?? null);
+    return put(actor, data.marketId, data.parentCall ?? null, data.mode);
   });
 
 /** Take it off the table. Frees a slot; erases nothing. */
@@ -90,12 +95,17 @@ export const takeOffTable = createServerFn({ method: "POST" })
 export const passOnCall = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) =>
     z
-      .object({ wallet: WALLET, session: SESSION, marketId: z.number().int().nonnegative() })
+      .object({
+        wallet: WALLET,
+        session: SESSION,
+        marketId: z.number().int().nonnegative(),
+        mode: MODE,
+      })
       .parse(raw),
   )
   .handler(async ({ data }): Promise<{ ok: boolean }> => {
     const { assertWalletOwnership } = await import("@/lib/wallet-session.server");
     const actor = await assertWalletOwnership(data.wallet, data.session);
     const { passCall } = await import("@/lib/table.server");
-    return { ok: await passCall(actor, data.marketId) };
+    return { ok: await passCall(actor, data.marketId, data.mode) };
   });

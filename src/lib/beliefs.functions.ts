@@ -9,22 +9,54 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { serviceClient } from "@/lib/supabase-clients";
 import { categoryToDomain } from "@/domain/categories";
-import { EXPRESSED_WEIGHT, readinessFor, type Readiness } from "@/domain/beliefs";
+import {
+  EXPRESSED_WEIGHT,
+  isDirectional,
+  profileProgressFor,
+  readinessFor,
+  type ProfileProgress,
+  type Readiness,
+} from "@/domain/beliefs";
 
 type Sb = ReturnType<typeof serviceClient>;
 
-/** Distinct directional markets the viewer has a belief on (on-chain ∪ expressed). */
+/**
+ * DISTINCT MARKETS THE VIEWER HAS A DIRECTION ON — the one count both thresholds
+ * fold over.
+ *
+ * FOUR SOURCES, and the third and fourth are the ones this used to miss:
+ *
+ *   · a live money-backed position          wallet_beliefs.stance_side
+ *   · a conviction they have since LEFT     wallet_beliefs.last_directional_side
+ *   · a completed Simulation position       expressed_beliefs (source='simulation')
+ *   · any other expressed belief            expressed_beliefs
+ *
+ * Filtering on `stance_side IN (YES, NO)` dropped the second: closing a position
+ * un-counted a conviction somebody genuinely took, so their progress could go
+ * DOWN by acting on the market. `pastFactor` already treats those as real
+ * beliefs for DNA — the counter simply disagreed with the scorer.
+ *
+ * Simulation needs no special case at all, which is the point of routing it
+ * through `expressed_beliefs`: a simulated conviction is counted because it is a
+ * belief, not because a second branch remembers to add it.
+ */
 async function beliefMarketCount(sb: Sb, wallet: string): Promise<number> {
   const [onchain, expressed] = await Promise.all([
     sb
       .from("wallet_beliefs")
-      .select("onchain_id")
-      .eq("wallet", wallet)
-      .in("stance_side", ["YES", "NO"]),
+      .select("onchain_id, stance_side, last_directional_side")
+      .eq("wallet", wallet),
     sb.from("expressed_beliefs").select("onchain_id").eq("wallet", wallet),
   ]);
   const ids = new Set<number>();
-  for (const r of (onchain.data ?? []) as { onchain_id: number }[]) ids.add(Number(r.onchain_id));
+  for (const r of (onchain.data ?? []) as {
+    onchain_id: number;
+    stance_side: string | null;
+    last_directional_side: string | null;
+  }[]) {
+    if (isDirectional(r.stance_side) || isDirectional(r.last_directional_side))
+      ids.add(Number(r.onchain_id));
+  }
   for (const r of (expressed.data ?? []) as { onchain_id: number }[]) ids.add(Number(r.onchain_id));
   return ids.size;
 }
@@ -37,7 +69,13 @@ export const expressBelief = createServerFn({ method: "POST" })
         wallet: z.string().min(3),
         marketId: z.number().int().nonnegative(),
         side: z.enum(["YES", "NO"]),
-        source: z.enum(["tap", "calibration"]).default("tap"),
+        /**
+         * WHERE THE BELIEF CAME FROM. `simulation` is written by the Simulation
+         * order transaction rather than by this endpoint — it is listed because
+         * the source is a property of the belief and the enum is the place that
+         * says which sources exist, not because a client may claim it.
+         */
+        source: z.enum(["tap", "calibration", "simulation"]).default("tap"),
         /** Proof the caller controls `wallet` (see useWalletSession). */
         session: z.string().min(16).max(2000),
       })
@@ -73,6 +111,24 @@ export const getViewerReadiness = createServerFn({ method: "GET" })
     if (!data.wallet) return readinessFor(0);
     const sb = serviceClient();
     return readinessFor(await beliefMarketCount(sb, data.wallet.toLowerCase()));
+  });
+
+/**
+ * HOW FAR THROUGH THE FIRST TEN — the same count, against the other target.
+ *
+ * Separate from `getViewerReadiness` on purpose. Readiness answers "can the
+ * Network compute closest people yet" (five); this answers "is onboarding done"
+ * (ten). Collapsing them would make one of the two lie, and the one that would
+ * lie is the one that withholds the Network.
+ */
+export const getProfileProgress = createServerFn({ method: "GET" })
+  .inputValidator((raw: unknown) =>
+    z.object({ wallet: z.string().min(3).nullable().optional() }).parse(raw ?? {}),
+  )
+  .handler(async ({ data }): Promise<ProfileProgress> => {
+    if (!data.wallet) return profileProgressFor(0);
+    const sb = serviceClient();
+    return profileProgressFor(await beliefMarketCount(sb, data.wallet.toLowerCase()));
   });
 
 const CALIBRATION_QUEUE_SIZE = 16;

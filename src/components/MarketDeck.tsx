@@ -45,21 +45,10 @@ import { hueFor, initialsFor } from "@/lib/wallet-identity";
 import type { TapeTrade } from "@/domain/conviction-series";
 
 import { CHAIN_ID } from "@/chain/decoder";
-import {
-  useBuyQuote,
-  useSellQuote,
-  useTrade,
-  useTradeReady,
-  useUserBalance,
-} from "@/lib/chain-trade";
-import {
-  pulseFor,
-  usdToWei,
-  fmtShares,
-  selectSide,
-  sharesForPct,
-  type OrderSide,
-} from "@/domain/order";
+import { useBuyQuote, useUserBalance } from "@/lib/chain-trade";
+import { useMarketExecution } from "@/lib/market-execution";
+import { DEFAULT_ORDER_CC } from "@/domain/simulation";
+import { pulseFor, usdToWei, selectSide, type OrderSide } from "@/domain/order";
 
 import { WindowFilter } from "@/components/WindowFilter";
 import { useDeckWindow, setDeckWindow } from "@/lib/deck-window";
@@ -146,10 +135,18 @@ export function MarketDeck({
   const [side, setSide] = useState<OrderSide | null>(null);
 
   const { switchChain } = useSwitchChain();
-  const ready = useTradeReady();
-  const trade = useTrade();
+  /**
+   * THE EXECUTION FACADE — the deck's ONLY route to a settlement.
+   *
+   * It used to hold `useTrade()` directly, which welded this screen to the chain.
+   * Now it holds whichever adapter the active ledger calls for and never learns
+   * which: the confirm below is identical in both modes, and `chain-trade.ts`
+   * keeps no knowledge of Simulation at all.
+   */
+  const exec = useMarketExecution({ viewerWallet, ethUsd });
+  const { trade, ready, sim } = exec;
   const bal = useUserBalance(marketId);
-  const house = useHouseFinalize(marketId, viewerWallet);
+  const house = useHouseFinalize(marketId, viewerWallet, sim ? "SIMULATION" : "REAL");
   // The owned-position flow — the SAME hook the phone game mounts, so the
   // ownership model, the sell path and the selector can never drift apart.
   const dock = useOwnedDock({
@@ -160,9 +157,11 @@ export function MarketDeck({
     ethUsd,
     ready,
     trade,
+    sim,
     onRequestConnect: requestConnect,
     onRequestChain: () => switchChain({ chainId: CHAIN_ID }),
   });
+
   /**
    * BEFORE AND AFTER, kept apart. At the instant a trade confirms the on-chain
    * read is still pre-trade, so the closing screen must not treat it as "after"
@@ -276,8 +275,13 @@ export function MarketDeck({
     }));
   }, [holders, net]);
   const { data: houseRead } = useQuery({
-    queryKey: houseKey(viewer, marketId),
-    queryFn: () => getHouseRead({ data: { wallet: viewer ?? null, marketId } }),
+    // Mode in the key: a Simulation round and a real round on the same market
+    // are different facts and must never share a cache entry.
+    queryKey: houseKey(viewer, marketId, sim ? "SIMULATION" : "REAL"),
+    queryFn: () =>
+      getHouseRead({
+        data: { wallet: viewer ?? null, marketId, mode: sim ? "SIMULATION" : "REAL" },
+      }),
     staleTime: 30_000,
     // Per-market key — see above: the House's read on the LAST market is not a
     // placeholder for this one, it is a wrong answer.
@@ -309,12 +313,22 @@ export function MarketDeck({
   // buys — only a confirmed on-chain bet unlocks the read.
   const chooseSide = useCallback(
     (s: OrderSide) => {
-      if (viewerWallet) express.mutate(s);
+      /**
+       * IN SIMULATION, OPENING A TICKET IS NOT A CONVICTION.
+       *
+       * In Real Mode a side tap records a free expressed belief immediately,
+       * which is right: the tap is the whole act, and an abandoned order form
+       * still leaves an opinion behind. Simulation counts toward a GOAL, and a
+       * belief written on selection would let somebody reach ten by opening and
+       * closing ten forms. The conviction is written by the settled order
+       * instead — one belief per completed position, inside the transaction.
+       */
+      if (viewerWallet && !sim) express.mutate(s);
       setSide((cur) => selectSide(cur, s));
     },
     // express is stable enough; excluding it avoids re-binding keyboard handlers.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [viewerWallet],
+    [viewerWallet, !!sim],
   );
 
   // Pass finalizes the round silently and moves straight to the next market —
@@ -328,28 +342,61 @@ export function MarketDeck({
   // Reveal the House pick exactly once, when a bet confirms on-chain.
   const betRevealed = useRef(false);
 
-  // Reset every flow when the market changes.
+  /**
+   * Reset every flow when the market changes — OR WHEN THE LEDGER DOES.
+   *
+   * Crossing ledgers discards the draft, and that is the whole of what leaving
+   * costs: no CC was spent, because only a CONFIRMED order is ever persisted. An
+   * unconfirmed form is the one thing an exit throws away, and carrying it across
+   * would be worse than losing it — an amount typed as CC would arrive in the
+   * real ticket as dollars, on a side chosen under different stakes.
+   *
+   * The amount opens at 100 CC in Simulation and at the existing default in Real
+   * Mode, which is why it is reset here rather than only on a market change.
+   */
   useEffect(() => {
     setSide(null);
+    setAmount(sim ? DEFAULT_ORDER_CC : 1);
     dock.reset();
     betRevealed.current = false;
     trade.reset();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [marketId]);
+  }, [marketId, !!sim]);
 
-  // On a confirmed buy, finalize the bet → the House read unlocks above.
+  /**
+   * ON A CONFIRMED BUY, FINALIZE THE ROUND — with whichever proof this ledger has.
+   *
+   * Real: a mined transaction hash, verified against Base. Simulation: a settled
+   * order id, verified against the Simulation ledger. Both are proof that the
+   * position exists; neither is taken on the client's word, and the Simulation
+   * path writes to a separate round so the real one for this market stays
+   * unopened.
+   */
+  const settledOrderId = exec.lastOrder?.order.id ?? null;
   useEffect(() => {
-    if (trade.isSuccess && trade.hash && side && !betRevealed.current) {
+    if (!trade.isSuccess || !side || betRevealed.current) return;
+    if (sim) {
+      if (settledOrderId) {
+        betRevealed.current = true;
+        house.betReveal(side, { simulationOrderId: settledOrderId });
+      }
+      return;
+    }
+    if (trade.hash) {
       betRevealed.current = true;
-      house.betReveal(side, trade.hash);
+      house.betReveal(side, { txHash: trade.hash });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trade.isSuccess, trade.hash, side]);
+  }, [trade.isSuccess, trade.hash, side, settledOrderId, !!sim]);
 
   // …and closes every open Challenge in this market. Separate from the House
   // reveal deliberately: that is a one-time unlock this viewer paid for, this is
   // a durable social fact, and neither should be able to break the other.
-  const backed = trade.isSuccess && !!trade.hash;
+  //
+  // ONLY IN REAL MODE. A Simulation order answers its Simulation calls inside the
+  // order transaction itself — atomically, and scoped to `mode = 'SIMULATION'` so
+  // a simulated position can never close a real call.
+  const backed = trade.isSuccess && !!trade.hash && !sim;
   useAnswerCalls(viewerWallet, marketId, backed);
 
   // Keyboard: ←/→ select a side, ↑ pass. None of them buy or reveal.
@@ -380,6 +427,7 @@ export function MarketDeck({
       ethUsd={ethUsd}
       ready={ready}
       trade={trade}
+      sim={sim}
       onBuySide={(s) => chooseSide(s)}
       onPass={() => choosePass()}
       onSold={() => {
@@ -401,6 +449,7 @@ export function MarketDeck({
       <PostAction
         kind="sell"
         wallet={viewerWallet}
+        mode={sim ? "SIMULATION" : "REAL"}
         act={{
           marketId,
           side: soldSide,
@@ -448,13 +497,21 @@ export function MarketDeck({
       <PostAction
         kind="buy"
         wallet={viewerWallet}
+        mode={sim ? "SIMULATION" : "REAL"}
         act={{
           marketId,
           side,
           authored: authoredByViewer,
           after: shift.after,
           before: shift.before,
-          firstBeliever: (side === "YES" ? evidence?.believersYes : evidence?.believersNo) === 1,
+          /**
+           * NEVER THE FIRST BELIEVER FROM SIMULATION. `believersYes` counts real
+           * money-backed believers, and a simulated position adds nothing to it —
+           * so a Simulation order on an empty side would read the count as 1 and
+           * claim a place in the real market that was never taken.
+           */
+          firstBeliever:
+            !sim && (side === "YES" ? evidence?.believersYes : evidence?.believersNo) === 1,
         }}
         onNextQuestion={() => {
           void bal.refetch();
@@ -685,8 +742,11 @@ export function MarketDeck({
               ethUsd={ethUsd}
               ready={ready}
               trade={trade}
+              sim={sim}
               onConfirm={async () => {
                 if (!ready.connected) return requestConnect();
+                // Simulation never switches networks — `ready.onBase` is true by
+                // construction there, so this asks only when a chain is involved.
                 if (!ready.onBase) return switchChain({ chainId: CHAIN_ID });
                 if (side && quote && ethWei > 0n && !(trade.isSubmitting || trade.isMining)) {
                   try {
@@ -705,8 +765,13 @@ export function MarketDeck({
         </div>
 
         {/* The payoff for standing on it: what your link has brought in. Only
-          renders once it's real (a believer, not just an open). */}
-        <ShareImpact marketId={marketId} wallet={viewerWallet} />
+          renders once it's real (a believer, not just an open).
+
+          SUPPRESSED IN SIMULATION. Share Impact reports real believers a real
+          link brought to a real market — every number in it is about money that
+          moved. Nothing a Simulation order does contributes to it, so showing it
+          here would credit a simulated position with real influence. */}
+        {!sim && <ShareImpact marketId={marketId} wallet={viewerWallet} />}
       </div>
     </div>
   );

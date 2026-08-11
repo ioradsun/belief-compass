@@ -20,10 +20,15 @@ import { avgPriceUsd, fmtShares, fmtUsd, sharesForPct, type OrderSide } from "@/
 import { formatMoney, type DisplayUnit, weiToEth, convertMoney } from "@/domain/money";
 import { affordability, affordabilityCopy } from "@/domain/affordability";
 import { useDisplayUnit } from "@/lib/display-unit";
-import type { useTrade } from "@/lib/chain-trade";
+import { checkSimulationBuy, formatCC, ORDER_FAILED } from "@/domain/simulation";
+import type { SimulationTicket, TradeLike } from "@/lib/market-execution";
 
-/** The trade controller the deck owns; the ticket only reads its state + calls it. */
-type TradeApi = ReturnType<typeof useTrade>;
+/**
+ * The trade controller the deck owns; the ticket only reads its state + calls it.
+ * Typed as the FACADE rather than the chain implementation, which is what lets
+ * one ticket serve both ledgers — see `lib/market-execution`.
+ */
+type TradeApi = TradeLike;
 
 // ONE control system for every order surface — Buy, Buy More, Sell, Create and
 // their Cancel / confirm / receipt bars all use the same height, radius and
@@ -321,6 +326,20 @@ function AvailRow({ ethUsd }: { ethUsd: number }) {
   return <QuoteRow k="Avail" v={v} />;
 }
 
+/**
+ * THE ONE MODE SWITCH ON THIS COMPONENT.
+ *
+ * Null in Real Mode; an object in Simulation. Everything the two tickets differ
+ * on hangs off this single nullable prop rather than a boolean plus four
+ * conditionally-meaningful fields, so there is no state where the ticket is "in
+ * simulation" but has no balance to show.
+ *
+ * WHAT IT DOES NOT CHANGE: the quote, the share maths, the side selection, the
+ * position maths, the layout, or the live price. The market is real in both
+ * modes; only the ledger the order lands in is different.
+ */
+type SimTicket = SimulationTicket | null | undefined;
+
 interface BuyTicketProps {
   side: OrderSide | null;
   amount: number;
@@ -336,6 +355,8 @@ interface BuyTicketProps {
   trade: TradeApi;
   onConfirm: () => void;
   onDone: () => void;
+  /** Simulation ledger descriptor, or null/absent in Real Mode. */
+  sim?: SimTicket;
 }
 
 interface SellTicketProps {
@@ -352,6 +373,8 @@ interface SellTicketProps {
   onConfirm: () => void;
   onCancel: () => void;
   onDone: () => void;
+  /** Simulation ledger descriptor, or null/absent in Real Mode. */
+  sim?: SimTicket;
 }
 
 /**
@@ -396,14 +419,21 @@ function BigAmount({
   unit,
   ethUsd,
   error,
+  cc = false,
 }: {
   amount: number;
   setAmount: (n: number) => void;
   unit: DisplayUnit;
   ethUsd: number;
   error?: string | null;
+  /**
+   * CC MODE. The value is already CC, so there is no conversion at all — the
+   * unit indicator moves to a suffix, because a leading symbol is what a
+   * currency has and CC is not one.
+   */
+  cc?: boolean;
 }) {
-  const eth = unit === "ETH";
+  const eth = !cc && unit === "ETH";
   const decimals = eth ? 8 : 2;
   const toUsd = (v: number) => (eth ? (ethUsd > 0 ? v * ethUsd : 0) : v);
   const toText = (usd: number) =>
@@ -424,7 +454,9 @@ function BigAmount({
         borderBottom: `1px solid ${error ? "var(--loss)" : focus ? "var(--text)" : "var(--border)"}`,
       }}
     >
-      {!eth && <span className="num text-[26px] font-medium text-[var(--text-muted)]">$</span>}
+      {!eth && !cc && (
+        <span className="num text-[26px] font-medium text-[var(--text-muted)]">$</span>
+      )}
       <input
         inputMode="decimal"
         value={text}
@@ -451,12 +483,13 @@ function BigAmount({
           setText(raw);
           setAmount(usd);
         }}
-        aria-label={`Amount to back in ${unit}`}
+        aria-label={`Amount to back in ${cc ? "CC" : unit}`}
         aria-invalid={!!error}
         placeholder="0"
         className="num min-w-0 flex-1 bg-transparent text-[30px] font-semibold leading-none text-[var(--text)] outline-none [font-variant-numeric:tabular-nums]"
       />
       {eth && <span className="text-[15px] font-medium text-[var(--text-muted)]">ETH</span>}
+      {cc && <span className="text-[15px] font-medium text-[var(--text-muted)]">CC</span>}
     </div>
   );
 }
@@ -476,10 +509,25 @@ function BuyTicket({
   trade,
   onConfirm,
   onDone,
+  sim,
 }: BuyTicketProps) {
   const { unit } = useDisplayUnit();
-  const money = (usd: number) => unitAmount(usd, unit, ethUsd);
-  const fromEth = (eth: number) => unitAmountFromEth(eth, unit, ethUsd);
+  /**
+   * THE TWO FORMATTERS, chosen once.
+   *
+   * In Simulation the ticket's own amounts are CC and go through `formatCC`;
+   * everything sourced from the market — the average price below — stays in the
+   * viewer's real display unit, because the market is real. That boundary is the
+   * whole discipline: the position is simulated, the market is not.
+   *
+   * `fromEth` crosses a wei-native quote figure (the fee) into CC through the
+   * same 1:1 convention the order was sized with, so the fee shown is the fee the
+   * real order would have paid, expressed in the ledger the reader is in.
+   */
+  const money = sim ? (v: number) => formatCC(v) : (usd: number) => unitAmount(usd, unit, ethUsd);
+  const fromEth = sim
+    ? (eth: number) => formatCC(eth * ethUsd)
+    : (eth: number) => unitAmountFromEth(eth, unit, ethUsd);
   const busy = trade.isSubmitting || trade.isMining;
   const [details, setDetails] = useState(false);
   const { eth: availEth } = useSpendableBalance();
@@ -511,11 +559,17 @@ function BuyTicket({
             <span style={{ color: side === "YES" ? "var(--yes)" : "var(--no)" }}>✓</span>
           </span>
           <div>
-            <div className="text-[14px] font-semibold text-[var(--text)]">Backed {side}</div>
+            <div className="text-[14px] font-semibold text-[var(--text)]">
+              {sim ? `Backed ${side} in Simulation` : `Backed ${side}`}
+            </div>
             {quote && (
               <div className="num text-[11px] text-[var(--text-muted)]">
                 {fmtShares(quote.tokens)} shares
-                {avgPrice == null ? "" : ` at $${avgPrice.toFixed(2)} avg`}
+                {avgPrice == null
+                  ? ""
+                  : sim
+                    ? ` at $${avgPrice.toFixed(2)} average`
+                    : ` at $${avgPrice.toFixed(2)} avg`}
               </div>
             )}
           </div>
@@ -555,31 +609,68 @@ function BuyTicket({
     );
   }
 
-  const availUnit = availEth == null ? null : unitAmountFromEth(availEth, unit, ethUsd);
+  /**
+   * WHAT IS SPENDABLE, AND AGAINST WHAT.
+   *
+   * Real Mode reads the wallet's ETH and reserves room for a network fee. Neither
+   * applies to Simulation: there is no gas to leave room for, so Max means the
+   * whole CC balance, and the affordability rule is the plain one from
+   * `domain/simulation`. Both fail CLOSED on an unknown balance.
+   */
+  const availUnit = sim
+    ? sim.balanceCc == null
+      ? null
+      : formatCC(sim.balanceCc)
+    : availEth == null
+      ? null
+      : unitAmountFromEth(availEth, unit, ethUsd);
+  const simCheck = sim ? checkSimulationBuy({ amountCc: amount, balanceCc: sim.balanceCc }) : null;
   // One rule, and it fails closed — see @/domain/affordability. The check this
   // replaces compared the amount to the FULL balance (no room for the network
   // fee), said only "Insufficient balance", and switched itself off entirely
   // when the ETH/USD rate was missing.
   const afford = affordability({ amountUsd: amount, balanceEth: availEth, ethUsd });
   const affordCopy = affordabilityCopy(afford);
-  const overBalance = !afford.ok;
-  const amountError = amount <= 0 ? null : (affordCopy?.detail ?? null);
+  const overBalance = sim ? !simCheck!.ok : !afford.ok;
+  const amountError =
+    amount <= 0
+      ? null
+      : sim
+        ? simCheck!.ok
+          ? null
+          : simCheck!.reason
+        : (affordCopy?.detail ?? null);
 
+  /**
+   * THE ACTION LABEL. In Simulation the wallet and network states are simply
+   * absent — no "Switch to Base" on a button that sends nothing, and no
+   * transaction vocabulary anywhere. "Adding position…" is what is actually
+   * happening: a row is being written.
+   */
   const label = !ready.connected
     ? "Connect wallet"
-    : !ready.onBase
+    : !sim && !ready.onBase
       ? "Switch to Base"
-      : busy
-        ? `Backing ${side}…`
-        : amount <= 0
-          ? "Enter an amount"
-          : affordCopy
-            ? affordCopy.label
-            : `Back ${side} · ${money(amount)}`;
-  const disabled =
-    ready.connected &&
-    ready.onBase &&
-    (busy || !quote || ethWei <= 0n || amount <= 0 || overBalance);
+      : sim && !sim.canOrder
+        ? "Your profile is ready"
+        : busy
+          ? sim
+            ? "Adding position…"
+            : `Backing ${side}…`
+          : amount <= 0
+            ? "Enter an amount"
+            : sim
+              ? simCheck!.ok
+                ? `Back ${side} · ${money(amount)}`
+                : simCheck!.reason
+              : affordCopy
+                ? affordCopy.label
+                : `Back ${side} · ${money(amount)}`;
+  const disabled = sim
+    ? !ready.connected || !sim.canOrder || busy || !quote || amount <= 0 || overBalance
+    : ready.connected &&
+      ready.onBase &&
+      (busy || !quote || ethWei <= 0n || amount <= 0 || overBalance);
 
   return (
     <div className="rounded-[16px] p-5 sm:p-[22px]" style={CARD_STYLE}>
@@ -609,14 +700,27 @@ function BuyTicket({
           unit={unit}
           ethUsd={ethUsd}
           error={amountError}
+          cc={!!sim}
         />
-        <div className="mt-1.5 text-[12px] text-[var(--text-muted)]">
+        <div className="mt-1.5 flex items-baseline justify-between gap-2 text-[12px] text-[var(--text-muted)]">
           {amountError ? (
             <span style={{ color: "var(--loss)" }}>
-              {amountError} · Available {availUnit ?? "—"}
+              {sim ? amountError : `${amountError} · Available ${availUnit ?? "—"}`}
             </span>
           ) : (
-            <>Available {availUnit ?? "—"}</>
+            <span>Available {availUnit ?? "—"}</span>
+          )}
+          {/* MAX IS THE WHOLE BALANCE — there is no gas to hold back. It appears
+              only in Simulation, where that sentence is true. */}
+          {sim && sim.balanceCc != null && sim.balanceCc > 0 && (
+            <button
+              type="button"
+              onClick={() => setAmount(sim.balanceCc as number)}
+              className="shrink-0 rounded-[6px] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--text-secondary)] transition-colors hover:text-[var(--text)]"
+              style={{ border: "1px solid var(--border)" }}
+            >
+              Max
+            </button>
           )}
         </div>
       </div>
@@ -638,31 +742,54 @@ function BuyTicket({
         </button>
       </div>
 
-      {details && (
-        <div id="order-details" className="mt-3 space-y-1.5">
-          <QuoteRow k="Amount invested" v={money(amount)} />
-          <QuoteRow k="Estimated shares" v={quote ? fmtShares(quote.tokens) : "—"} />
-          <QuoteRow k="Avg execution" v={avgPrice == null ? "—" : `$${avgPrice.toFixed(2)}`} />
-          <QuoteRow k="Protocol fee" v={quote ? fromEth(weiToEth(quote.fee)) : "—"} />
-          <QuoteRow k="Total paid" v={fromEth(weiToEth(ethWei))} />
-          <QuoteRow k="Network" v="Base" />
-        </div>
-      )}
+      {details &&
+        (sim ? (
+          /* THE SIMULATION QUOTE, and the one line in it that stays real.
+             "Live average price" is the market's number in the viewer's real
+             display unit — the market is not simulated and must never be shown
+             as though it were. Everything the reader OWNS is CC. There is no
+             network row, because no network is involved. */
+          <div id="order-details" className="mt-3 space-y-1.5">
+            <QuoteRow k="CC committed" v={money(amount)} />
+            <QuoteRow k="Estimated shares" v={quote ? fmtShares(quote.tokens) : "—"} />
+            <QuoteRow
+              k="Live average price"
+              v={avgPrice == null ? "—" : `$${avgPrice.toFixed(2)}`}
+            />
+            <QuoteRow k="Simulated market fee" v={quote ? fromEth(weiToEth(quote.fee)) : "—"} />
+          </div>
+        ) : (
+          <div id="order-details" className="mt-3 space-y-1.5">
+            <QuoteRow k="Amount invested" v={money(amount)} />
+            <QuoteRow k="Estimated shares" v={quote ? fmtShares(quote.tokens) : "—"} />
+            <QuoteRow k="Avg execution" v={avgPrice == null ? "—" : `$${avgPrice.toFixed(2)}`} />
+            <QuoteRow k="Protocol fee" v={quote ? fromEth(weiToEth(quote.fee)) : "—"} />
+            <QuoteRow k="Total paid" v={fromEth(weiToEth(ethWei))} />
+            <QuoteRow k="Network" v="Base" />
+          </div>
+        ))}
 
       {trade.isError && (
         <div className="mt-2 text-[11px]" role="alert" style={{ color: "var(--loss)" }}>
           {/* Never a bare "Transaction failed" when we do not know that it
               failed — that is the sentence that makes a reader submit again.
-              An error we cannot name is an error we say we cannot name. */}
+              An error we cannot name is an error we say we cannot name.
+              In Simulation we DO know: nothing settled means nothing was spent,
+              and saying so is the difference between a retry and a worry. */}
           {trade.error?.message?.slice(0, 120) ??
-            "We didn't get a result back. Check your wallet before trying again."}
+            (sim
+              ? ORDER_FAILED
+              : "We didn't get a result back. Check your wallet before trying again.")}
         </div>
       )}
 
       {/* THE TWO ANXIOUS STATES, told apart. They shared one label — "Backing
           YES…" — which answered neither of the questions a person actually has
-          at each: has my money left, and may I close this. */}
-      {trade.isSubmitting && !trade.isMining && (
+          at each: has my money left, and may I close this.
+          NEITHER EXISTS IN SIMULATION: no wallet is opened, nothing is sent, and
+          there is no block to wait for, so the copy is absent rather than
+          reworded. `isMining` is false by construction in that adapter. */}
+      {!sim && trade.isSubmitting && !trade.isMining && (
         <p className="mt-2 text-[11px] leading-snug text-[var(--text-muted)]" role="status">
           <span className="font-semibold text-[var(--text-secondary)]">
             Waiting for your wallet.
@@ -670,7 +797,7 @@ function BuyTicket({
           Nothing has been sent yet — approve it there, or dismiss to cancel.
         </p>
       )}
-      {trade.isMining && (
+      {!sim && trade.isMining && (
         <p className="mt-2 text-[11px] leading-snug text-[var(--text-muted)]" role="status">
           <span className="font-semibold text-[var(--text-secondary)]">
             Sent — waiting for Base to confirm.
@@ -707,14 +834,18 @@ function SellTicket({
   onConfirm,
   onCancel,
   onDone,
+  sim,
 }: SellTicketProps) {
   const { unit } = useDisplayUnit();
   // Proceeds are ETH-native (a wei quote); worth is USD-native. Both go to the
-  // viewer's chosen unit through the one rate.
+  // viewer's chosen unit through the one rate — or, in Simulation, into CC
+  // through the same 1:1 convention the order was sized with.
   const proceedsStr = (signed = false) =>
     proceeds == null
       ? "—"
-      : formatMoney(weiToEth(proceeds), { from: "ETH", to: unit, ethUsd, signed });
+      : sim
+        ? formatCC(weiToEth(proceeds) * ethUsd, signed)
+        : formatMoney(weiToEth(proceeds), { from: "ETH", to: unit, ethUsd, signed });
   const busy = trade.isSubmitting || trade.isMining;
   const [details, setDetails] = useState(false);
 
@@ -740,10 +871,18 @@ function SellTicket({
             <span className="text-[var(--text-secondary)]">✓</span>
           </span>
           <div>
-            <div className="text-[14px] font-semibold text-[var(--text)]">Left {held.side}</div>
+            <div className="text-[14px] font-semibold text-[var(--text)]">
+              {sim ? `Reduced ${held.side} in Simulation` : `Left ${held.side}`}
+            </div>
             {proceeds != null && (
               <div className="num text-[11px] text-[var(--text-muted)]">
-                Sold {fmtShares(sharesForPct(held.tokens, pct))} shares · {proceedsStr(true)}
+                {sim ? (
+                  <>{proceedsStr()} returned</>
+                ) : (
+                  <>
+                    Sold {fmtShares(sharesForPct(held.tokens, pct))} shares · {proceedsStr(true)}
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -773,22 +912,29 @@ function SellTicket({
     // Round to the cent so "Max" always lands exactly on the full position.
     setPct(usd >= worthUsd! ? 100 : Math.round(p * 100) / 100);
   };
-  const money = (usd: number) => unitAmount(usd, unit, ethUsd);
+  // In Simulation `worthUsd` is already a CC figure (the dock marks the position
+  // in the active ledger's unit), so it needs no conversion — only the other
+  // formatter.
+  const money = sim ? (v: number) => formatCC(v) : (usd: number) => unitAmount(usd, unit, ethUsd);
   const positionUnit = priced ? money(worthUsd!) : `${fmtShares(held.tokens)} shares`;
   const remainingUsd = priced ? worthUsd! - amountUsd : null;
 
   const confirmLabel = !ready.connected
     ? "Connect wallet"
-    : !ready.onBase
+    : !sim && !ready.onBase
       ? "Switch to Base"
       : busy
-        ? "Selling…"
+        ? sim
+          ? "Updating position…"
+          : "Selling…"
         : priced && amountUsd <= 0
           ? "Enter an amount"
           : priced
             ? `Sell ${money(amountUsd)}`
             : `Sell all ${held.side}`;
-  const disabled = ready.connected && ready.onBase && (busy || proceeds == null || shares <= 0n);
+  const disabled = sim
+    ? !ready.connected || busy || proceeds == null || shares <= 0n
+    : ready.connected && ready.onBase && (busy || proceeds == null || shares <= 0n);
 
   // The SAME form as Back — title + close, the big editable amount, the size
   // line beneath it, one summary row with Details, one full-width action.
@@ -820,7 +966,13 @@ function SellTicket({
 
       <div className="mt-4">
         {priced ? (
-          <BigAmount amount={amountUsd} setAmount={setAmountUsd} unit={unit} ethUsd={ethUsd} />
+          <BigAmount
+            amount={amountUsd}
+            setAmount={setAmountUsd}
+            unit={unit}
+            ethUsd={ethUsd}
+            cc={!!sim}
+          />
         ) : (
           /* No value read yet — the whole position is the only honest offer. */
           <div
@@ -871,7 +1023,8 @@ function SellTicket({
               v={pct >= 100 ? money(0) : `≈ ${money(remainingUsd)}`}
             />
           )}
-          <QuoteRow k="Network" v="Base" />
+          {/* No network row in Simulation: nothing is settled on one. */}
+          {!sim && <QuoteRow k="Network" v="Base" />}
         </div>
       )}
 
@@ -881,14 +1034,17 @@ function SellTicket({
               failed — that is the sentence that makes a reader submit again.
               An error we cannot name is an error we say we cannot name. */}
           {trade.error?.message?.slice(0, 120) ??
-            "We didn't get a result back. Check your wallet before trying again."}
+            (sim
+              ? ORDER_FAILED
+              : "We didn't get a result back. Check your wallet before trying again.")}
         </div>
       )}
 
       {/* THE TWO ANXIOUS STATES, told apart. They shared one label — "Backing
           YES…" — which answered neither of the questions a person actually has
-          at each: has my money left, and may I close this. */}
-      {trade.isSubmitting && !trade.isMining && (
+          at each: has my money left, and may I close this. Absent in Simulation,
+          where neither question exists. */}
+      {!sim && trade.isSubmitting && !trade.isMining && (
         <p className="mt-2 text-[11px] leading-snug text-[var(--text-muted)]" role="status">
           <span className="font-semibold text-[var(--text-secondary)]">
             Waiting for your wallet.
@@ -896,7 +1052,7 @@ function SellTicket({
           Nothing has been sent yet — approve it there, or dismiss to cancel.
         </p>
       )}
-      {trade.isMining && (
+      {!sim && trade.isMining && (
         <p className="mt-2 text-[11px] leading-snug text-[var(--text-muted)]" role="status">
           <span className="font-semibold text-[var(--text-secondary)]">
             Sent — waiting for Base to confirm.

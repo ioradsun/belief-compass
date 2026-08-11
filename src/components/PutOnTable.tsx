@@ -20,6 +20,8 @@
  */
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { putOnTable } from "@/lib/table.functions";
+import { useSimulationMode } from "@/lib/simulation-mode";
+import type { RecordMode } from "@/domain/simulation";
 import { railSideKey, tableKey, useTable } from "@/components/YourTable";
 import { canPutOnTable } from "@/domain/table";
 import { AudiencePreview } from "@/components/AudiencePreview";
@@ -38,7 +40,15 @@ export function PutOnTable({
 }) {
   const qc = useQueryClient();
   const { ensureSession } = useWalletSession();
-  const { data: table } = useTable(wallet);
+  /**
+   * ONE LEDGER, END TO END. The capacity read, the audience preview and the write
+   * all carry the same mode, so what the reader is shown is exactly what the
+   * write would do — a Simulation Challenge reaches only active Simulation users
+   * and occupies a Simulation slot.
+   */
+  const { active: simulating } = useSimulationMode();
+  const mode: RecordMode = simulating ? "SIMULATION" : "REAL";
+  const { data: table } = useTable(wallet, mode);
 
   const put = useMutation({
     mutationFn: async (): Promise<PutResult | null> =>
@@ -48,10 +58,11 @@ export function PutOnTable({
             wallet: wallet as string,
             session: await ensureSession({ interactive: true }),
             marketId: marketId as number,
+            mode,
           },
         }),
       ),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: tableKey(wallet) }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: tableKey(wallet, mode) }),
   });
 
   if (!wallet || marketId == null) return null;
@@ -138,7 +149,7 @@ export function PutOnTable({
           asking somebody to publish into an unnamed crowd was the one place it
           kept its own cards face down. Self-hides on a refused or empty read, so
           the offer never sits under a heading with nothing beneath it. */}
-      <AudiencePreview wallet={wallet} marketId={marketId} />
+      <AudiencePreview wallet={wallet} marketId={marketId} mode={mode} />
       <button
         type="button"
         disabled={put.isPending}

@@ -60,7 +60,10 @@ import { expressBelief } from "@/lib/beliefs.functions";
 import { bestEffort, useWalletSession } from "@/hooks/useWalletSession";
 import { requestConnect } from "@/lib/connect-bridge";
 import { CHAIN_ID } from "@/chain/decoder";
-import { useBuyQuote, useTrade, useTradeReady, useUserBalance } from "@/lib/chain-trade";
+import { useBuyQuote, useUserBalance } from "@/lib/chain-trade";
+import { useMarketExecution } from "@/lib/market-execution";
+import { useSimulationMode } from "@/lib/simulation-mode";
+import { DEFAULT_ORDER_CC } from "@/domain/simulation";
 import { usdToWei, type OrderSide } from "@/domain/order";
 import { useMoney } from "@/lib/display-unit";
 import { OrderTicket } from "@/components/order/OrderTicket";
@@ -95,6 +98,9 @@ export function MobileGame({
 }) {
   const marketId = Number(row.onchain_id);
   const title = marketTitle(row.markets?.title, marketId);
+
+  /** Which ledger this phone session is in — the one flag the screen branches on. */
+  const { active: simulating } = useSimulationMode();
 
   const [phase, setPhase] = useState<Phase>("question");
   const [side, setSide] = useState<OrderSide | null>(null);
@@ -141,7 +147,9 @@ export function MobileGame({
 
   const qc = useQueryClient();
   const { ensureSession } = useWalletSession();
-  const house = useHouseFinalize(marketId, viewerWallet);
+  // The mode is read from the provider rather than from `exec`, which is created
+  // further down: one source of truth either way.
+  const house = useHouseFinalize(marketId, viewerWallet, simulating ? "SIMULATION" : "REAL");
   const express = useMutation({
     // Free belief: recorded only if the wallet already signed in for a paid
     // action — expressing an opinion never opens the wallet.
@@ -176,8 +184,15 @@ export function MobileGame({
     staleTime: 5 * 60_000,
   });
   const { data: houseRead } = useQuery({
-    queryKey: houseKey(viewerWallet, marketId),
-    queryFn: () => getHouseRead({ data: { wallet: viewerWallet ?? null, marketId } }),
+    queryKey: houseKey(viewerWallet, marketId, simulating ? "SIMULATION" : "REAL"),
+    queryFn: () =>
+      getHouseRead({
+        data: {
+          wallet: viewerWallet ?? null,
+          marketId,
+          mode: simulating ? "SIMULATION" : "REAL",
+        },
+      }),
     staleTime: 30_000,
   });
   // For the Conviction Reveal after a completed buy (same keys the Reveal screen
@@ -220,11 +235,14 @@ export function MobileGame({
       // swaps the screen (matches desktop). The question stays put; only the dock
       // transforms into the order controls. The House pick + celebration wait for
       // a placed order.
-      if (viewerWallet) express.mutate(s);
+      // IN SIMULATION, SELECTING A SIDE IS NOT A CONVICTION — the settled order
+      // writes the belief instead, so ten opened-and-abandoned forms cannot
+      // graduate somebody. Same rule as the desktop deck, same reason.
+      if (viewerWallet && !simulating) express.mutate(s);
       setSide(s);
       setBacking(true);
     },
-    [viewerWallet], // eslint-disable-line react-hooks/exhaustive-deps
+    [viewerWallet, simulating], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   const pass = () => {
@@ -235,8 +253,13 @@ export function MobileGame({
 
   // ---- money: only ever asked for AFTER a side is chosen ----
   const { switchChain } = useSwitchChain();
-  const ready = useTradeReady();
-  const trade = useTrade();
+  /**
+   * THE SAME FACADE THE DESKTOP DECK USES. The phone and the deck settle orders
+   * through one adapter selection, so the two surfaces cannot end up in different
+   * ledgers — or in the same ledger by two different routes.
+   */
+  const exec = useMarketExecution({ viewerWallet, ethUsd });
+  const { trade, ready, sim } = exec;
   const bal = useUserBalance(marketId);
   // The SAME owned-position hook the desktop deck mounts — the phone previously
   // had no sell path at all, so owning shares here was a one-way door.
@@ -248,9 +271,25 @@ export function MobileGame({
     ethUsd,
     ready,
     trade,
+    sim,
     onRequestConnect: requestConnect,
     onRequestChain: () => switchChain({ chainId: CHAIN_ID }),
   });
+
+  /**
+   * CROSSING LEDGERS DISCARDS THE DRAFT — the whole of what leaving costs. No CC
+   * was spent, because only a confirmed order is ever persisted, and carrying an
+   * amount typed as CC into a dollar field would be worse than losing it.
+   * Simulation opens at 100 CC; Real Mode keeps its existing default.
+   */
+  useEffect(() => {
+    setAmount(sim ? DEFAULT_ORDER_CC : 1);
+    setSide(null);
+    setBacking(false);
+    dock.reset();
+    trade.reset();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [!!sim, marketId]);
   /**
    * BEFORE AND AFTER, kept apart — the on-chain read is still pre-trade at the
    * instant a trade confirms, so it must not be handed over as "after".
@@ -297,17 +336,32 @@ export function MobileGame({
     );
     return insiderRead(houseRead ?? null, { pulse });
   }, [viewerWallet, houseRead, marketChange, row, ethUsd]);
+  /**
+   * Whichever proof this ledger has: a mined hash, or a settled Simulation order
+   * id. Both verified server-side; the Simulation path writes a separate round so
+   * the real one for this market stays unopened.
+   */
+  const settledOrderId = exec.lastOrder?.order.id ?? null;
   useEffect(() => {
-    if (trade.isSuccess && trade.hash && side && !revealed) {
+    if (!trade.isSuccess || !side || revealed) return;
+    if (sim) {
+      if (settledOrderId) {
+        setRevealed(true);
+        house.betReveal(side, { simulationOrderId: settledOrderId });
+      }
+      return;
+    }
+    if (trade.hash) {
       setRevealed(true);
-      house.betReveal(side, trade.hash);
+      house.betReveal(side, { txHash: trade.hash });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trade.isSuccess, trade.hash, side]);
+  }, [trade.isSuccess, trade.hash, side, settledOrderId, !!sim]);
 
   // The SAME rule the desktop deck runs, from the same hook rather than a second
   // copy of it — a confirmed buy closes every open Challenge in this market.
-  useAnswerCalls(viewerWallet, marketId, trade.isSuccess && !!trade.hash);
+  // REAL ONLY: a Simulation order answers its own calls inside its transaction.
+  useAnswerCalls(viewerWallet, marketId, trade.isSuccess && !!trade.hash && !sim);
 
   const stageMedia = stageMediaFrom(cm);
   const tallMedia = usesStageSwitch(stageMedia);
@@ -356,6 +410,7 @@ export function MobileGame({
         <PostAction
           kind="buy"
           wallet={viewerWallet}
+          mode={simulating ? "SIMULATION" : "REAL"}
           act={{
             marketId,
             side,
@@ -365,7 +420,10 @@ export function MobileGame({
               cm.creator.wallet.toLowerCase() === viewerWallet.toLowerCase(),
             after: shift.after,
             before: shift.before,
+            // Never the first REAL believer from a simulated position: that count
+            // is money-backed and a Simulation order adds nothing to it.
             firstBeliever:
+              !simulating &&
               (side === "YES" ? revealEvidence?.believersYes : revealEvidence?.believersNo) === 1,
           }}
           onNextQuestion={onNext}
@@ -553,6 +611,7 @@ export function MobileGame({
               ethUsd={ethUsd}
               ready={ready}
               trade={trade}
+              sim={sim}
               onBuySide={(s) => {
                 trade.reset();
                 choose(s);
@@ -585,6 +644,7 @@ export function MobileGame({
               ethUsd={ethUsd}
               ready={ready}
               trade={trade}
+              sim={sim}
               onConfirm={async () => {
                 if (!ready.connected) return requestConnect();
                 if (!ready.onBase) return switchChain({ chainId: CHAIN_ID });
@@ -605,7 +665,9 @@ export function MobileGame({
         </div>
         {/* What your link has brought into this market — only once it's real. */}
         <div className="mt-2">
-          <ShareImpact marketId={marketId} wallet={viewerWallet} />
+          {/* Share Impact reports real believers a real link brought in — a
+              simulated position contributes nothing to it, so it is absent. */}
+          {!simulating && <ShareImpact marketId={marketId} wallet={viewerWallet} />}
         </div>
       </Dock>
     </Screen>
