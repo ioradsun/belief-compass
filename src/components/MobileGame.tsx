@@ -63,7 +63,6 @@ import { CHAIN_ID } from "@/chain/decoder";
 import { useBuyQuote, useUserBalance } from "@/lib/chain-trade";
 import { useMarketExecution } from "@/lib/market-execution";
 import { useSimulationMode } from "@/lib/simulation-mode";
-import { DEFAULT_ORDER_CC } from "@/domain/simulation";
 import { usdToWei, type OrderSide } from "@/domain/order";
 import { useMoney } from "@/lib/display-unit";
 import { OrderTicket } from "@/components/order/OrderTicket";

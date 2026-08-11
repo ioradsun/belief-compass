@@ -45,7 +45,6 @@ import type { TapeTrade } from "@/domain/conviction-series";
 import { CHAIN_ID } from "@/chain/decoder";
 import { useBuyQuote, useUserBalance } from "@/lib/chain-trade";
 import { useMarketExecution } from "@/lib/market-execution";
-import { DEFAULT_ORDER_CC } from "@/domain/simulation";
 import { pulseFor, usdToWei, selectSide, type OrderSide } from "@/domain/order";
 
 import { WindowFilter } from "@/components/WindowFilter";
