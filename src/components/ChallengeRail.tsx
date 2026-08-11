@@ -26,6 +26,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ChainList } from "@/components/ChainList";
 import { useTable } from "@/components/YourTable";
+import { useSimulationMode } from "@/lib/simulation-mode";
 import { hideCall, useOpenCalls, type OpenCalls } from "@/lib/open-calls";
 import { ChallengeCardList } from "@/components/ChallengeCardList";
 import { passOnCall } from "@/lib/table.functions";
@@ -129,7 +130,10 @@ export function ChallengeRail({
       }),
     );
   };
-  const { data: table } = useTable(wallet);
+  // The rail shows the table for the ledger the reader is in — three Simulation
+  // Challenges must not make a real table look full, or the reverse.
+  const { active: simulating } = useSimulationMode();
+  const { data: table } = useTable(wallet, simulating ? "SIMULATION" : "REAL");
 
   // The open queue, minus anything this reader has waved off, plus what recently
   // became of the ones that were waiting. The count follows the WAITING list

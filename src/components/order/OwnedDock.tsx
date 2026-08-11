@@ -20,7 +20,9 @@
 import { useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { positionSummaryQO } from "@/lib/positions-query";
-import { useSellQuote, type useTrade, type useTradeReady } from "@/lib/chain-trade";
+import { simulationPositionQO } from "@/lib/simulation-query";
+import { useSimulationMode } from "@/lib/simulation-mode";
+import { useSellQuote, type useTradeReady } from "@/lib/chain-trade";
 import { fmtShares, sharesForPct, type OrderSide } from "@/domain/order";
 import {
   ownedPositions,
@@ -32,8 +34,10 @@ import {
 import { useMoney } from "@/lib/display-unit";
 import { OrderTicket, OwnedLine, SideButton } from "@/components/order/OrderTicket";
 import { weiToEth } from "@/domain/money";
+import { formatCC, sharesToWei } from "@/domain/simulation";
+import type { SimulationTicket, TradeLike } from "@/lib/market-execution";
 
-type TradeApi = ReturnType<typeof useTrade>;
+type TradeApi = TradeLike;
 type ReadyApi = ReturnType<typeof useTradeReady>;
 
 export interface OwnedDockApi {
@@ -66,17 +70,32 @@ export function useOwnedDock({
   ethUsd,
   ready,
   trade,
+  sim,
+  resolving = false,
   onRequestConnect,
   onRequestChain,
 }: {
   marketId: number;
   viewerWallet?: string;
+  /** The REAL on-chain balances. Ignored entirely while Simulation is active. */
   yesTokens: bigint;
   noTokens: bigint;
   /** The live rate — turns on-chain proceeds into a value the field can size. */
   ethUsd: number;
   ready: ReadyApi;
   trade: TradeApi;
+  /** Simulation ledger descriptor, or null in Real Mode. */
+  sim?: SimulationTicket | null;
+  /**
+   * WHICH LEDGER OWNS THIS MARKET IS NOT YET KNOWN.
+   *
+   * Ownership is reported EMPTY while this is true. Showing real holdings to
+   * somebody the server has in Simulation is not a data leak — it is their own
+   * position — but it is a wrong answer, and it would put a Sell button on a
+   * ledger the app has not established. Empty for the moment it takes to find
+   * out is the honest state.
+   */
+  resolving?: boolean;
   onRequestConnect: () => void;
   onRequestChain: () => void;
 }): OwnedDockApi {
@@ -86,24 +105,57 @@ export function useOwnedDock({
 
   // The viewer's honest ownership numbers on THIS market (cost basis + worth).
   const { data: posSummary } = useQuery(positionSummaryQO(viewerWallet, marketId));
+  /**
+   * THE OTHER LEDGER'S HOLDING. Queried under its own key, so a real position
+   * and a simulated one on the same market can never occupy the same cache entry
+   * — and only one of them is ever read into the dock.
+   */
+  const { session } = useSimulationMode();
+  const { data: simPos } = useQuery({
+    ...simulationPositionQO(viewerWallet, marketId, session),
+    enabled: !!viewerWallet && !!sim,
+  });
+
+  /**
+   * ONE LEDGER AT A TIME, NEVER A MERGE. Holding a real YES and a simulated NO on
+   * the same market is legal and normal, and showing them added together would
+   * be a portfolio that exists nowhere. While Simulation is active the real
+   * balances are not consulted at all.
+   */
+  const simulated = !!sim;
+  const simYes = sharesToWei(simPos?.yesShares ?? 0);
+  const simNo = sharesToWei(simPos?.noShares ?? 0);
+  // Neither ledger's holdings while the owning one is unknown — see `resolving`.
+  const activeYes = resolving ? 0n : simulated ? simYes : yesTokens;
+  const activeNo = resolving ? 0n : simulated ? simNo : noTokens;
 
   // What each whole side would actually fetch right now, straight from the
   // contract. This is the LAST RESORT for a side's value — the read model's
   // marked value is preferred so the dock agrees with Positions everywhere else
   // — but it means an owned side always has a real number instead of the word
   // "held", and the sell field always has a basis to size a partial against.
-  const { proceeds: yesFullWei } = useSellQuote(marketId, true, yesTokens);
-  const { proceeds: noFullWei } = useSellQuote(marketId, false, noTokens);
+  //
+  // The quote is the SAME live market read in both modes: a simulated position
+  // is marked against the real market, because there is no other market.
+  const { proceeds: yesFullWei } = useSellQuote(marketId, true, activeYes);
+  const { proceeds: noFullWei } = useSellQuote(marketId, false, activeNo);
   const liveUsd = (wei: bigint | null): number | null =>
     wei != null && wei > 0n && ethUsd > 0 ? weiToEth(wei) * ethUsd : null;
   /** A marked value only counts when it is a real, positive number. */
   const marked = (v: number | null | undefined): number | null => (v != null && v > 0 ? v : null);
 
   const owned = ownedPositions({
-    yesTokens,
-    noTokens,
-    yesWorthUsd: marked(posSummary?.yes?.worth) ?? liveUsd(yesFullWei),
-    noWorthUsd: marked(posSummary?.no?.worth) ?? liveUsd(noFullWei),
+    yesTokens: activeYes,
+    noTokens: activeNo,
+    // In Simulation the "worth" carried through this hook is already CC: the
+    // server marked it against the live price, and the live quote is the
+    // fallback through the same 1:1 convention the order was sized with.
+    yesWorthUsd: simulated
+      ? (marked(simPos?.yesValueCc) ?? liveUsd(yesFullWei))
+      : (marked(posSummary?.yes?.worth) ?? liveUsd(yesFullWei)),
+    noWorthUsd: simulated
+      ? (marked(simPos?.noValueCc) ?? liveUsd(noFullWei))
+      : (marked(posSummary?.no?.worth) ?? liveUsd(noFullWei)),
   });
 
   const sellHeld = sellSide ? heldSide(owned, sellSide) : null;
@@ -145,8 +197,13 @@ export function useOwnedDock({
     setAction(null);
   };
   const onSellConfirm = async () => {
+    // Nothing may settle before the owning ledger is established.
+    if (resolving) return;
     if (!ready.connected) return onRequestConnect();
-    if (!ready.onBase) return onRequestChain();
+    // Simulation never needs a network: `ready.onBase` is true by construction in
+    // that adapter, and asking for a chain switch here would be a prompt for a
+    // transaction that is never sent.
+    if (!simulated && !ready.onBase) return onRequestChain();
     if (
       sellSide &&
       proceeds != null &&
@@ -202,6 +259,8 @@ export function OwnedDock({
   ethUsd,
   ready,
   trade,
+  sim,
+  resolving = false,
   onBuySide,
   onPass,
   onSold,
@@ -212,6 +271,10 @@ export function OwnedDock({
   ethUsd: number;
   ready: ReadyApi;
   trade: TradeApi;
+  /** Simulation ledger descriptor, or null in Real Mode. */
+  sim?: SimulationTicket | null;
+  /** The owning ledger is not yet known — nothing may be submitted. */
+  resolving?: boolean;
   /** Chose a side to BUY — the parent records the belief and opens its ticket. */
   onBuySide: (s: OrderSide) => void;
   onPass: () => void;
@@ -222,15 +285,14 @@ export function OwnedDock({
   const { owned } = api;
   const surface = dockSurface({ owned, selling: api.isSelling, buySide });
 
-  // What a held side is worth, in the viewer's own currency. Shares are the
+  // What a held side is worth, in the ACTIVE ledger's unit. Shares are the
   // fallback only while the value is still being read — never the word "held",
   // which told the viewer nothing they didn't already know.
   const ownedText = (s: OrderSide): string | null => {
     const h = heldSide(owned, s);
     if (!h) return null;
-    return h.worthUsd != null && h.worthUsd > 0
-      ? format(h.worthUsd, "USD")
-      : `${fmtShares(h.tokens)} shares`;
+    if (!(h.worthUsd != null && h.worthUsd > 0)) return `${fmtShares(h.tokens)} shares`;
+    return sim ? formatCC(h.worthUsd) : format(h.worthUsd, "USD");
   };
 
   if (surface === "sell" && api.sellSide && api.sellPct != null) {
@@ -246,6 +308,8 @@ export function OwnedDock({
         worthUsd={api.worthUsd}
         ready={ready}
         trade={trade}
+        sim={sim}
+        resolving={resolving}
         onConfirm={api.onSellConfirm}
         onCancel={api.closeSell}
         onDone={onSold}

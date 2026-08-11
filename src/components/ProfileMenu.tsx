@@ -23,6 +23,8 @@ import { getProfileOverride } from "@/lib/profile-edit.functions";
 const ProfileEditor = lazyRetry(() =>
   import("@/components/ProfileEditor").then((m) => ({ default: m.ProfileEditor })),
 );
+import { useSimulationMode } from "@/lib/simulation-mode";
+
 const CreatorEarnings = lazyRetry(() =>
   import("@/components/CreatorEarnings").then((m) => ({ default: m.CreatorEarnings })),
 );
@@ -71,6 +73,7 @@ export function ProfileMenu({
   ethUsd?: number;
 }) {
   const me = wallet.toLowerCase();
+  const { active: simulating } = useSimulationMode();
   const [open, setOpen] = useState(false);
   const [panel, setPanel] = useState<Panel>(null);
   const [copied, setCopied] = useState(false);
@@ -215,7 +218,14 @@ export function ProfileMenu({
           </div>
 
           <Divider />
-          {onOpenDashboard && (
+          {/* THE TWO REAL-MONEY DESTINATIONS ARE ABSENT WHILE SIMULATING, not
+              disabled. Conviction Dashboard is a complete P&L of actual trades
+              and Creator Earnings is money somebody has really been paid;
+              reaching either from a CC balance would cross ledgers with nothing
+              on screen saying so. Everything else here — profile, settings,
+              wallet, the informational pages — works exactly as it always does.
+              The banner's Exit is the one-tap route back. */}
+          {onOpenDashboard && !simulating && (
             <Item
               label="Conviction Dashboard"
               onClick={() => {
@@ -227,7 +237,9 @@ export function ProfileMenu({
           {/* Opening a panel closes the dropdown — otherwise the menu stayed
               live under the dialog and kept competing for the same clicks. */}
           <Item label="Edit Profile" onClick={() => (setPanel("edit"), setOpen(false))} />
-          <Item label="Creator Earnings" onClick={() => (setPanel("earnings"), setOpen(false))} />
+          {!simulating && (
+            <Item label="Creator Earnings" onClick={() => (setPanel("earnings"), setOpen(false))} />
+          )}
           <Item label="Import POV Wallet" onClick={() => (setPanel("import"), setOpen(false))} />
           <Divider />
           <Item label="Settings" onClick={() => (setPanel("settings"), setOpen(false))} />

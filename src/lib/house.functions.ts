@@ -12,11 +12,16 @@ import {
   loadHouseRead,
   finalizeHouseBet,
   finalizeHousePass,
+  finalizeSimulationBet,
+  finalizeSimulationPass,
   recordFoundationAnswer,
+  type HouseMode,
   type HouseReadView,
 } from "@/lib/house.server";
 
-export type { HouseReadView };
+export type { HouseReadView, HouseMode };
+
+const MODE = z.enum(["REAL", "SIMULATION"]).default("REAL");
 
 export const getHouseRead = createServerFn({ method: "GET" })
   .inputValidator((raw: unknown) =>
@@ -24,10 +29,11 @@ export const getHouseRead = createServerFn({ method: "GET" })
       .object({
         wallet: z.string().min(3).nullable().optional(),
         marketId: z.number().int().nonnegative(),
+        mode: MODE,
       })
       .parse(raw),
   )
-  .handler(async ({ data }) => loadHouseRead(data.wallet ?? null, data.marketId));
+  .handler(async ({ data }) => loadHouseRead(data.wallet ?? null, data.marketId, data.mode));
 
 /**
  * Reveal the House pick by finalizing a verified on-chain buy.
@@ -56,6 +62,49 @@ export const finalizeBet = createServerFn({ method: "POST" })
       wallet = await assertWalletOwnership(data.wallet, data.session);
     }
     return finalizeHouseBet(wallet, data.marketId, data.side, data.txHash);
+  });
+
+/**
+ * Reveal the House pick from a settled SIMULATION order.
+ *
+ * SIGNED, unlike the real path — and the asymmetry is the point. A mined
+ * transaction proves its own sender, so the real reveal needs no second prompt.
+ * A Simulation order id proves nothing about who is asking, so the wallet
+ * session is what stops one person opening another's round by guessing a number.
+ */
+export const finalizeSimulationReveal = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) =>
+    z
+      .object({
+        wallet: z.string().min(3),
+        marketId: z.number().int().nonnegative(),
+        side: z.enum(["YES", "NO"]),
+        simulationOrderId: z.number().int().positive(),
+        session: z.string().min(16).max(2000),
+      })
+      .parse(raw),
+  )
+  .handler(async ({ data }) => {
+    const { assertWalletOwnership } = await import("@/lib/wallet-session.server");
+    const wallet = await assertWalletOwnership(data.wallet, data.session);
+    return finalizeSimulationBet(wallet, data.marketId, data.side, data.simulationOrderId);
+  });
+
+/** Close the SIMULATION round with a pass. Free, and it costs no CC. */
+export const finalizeSimulationPassFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) =>
+    z
+      .object({
+        wallet: z.string().min(3),
+        marketId: z.number().int().nonnegative(),
+        session: z.string().min(16).max(2000),
+      })
+      .parse(raw),
+  )
+  .handler(async ({ data }) => {
+    const { assertWalletOwnership } = await import("@/lib/wallet-session.server");
+    const wallet = await assertWalletOwnership(data.wallet, data.session);
+    return finalizeSimulationPass(wallet, data.marketId);
   });
 
 /** Close the round with a pass; the directional pick stays sealed. */

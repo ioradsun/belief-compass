@@ -123,6 +123,26 @@ interface Common {
    * rather than a fabricated one; there is no default that is a lie.
    */
   copySeed?: string;
+  /**
+   * WHICH LEDGER THIS ACTION LANDED IN.
+   *
+   * It changes exactly two things and nothing else: what a position may be
+   * called (a simulated Market Maker is "Simulating YES", not a real-money
+   * participant), and — through `formatValue` below — what unit the money
+   * sentences print. Every other judgement this resolver makes is about
+   * behaviour, and behaviour is equally real in both.
+   */
+  mode?: "REAL" | "SIMULATION";
+  /**
+   * HOW A VALUE IS PRINTED — supplied, never assumed.
+   *
+   * This module used to hardcode `$`, which was correct for as long as there was
+   * one ledger. It is a DOMAIN module: it decides what may be SAID about a
+   * number, and it has no business deciding which currency somebody is looking
+   * at. A caller that omits it gets dollars, which is what every existing caller
+   * meant.
+   */
+  formatValue?: (v: number) => string;
 }
 
 /**
@@ -301,8 +321,11 @@ function assertNever(x: never): never {
 const spotsOpen = (c: { active: number; total: number }): number =>
   Math.max(0, c.total - Math.max(0, c.active));
 
-/** Money the reader can check. Never rounded into a claim. */
+/** Money the reader can check. Never rounded into a claim. The default unit. */
 const usd = (v: number): string => `$${Math.abs(v).toFixed(2)}`;
+
+/** The caller's formatter, or dollars — resolved once per screen. */
+const valueFmt = (i: Pick<Common, "formatValue">): ((v: number) => string) => i.formatValue ?? usd;
 
 /**
  * CAN THIS PERSON PUT THE QUESTION UP RIGHT NOW?
@@ -331,9 +354,12 @@ export function challengeLabel(audience: Audience): string {
 }
 
 /** The realised line, and ONLY when the canonical number exists. */
-export function realizedLine(realizedGainUsd: number | null): string | null {
+export function realizedLine(
+  realizedGainUsd: number | null,
+  fmt: (v: number) => string = usd,
+): string | null {
   if (realizedGainUsd == null || realizedGainUsd === 0) return null;
-  return `${realizedGainUsd > 0 ? "+" : "−"}${usd(realizedGainUsd)} realized`;
+  return `${realizedGainUsd > 0 ? "+" : "−"}${fmt(realizedGainUsd)} realized`;
 }
 
 /**
@@ -440,9 +466,23 @@ function progressLine(p: { shown: number; reached: number } | null): string | nu
  * is both, and authorship is the larger fact — being reduced to "BELIEVER · YES"
  * on your own market is the identity error this line exists to prevent.
  */
-function identityFor(role: MarketRole, side: Side | null): string | null {
+function identityFor(
+  role: MarketRole,
+  side: Side | null,
+  mode: "REAL" | "SIMULATION" = "REAL",
+): string | null {
   if (role === "believer") return null;
-  return side ? `Market Maker · Backing ${side}` : "Market Maker";
+  if (!side) return "Market Maker";
+  /**
+   * "BACKING" IS A CLAIM ABOUT MONEY. A Market Maker who took a Simulation
+   * position on their own question is genuinely a Market Maker — authorship is
+   * real in both ledgers — but describing them as backing it would present a
+   * simulated position as real-money participation in their own market, which is
+   * the most persuasive place on the whole product to say something untrue.
+   */
+  return mode === "SIMULATION"
+    ? `Market Maker · Simulating ${side}`
+    : `Market Maker · Backing ${side}`;
 }
 
 /**
@@ -454,15 +494,20 @@ function identityFor(role: MarketRole, side: Side | null): string | null {
  * proceeds profit is the single most tempting lie on this screen.
  */
 function sellSupport(i: SellInput): string | null {
+  const fmt = valueFmt(i);
   const parts = [`Closed ${i.side}.`];
-  if (i.proceedsUsd != null && i.proceedsUsd > 0) parts.push(`${usd(i.proceedsUsd)} returned.`);
+  if (i.proceedsUsd != null && i.proceedsUsd > 0) parts.push(`${fmt(i.proceedsUsd)} returned.`);
   return parts.join(" ");
 }
 
 /** The still-in sentence, with a value only when there is one. */
-function stillBacking(remaining: Side, valueUsd: number | null): string {
+function stillBacking(
+  remaining: Side,
+  valueUsd: number | null,
+  fmt: (v: number) => string = usd,
+): string {
   return valueUsd != null
-    ? `Still backing ${remaining} with ${usd(valueUsd)}.`
+    ? `Still backing ${remaining} with ${fmt(valueUsd)}.`
     : `Still backing ${remaining}.`;
 }
 
@@ -503,7 +548,7 @@ export function resolvePostAction(i: PostActionInput): PostActionExperience {
         consequence: null,
         consequenceLine: null,
         challengeModule: module,
-        identity: identityFor(i.role, i.side),
+        identity: identityFor(i.role, i.side, i.mode),
         primary,
         secondary: secondaryUnless(primary, viewMarket),
         stayOnMarket: true,
@@ -559,7 +604,7 @@ export function resolvePostAction(i: PostActionInput): PostActionExperience {
           consequence: branchLive,
           consequenceLine: branchLine,
           challengeModule: module,
-          identity: identityFor(i.role, i.side),
+          identity: identityFor(i.role, i.side, i.mode),
           primary,
           secondary,
           stayOnMarket: false,
@@ -578,7 +623,7 @@ export function resolvePostAction(i: PostActionInput): PostActionExperience {
           consequence: branchLive,
           consequenceLine: branchLine,
           challengeModule: module,
-          identity: identityFor(i.role, null),
+          identity: identityFor(i.role, null, i.mode),
           primary,
           secondary,
           stayOnMarket: false,
@@ -604,7 +649,7 @@ export function resolvePostAction(i: PostActionInput): PostActionExperience {
           consequence: branchLive,
           consequenceLine: branchLine,
           challengeModule: module,
-          identity: identityFor(i.role, i.side),
+          identity: identityFor(i.role, i.side, i.mode),
           primary,
           secondary,
           stayOnMarket: false,
@@ -627,7 +672,7 @@ export function resolvePostAction(i: PostActionInput): PostActionExperience {
           consequence: branchLive,
           consequenceLine: branchLine,
           challengeModule: module,
-          identity: identityFor(i.role, null),
+          identity: identityFor(i.role, null, i.mode),
           primary,
           secondary,
           stayOnMarket: false,
@@ -642,7 +687,7 @@ export function resolvePostAction(i: PostActionInput): PostActionExperience {
           consequence: branchLive,
           consequenceLine: branchLine,
           challengeModule: module,
-          identity: identityFor(i.role, i.side),
+          identity: identityFor(i.role, i.side, i.mode),
           primary,
           secondary,
           stayOnMarket: false,
@@ -658,7 +703,7 @@ export function resolvePostAction(i: PostActionInput): PostActionExperience {
           consequence: branchLive,
           consequenceLine: branchLine,
           challengeModule: module,
-          identity: identityFor(i.role, i.side),
+          identity: identityFor(i.role, i.side, i.mode),
           primary,
           secondary,
           stayOnMarket: false,
@@ -779,7 +824,7 @@ export function resolvePostAction(i: PostActionInput): PostActionExperience {
           challengeModule: makerMayAsk ? sellModule : null,
           // A creator who has exited still authored the question. No side —
           // they hold none — but the authorship does not lapse with the position.
-          identity: makerMayAsk ? identityFor(i.role, null) : null,
+          identity: makerMayAsk ? identityFor(i.role, null, i.mode) : null,
           primary: makerMayAsk ? sellPrimary : backToMarket,
           secondary: makerMayAsk ? sellSecondary : null,
           stayOnMarket: true,
@@ -792,11 +837,11 @@ export function resolvePostAction(i: PostActionInput): PostActionExperience {
       if (i.action === "side_exit") {
         return {
           headline: `You left ${i.side}.`,
-          support: stillBacking(remaining, i.remainingValueUsd),
+          support: stillBacking(remaining, i.remainingValueUsd, valueFmt(i)),
           consequence: challengeLive,
           consequenceLine: challengeLive ? progressLine(i.outgoingProgress) : null,
           challengeModule: sellModule,
-          identity: identityFor(i.role, remaining),
+          identity: identityFor(i.role, remaining, i.mode),
           primary: sellPrimary,
           secondary: sellSecondary,
           stayOnMarket: true,
@@ -806,11 +851,11 @@ export function resolvePostAction(i: PostActionInput): PostActionExperience {
 
       return {
         headline: "You took some off.",
-        support: stillBacking(remaining, i.remainingValueUsd),
+        support: stillBacking(remaining, i.remainingValueUsd, valueFmt(i)),
         consequence: challengeLive,
         consequenceLine: challengeLive ? progressLine(i.outgoingProgress) : null,
         challengeModule: sellModule,
-        identity: identityFor(i.role, remaining),
+        identity: identityFor(i.role, remaining, i.mode),
         primary: sellPrimary,
         secondary: sellSecondary,
         stayOnMarket: true,

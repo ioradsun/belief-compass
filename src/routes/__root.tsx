@@ -17,6 +17,7 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { WalletProviders } from "../components/WalletConnect";
 import { DisplayUnitProvider } from "../lib/display-unit";
+import { SimulationModeProvider } from "../lib/simulation-mode";
 import { VersionWatcher } from "../components/VersionWatcher";
 import { restoreQueryCache, startQueryPersist } from "../lib/query-persist";
 import { startRealtime } from "../lib/realtime/coordinator";
@@ -191,11 +192,23 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <WalletProviders>
-        <DisplayUnitProvider>
-          <VersionWatcher />
-          {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-          <Outlet />
-        </DisplayUnitProvider>
+        {/* SIMULATION SITS INSIDE THE WALLET AND QUERY PROVIDERS AND OUTSIDE THE
+            APP. Inside, because the mode is keyed by the connected wallet and read
+            through React Query — it needs both above it. Outside, because every
+            order, position, banner and rail below has to read ONE answer to "which
+            ledger am I in", and a provider mounted per-screen is how two screens
+            come to disagree.
+
+            DisplayUnitProvider is untouched and remains the real USD/ETH system.
+            CC is deliberately not part of it: it has no rate, so it belongs in no
+            conversion context. */}
+        <SimulationModeProvider>
+          <DisplayUnitProvider>
+            <VersionWatcher />
+            {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+            <Outlet />
+          </DisplayUnitProvider>
+        </SimulationModeProvider>
       </WalletProviders>
     </QueryClientProvider>
   );

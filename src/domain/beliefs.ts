@@ -19,6 +19,22 @@ export const EXPRESSED_WEIGHT = 0.15;
 export const CALIBRATION_TARGET = 5;
 
 /**
+ * THE ONBOARDING GOAL — and it is deliberately NOT the calibration target.
+ *
+ * Five is the point at which a pattern becomes RECOGNIZABLE: the DNA minimum, the
+ * moment the Network can compute closest people, and the threshold a Simulation
+ * Challenge unlocks at. Ten is the point at which somebody's profile is DONE
+ * enough to stop onboarding them — it is what the first-run brief counts toward
+ * and what ends Simulation.
+ *
+ * They were never the same number and must not be collapsed into one. Raising
+ * CALIBRATION_TARGET to 10 to make Simulation graduate correctly would silently
+ * withhold the Network from everybody between five and ten convictions, which is
+ * exactly the population this whole mode exists to serve.
+ */
+export const PROFILE_TARGET = 10;
+
+/**
  * Merge on-chain and expressed factors, deduped by market. On-chain always wins
  * on a shared market (money beats a free tap); expressed fills the rest.
  */
@@ -134,5 +150,40 @@ export function readinessFor(count: number, target: number = CALIBRATION_TARGET)
     remaining,
     progress: Math.min(1, c / t),
     calibrated: c >= t,
+  };
+}
+
+/**
+ * HOW FAR THROUGH THE FIRST TEN — the same fold, against the other target.
+ *
+ * `count` is DISTINCT MARKETS the viewer has taken a direction on, from any of
+ * the four sources the belief layer recognises: a live money-backed position, a
+ * remembered one, a completed Simulation position, or any other expressed
+ * belief. Deduplicated by market, so holding both sides, adding to a position or
+ * changing sides is one conviction — the market is the unit, not the trade.
+ */
+export interface ProfileProgress {
+  count: number;
+  target: number;
+  /** Convictions still needed (never negative). */
+  remaining: number;
+  /** 0..1 progress toward the goal. */
+  progress: number;
+  /** The profile has enough signal — onboarding is over. */
+  complete: boolean;
+}
+
+/** Turn a raw distinct-belief count into the one onboarding progress signal. */
+export function profileProgressFor(
+  count: number,
+  target: number = PROFILE_TARGET,
+): ProfileProgress {
+  const r = readinessFor(count, target);
+  return {
+    count: r.count,
+    target: r.target,
+    remaining: r.remaining,
+    progress: r.progress,
+    complete: r.calibrated,
   };
 }

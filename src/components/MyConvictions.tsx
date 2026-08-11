@@ -16,11 +16,12 @@ import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { type VolumeWindow } from "@/lib/markets.functions";
 import { positionValueUsd, isMeasured } from "@/domain/position-value";
-import { myConvictionsQO } from "@/lib/positions-query";
+import { useViewerPositions } from "@/lib/positions-query";
 import { type MarketRow } from "@/components/MarketCard";
 import { positionPnl } from "@/domain/position";
 import { positionReturn, formatPct } from "@/domain/metric-display";
 import { formatMoney } from "@/domain/money";
+import { formatCC } from "@/domain/simulation";
 import { StandOnIt } from "@/components/StandOnIt";
 import { Signed } from "@/components/Signed";
 
@@ -269,13 +270,25 @@ export function MyConvictions({
   onOpenDashboard?: () => void;
 }) {
   const { unit } = useDisplayUnit();
+  /**
+   * WHICH LEDGER, AND THEREFORE WHICH FORMATTER.
+   *
+   * The arithmetic below is identical in both modes — value, cost, return, the
+   * story — because a simulated position is a real position with a fake balance
+   * behind it. The ONE thing that must not be shared is the unit: a CC figure
+   * rendered through `formatMoney` would print a dollar sign on something that
+   * has no monetary value, which is the single sentence this whole mode exists
+   * not to say.
+   */
+  const { positions: rawPositions, simulated } = useViewerPositions(wallet, win);
   // Position value and gain are USD-native (POV marks the tokens in dollars); one
   // rate takes them to the viewer's chosen unit so both sides share a rate.
-  const money: MoneyFmt = (n) => formatMoney(n, { from: "USD", to: unit, ethUsd });
-  const signedMoney: MoneyFmt = (n) =>
-    formatMoney(n, { from: "USD", to: unit, ethUsd, signed: true });
-
-  const { data } = useQuery(myConvictionsQO(wallet, win));
+  const money: MoneyFmt = simulated
+    ? (n) => formatCC(n)
+    : (n) => formatMoney(n, { from: "USD", to: unit, ethUsd });
+  const signedMoney: MoneyFmt = simulated
+    ? (n) => formatCC(n, true)
+    : (n) => formatMoney(n, { from: "USD", to: unit, ethUsd, signed: true });
 
   const byId = new Map<number, MarketRow>();
   for (const r of rows) byId.set(Number(r.onchain_id), r);
@@ -289,7 +302,7 @@ export function MyConvictions({
   // while the dashboard totals counted both. `stance_side` is a stance signal (it
   // belongs in DNA and the House); it is not a holdings filter. Ownership is
   // decided by what you HOLD, exactly as the order dock decides it.
-  const facts = ((data?.positions ?? []) as Position[])
+  const facts = (rawPositions as unknown as Position[])
     .flatMap((p) => (["YES", "NO"] as Side[]).map((side) => ({ p, side })))
     .map(({ p, side }) => {
       const id = Number(p.onchain_id);
@@ -571,7 +584,11 @@ export function MyConvictions({
               </span>
             </div>
 
-            {onOpenDashboard && (
+            {/* NO REAL-MONEY DASHBOARD FROM A SIMULATED PANEL. Full P&L is the
+                complete history of actual trades; opening it from a CC portfolio
+                would put two ledgers one tap apart with nothing saying which is
+                which. The banner's Exit is the route back to it. */}
+            {onOpenDashboard && !simulated && (
               <div className="mt-2.5">
                 <button
                   type="button"

@@ -28,6 +28,8 @@ import { useAudience } from "@/components/AudiencePreview";
 import { answeredCallKey, closedCallsKey } from "@/hooks/useAnswerCalls";
 import { tableProgress, TABLE_SLOTS } from "@/domain/table";
 import { audienceGroupFor } from "@/domain/audience";
+import { formatCC, type RecordMode } from "@/domain/simulation";
+import { useSimulationMode } from "@/lib/simulation-mode";
 import type { NamedPerson } from "@/domain/challenge";
 import type {
   Audience,
@@ -131,8 +133,29 @@ function sellAction(
  * read has historically become "nobody qualifies", and the two words are one
  * character apart in a switch.
  */
-export function useAudienceFacts(wallet?: string, marketId?: number): Audience {
-  const { data, isLoading } = useAudience(wallet, marketId);
+export function useAudienceFacts(
+  wallet?: string,
+  marketId?: number,
+  mode: RecordMode = "REAL",
+): Audience {
+  /**
+   * GRADUATION OUTRANKS THE RELAY.
+   *
+   * Once the tenth conviction lands, no NEW outgoing Simulation Challenge may be
+   * offered — the reader is leaving the mode, and asking people to meet them
+   * somewhere they are about to exit is a promise the product cannot keep.
+   * Reported as `none` rather than a disabled button, because a CTA that cannot
+   * be used is a smaller version of a promise that cannot be kept, and the
+   * resolver already knows what to do with an audience of nobody.
+   *
+   * An INCOMING answer is unaffected: a tenth conviction that answers somebody
+   * is recorded normally, inside the order transaction.
+   */
+  const { active: simulating, canOrder } = useSimulationMode();
+  const graduating = simulating && !canOrder;
+
+  const { data, isLoading } = useAudience(wallet, marketId, mode);
+  if (graduating) return NO_AUDIENCE;
   if (isLoading || !data) return LOADING_AUDIENCE;
   switch (data.status) {
     case "available":
@@ -164,6 +187,14 @@ const LOADING_AUDIENCE: Audience = {
   formingOnly: false,
 };
 
+/** Nobody to ask — the honest empty, distinct from a read that failed. */
+const NO_AUDIENCE: Audience = {
+  status: "none",
+  total: 0,
+  singleRecipientName: null,
+  formingOnly: false,
+};
+
 /**
  * WHAT THIS PERSON ALREADY HAS UP — capacity, and the state of this market.
  *
@@ -172,8 +203,8 @@ const LOADING_AUDIENCE: Audience = {
  * resolver still reports that a Challenge is live if the ledger said so, and
  * declines to quantify it.
  */
-function useTableFacts(wallet?: string, marketId?: number) {
-  const { data: table } = useTable(wallet);
+function useTableFacts(wallet?: string, marketId?: number, mode: RecordMode = "REAL") {
+  const { data: table } = useTable(wallet, mode);
   const live = (table ?? []).filter((r) => r.closedAtMs == null);
   const mine = live.find((r) => r.marketId === marketId);
   const progress = mine ? tableProgress(mine.recipients) : null;
@@ -239,9 +270,16 @@ export function usePostActionFacts(
   kind: "buy" | "sell" | "create",
   wallet: string | undefined,
   act: ConfirmedAction,
+  /**
+   * WHICH LEDGER THIS ACTION LANDED IN. Every fact gathered below is read from a
+   * mode-scoped source — the audience a Simulation Challenge could reach, the
+   * Simulation table's capacity — so the resolver decides about one world rather
+   * than a mixture of two.
+   */
+  mode: RecordMode = "REAL",
 ): PostActionFacts {
-  const audience = useAudienceFacts(wallet, act.marketId);
-  const { outgoing, outgoingProgress, capacity } = useTableFacts(wallet, act.marketId);
+  const audience = useAudienceFacts(wallet, act.marketId, mode);
+  const { outgoing, outgoingProgress, capacity } = useTableFacts(wallet, act.marketId, mode);
   const { answered, parentCall } = useAnsweredFacts(act.marketId);
 
   const holds = !!act.after && (act.after.yes > 0 || act.after.no > 0);
@@ -261,6 +299,14 @@ export function usePostActionFacts(
     capacity,
     audience,
     copySeed: String(act.marketId),
+    mode,
+    /**
+     * THE UNIT THE RESOLVER MAY PRINT. Supplied rather than assumed: the domain
+     * module owns what may be SAID about a value, and this owns which ledger the
+     * value belongs to. In Real Mode it is omitted, which leaves the resolver's
+     * dollar default exactly where it was.
+     */
+    formatValue: mode === "SIMULATION" ? (v: number) => formatCC(v) : undefined,
   } as const;
 
   if (kind === "create") {

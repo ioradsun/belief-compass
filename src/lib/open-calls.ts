@@ -28,6 +28,8 @@ import { useSyncExternalStore } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { networkQO } from "@/lib/network-query";
 import { getChallenges } from "@/lib/challenge.functions";
+import { useSimulationMode } from "@/lib/simulation-mode";
+import type { RecordMode } from "@/domain/simulation";
 import { challengeLock, type Challenge } from "@/domain/challenge";
 import { passedNow } from "@/domain/dependability";
 
@@ -157,6 +159,16 @@ export interface OpenCalls {
  * Challenges" is a claim about the queue, and only the second one is true.
  */
 export function useOpenCalls(wallet?: string): OpenCalls {
+  /**
+   * ONLY THE CALLS FROM THE LEDGER YOU ARE IN.
+   *
+   * A Simulation user cannot answer a real call — answering means taking a real
+   * position — and somebody back in Real Mode cannot answer a Simulation one.
+   * Showing either would put a question on somebody's rail that they have no way
+   * to close, which is the one thing a queue must never do.
+   */
+  const { active: simulating } = useSimulationMode();
+  const mode: RecordMode = simulating ? "SIMULATION" : "REAL";
   // The same cached observer DnaFirstReveal uses — the lock costs no round trip.
   const { data: net, isError: netError } = useQuery({ ...networkQO(wallet), enabled: !!wallet });
   const lock = challengeLock(net?.summary.expressedBeliefs ?? 0, (net?.summary.twinCount ?? 0) > 0);
@@ -165,8 +177,9 @@ export function useOpenCalls(wallet?: string): OpenCalls {
   const lockUnknown = netError && !net;
 
   const { data: challenges, isError } = useQuery({
-    queryKey: ["challenges", wallet ?? null],
-    queryFn: () => getChallenges({ data: { wallet: wallet ?? null } }),
+    // The mode is in the key: two different lists, never one cache entry.
+    queryKey: ["challenges", wallet ?? null, mode],
+    queryFn: () => getChallenges({ data: { wallet: wallet ?? null, mode } }),
     enabled: !!wallet && lock.unlocked,
     staleTime: 60_000,
   });

@@ -904,3 +904,83 @@ describe("a refused write is a transient fact, not a new post-action state", () 
     for (const banned of POST_ACTION_BANNED) expect(said.toLowerCase()).not.toContain(banned);
   });
 });
+
+/**
+ * SIMULATION CHANGES TWO THINGS AND NOTHING ELSE: what a position may be CALLED,
+ * and what unit a value is PRINTED in. Every other judgement this resolver makes
+ * is about behaviour, and behaviour is equally real in both ledgers — which is
+ * the whole reason a Simulation conviction is worth counting at all.
+ */
+describe("the closing screen tells the truth about which ledger it is in", () => {
+  const cc = (v: number) => `${Math.abs(v).toFixed(2)} CC`;
+
+  /** A full exit — the shape whose support line is the money sentence. */
+  const exit = (over: Partial<SellInput> = {}): SellInput =>
+    ({
+      ...(sell() as SellInput),
+      action: "market_exit",
+      after: { yes: 0, no: 0 },
+      proceedsUsd: 75,
+      remainingValueUsd: null,
+      ...over,
+    }) as SellInput;
+
+  it("prints a sell's money in the supplied unit rather than assuming dollars", () => {
+    const r = resolvePostAction(exit({ mode: "SIMULATION", formatValue: cc }));
+    expect(r.support).toContain("75.00 CC returned");
+    expect(r.support).not.toContain("$");
+  });
+
+  it("still says dollars when no formatter is supplied", () => {
+    expect(resolvePostAction(exit()).support).toContain("$75.00 returned");
+  });
+
+  it("carries the unit into the still-backing sentence too", () => {
+    const r = resolvePostAction(
+      sell({
+        action: "side_exit",
+        side: "YES",
+        after: { yes: 0, no: 6 },
+        proceedsUsd: 20,
+        remainingValueUsd: 12,
+        mode: "SIMULATION",
+        formatValue: cc,
+      }) as SellInput,
+    );
+    expect(`${r.headline} ${r.support}`).not.toContain("$");
+  });
+
+  it("signs a realised line in the supplied unit", () => {
+    expect(realizedLine(4.2, cc)).toBe("+4.20 CC realized");
+    expect(realizedLine(-4.2, cc)).toBe("−4.20 CC realized");
+    // Unchanged for every caller that does not supply one.
+    expect(realizedLine(4.2)).toBe("+$4.20 realized");
+  });
+
+  it("never calls a simulated Market Maker a real-money backer", () => {
+    const real = resolvePostAction(buy({ role: "market_maker_and_believer", side: "YES" }));
+    expect(real.identity).toBe("Market Maker · Backing YES");
+
+    const simulated = resolvePostAction(
+      buy({ role: "market_maker_and_believer", side: "YES", mode: "SIMULATION" }),
+    );
+    // Authorship is real in both ledgers; the position is not.
+    expect(simulated.identity).toBe("Market Maker · Simulating YES");
+    expect(simulated.identity).not.toContain("Backing");
+  });
+
+  it("keeps the plain Market Maker line when there is no position to describe", () => {
+    const r = resolvePostAction(create({ role: "market_maker", side: null, mode: "SIMULATION" }));
+    expect(r.identity).toBe("Market Maker");
+  });
+
+  it("offers no Challenge when the Simulation audience is empty", () => {
+    // The adapter reports `none` while graduating; the resolver must then reach
+    // for the next action rather than rendering a CTA that cannot be used.
+    const r = resolvePostAction(
+      buy({ mode: "SIMULATION", audience: aud({ status: "none", total: 0 }) }),
+    );
+    expect(r.primary.kind).not.toBe("challenge");
+    expect(r.challengeModule).toBeNull();
+  });
+});

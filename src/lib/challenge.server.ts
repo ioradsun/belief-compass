@@ -22,6 +22,7 @@
  */
 import { serviceClient } from "@/lib/supabase-clients";
 import { aliasFor } from "@/lib/wallet-identity";
+import type { RecordMode } from "@/domain/simulation";
 import { CLOSEST_MIN_SHARED } from "@/domain/dna/config";
 import {
   composeChallenges,
@@ -265,18 +266,31 @@ async function dnaCandidates(
 async function answeredCandidates(
   sb: Sb,
   viewer: string,
+  /**
+   * WHICH LEDGER'S HISTORY QUALIFIES SOMEBODY.
+   *
+   * This is a DOOR INTO AN AUDIENCE — "we have answered each other before, so you
+   * can ask me" — and an audience decides who actually gets contacted. Reading
+   * both ledgers here would let a real answering relationship qualify somebody
+   * for a Simulation Challenge they cannot receive, and the reverse. See
+   * `docs/simulation-mode.md` for where the mode line falls and where it
+   * deliberately does not.
+   */
+  mode: RecordMode = "REAL",
 ): Promise<{ status: "ok"; rows: AudienceCandidate[] } | { status: "failed" }> {
   const [mine, theirs] = await Promise.all([
     sb
       .from("market_calls")
       .select("responder_wallet")
       .eq("caller_wallet", viewer)
+      .eq("mode", mode)
       .not("responded_at", "is", null)
       .limit(READ.answeredPairs),
     sb
       .from("market_calls")
       .select("caller_wallet")
       .eq("responder_wallet", viewer)
+      .eq("mode", mode)
       .not("responded_at", "is", null)
       .limit(READ.answeredPairs),
   ]);
@@ -333,7 +347,11 @@ async function answeredCandidates(
  *
  * The card can now say who wants you there, and mean it.
  */
-export async function buildChallenges(viewer: string): Promise<Challenge[]> {
+export async function buildChallenges(
+  viewer: string,
+  /** Only calls from the ledger the reader is currently in. */
+  mode: RecordMode = "REAL",
+): Promise<Challenge[]> {
   const me = viewer.toLowerCase();
   const sb = serviceClient();
 
@@ -358,6 +376,7 @@ export async function buildChallenges(viewer: string): Promise<Challenge[]> {
     .from("market_calls")
     .select("market_id, caller_wallet, relation_at_call, called_at, responded_at, passed_at")
     .eq("responder_wallet", me)
+    .eq("mode", mode)
     .not("challenge_id", "is", null)
     .or(
       `and(responded_at.is.null,passed_at.is.null),responded_at.gte.${since},passed_at.gte.${since}`,
@@ -591,11 +610,18 @@ export async function markCallsAnswered(
   // `.select()` on the UPDATE returns exactly the rows this call closed — the
   // ones that were still open a moment ago. Reading them separately afterwards
   // would race a second tab and could name somebody this trade did not answer.
+  /**
+   * REAL CALLS ONLY. This path is reached by a mined transaction, and a real
+   * position must not close a Simulation call any more than a simulated one may
+   * close a real one. A Simulation order answers its own calls inside the order
+   * transaction, scoped the same way.
+   */
   let res = await sb
     .from("market_calls")
     .update(stamp)
     .eq("market_id", marketId)
     .eq("responder_wallet", wallet.toLowerCase())
+    .eq("mode", "REAL")
     .is("responded_at", null)
     .select("id, caller_wallet, called_at");
   /**
@@ -614,6 +640,7 @@ export async function markCallsAnswered(
       .update({ responded_at: stamp["responded_at"] as string })
       .eq("market_id", marketId)
       .eq("responder_wallet", wallet.toLowerCase())
+      .eq("mode", "REAL")
       .is("responded_at", null)
       .select("id, caller_wallet, called_at");
   }
@@ -703,6 +730,15 @@ export async function eligibleAudience(
   sb: Sb,
   viewer: string,
   marketId: number,
+  /**
+   * WHICH LEDGER IS ASKING.
+   *
+   * A Simulation Challenge may reach ONLY another active Simulation user, and
+   * that is expressed as an INTERSECTION with this same canonical audience —
+   * never as a second matching algorithm. The relationships that qualify
+   * somebody are identical in both modes; the mode only narrows who is reachable.
+   */
+  mode: RecordMode = "REAL",
 ): Promise<
   { status: "ok"; members: AudienceCandidate[] } | { status: "failed"; reason: AudienceFailure }
 > {
@@ -715,7 +751,10 @@ export async function eligibleAudience(
    * what `relation_at_call` freezes. `dedupeAudience` settles that by
    * precedence, not by arrival.
    */
-  const [dna, answered] = await Promise.all([dnaCandidates(sb, me), answeredCandidates(sb, me)]);
+  const [dna, answered] = await Promise.all([
+    dnaCandidates(sb, me),
+    answeredCandidates(sb, me, mode),
+  ]);
   if (dna.status === "failed") return { status: "failed", reason: "dna_unavailable" };
   if (answered.status === "failed") return { status: "failed", reason: "calls_unavailable" };
 
@@ -723,15 +762,49 @@ export async function eligibleAudience(
   if (candidates.length === 0) return { status: "ok", members: [] };
   const wallets = candidates.map((c) => c.wallet);
 
-  const [participants, asked, market] = await Promise.all([
+  const [participants, asked, market, simulators, simParticipants] = await Promise.all([
     sb.from("wallet_beliefs").select("wallet").eq("onchain_id", marketId).in("wallet", wallets),
     sb
       .from("market_calls")
       .select("responder_wallet")
       .eq("market_id", marketId)
       .eq("caller_wallet", me)
+      .eq("mode", mode)
       .in("responder_wallet", wallets),
     sb.from("markets").select("author_wallet").eq("onchain_id", marketId).maybeSingle(),
+    /**
+     * THE INTERSECTION: who can actually ANSWER in this ledger.
+     *
+     * `state = 'ACTIVE'` and nothing looser. A GRADUATING account is finished —
+     * it may still read its receipt but may not place another order — so
+     * including one would ask somebody for a thing they are forbidden from
+     * giving. EXITED and GRADUATED are excluded by the same predicate rather
+     * than by three separate conditions a future edit could forget one of.
+     */
+    mode === "SIMULATION"
+      ? sb.from("simulation_accounts").select("wallet").eq("state", "ACTIVE").in("wallet", wallets)
+      : Promise.resolve({ data: null, error: null }),
+    /**
+     * ALREADY ANSWERED THIS MARKET — IN THIS LEDGER.
+     *
+     * The `wallet_beliefs` read above finds real participants and cannot see a
+     * Simulation one, because Simulation positions live in their own table. So a
+     * person who had already taken a side here in Simulation stayed eligible for
+     * somebody else's Simulation Challenge on the same market — asked a question
+     * they had already answered.
+     *
+     * ROW EXISTENCE, NOT POSITIVE SHARES. Selling out does not un-answer a
+     * question, which is exactly the rule the real read already follows: a
+     * `wallet_beliefs` row survives a full exit, and that is why its mere
+     * existence is the right test.
+     */
+    mode === "SIMULATION"
+      ? sb
+          .from("simulation_positions")
+          .select("wallet")
+          .eq("onchain_id", marketId)
+          .in("wallet", wallets)
+      : Promise.resolve({ data: null, error: null }),
   ]);
 
   const refuse = (reason: AudienceFailure, e: { code?: string; message?: string }) => {
@@ -745,6 +818,11 @@ export async function eligibleAudience(
   if (participants.error) return refuse("participants_unavailable", participants.error);
   if (asked.error) return refuse("calls_unavailable", asked.error);
   if (market.error) return refuse("market_unavailable", market.error);
+  // A failed intersection read is a FAILURE, never an empty audience: reporting
+  // "nobody qualifies" because a query broke is the exact confident-and-wrong
+  // sentence this path already refuses to say about somebody's network.
+  if (simulators.error) return refuse("calls_unavailable", simulators.error);
+  if (simParticipants.error) return refuse("participants_unavailable", simParticipants.error);
 
   const excluded = new Set<string>();
   const drop = (w: unknown) => {
@@ -752,10 +830,22 @@ export async function eligibleAudience(
     if (k) excluded.add(k);
   };
   for (const r of (participants.data ?? []) as { wallet: string }[]) drop(r.wallet);
+  // The other ledger's participants, on this market, in Simulation only.
+  for (const r of (simParticipants.data ?? []) as { wallet: string }[]) drop(r.wallet);
   for (const r of (asked.data ?? []) as { responder_wallet: string }[]) drop(r.responder_wallet);
   drop((market.data as { author_wallet?: string } | null)?.author_wallet);
   drop(me);
-  return { status: "ok", members: candidates.filter((c) => !excluded.has(c.wallet)) };
+
+  let members = candidates.filter((c) => !excluded.has(c.wallet));
+  if (mode === "SIMULATION") {
+    // INTERSECT, not replace. Everybody who was qualified stays qualified; the
+    // audience is narrowed to those who can actually answer in this ledger.
+    const active = new Set(
+      ((simulators.data ?? []) as { wallet: string }[]).map((r) => r.wallet.toLowerCase()),
+    );
+    members = members.filter((c) => active.has(c.wallet));
+  }
+  return { status: "ok", members };
 }
 
 /**
@@ -770,12 +860,16 @@ export async function eligibleAudience(
  * `lazyCap` is 0: this runs on a preview, and a preview must not spend twenty
  * outbound pov.co lookups. Whatever is already cached is what shows.
  */
-export async function audienceFor(wallet: string, marketId: number): Promise<AudienceResult> {
+export async function audienceFor(
+  wallet: string,
+  marketId: number,
+  mode: RecordMode = "REAL",
+): Promise<AudienceResult> {
   const me = wallet.toLowerCase();
   if (!me || !Number.isFinite(marketId)) return { status: "none" };
   const sb = serviceClient();
 
-  const resolved = await eligibleAudience(sb, me, marketId);
+  const resolved = await eligibleAudience(sb, me, marketId, mode);
   if (resolved.status === "failed") return { status: "failed", reason: resolved.reason };
   if (resolved.members.length === 0) return { status: "none" };
 
@@ -792,7 +886,12 @@ export async function audienceFor(wallet: string, marketId: number): Promise<Aud
   );
 }
 
-export async function callReachFor(wallet: string, marketId?: number): Promise<CallReach> {
+export async function callReachFor(
+  wallet: string,
+  marketId?: number,
+  /** The reach shown before committing must be the reach the write would have. */
+  mode: RecordMode = "REAL",
+): Promise<CallReach> {
   const sb = serviceClient();
   const me = wallet.toLowerCase();
   /**
@@ -803,7 +902,7 @@ export async function callReachFor(wallet: string, marketId?: number): Promise<C
    */
   let relations: CallRelationAtTime[];
   if (typeof marketId === "number" && Number.isFinite(marketId)) {
-    const res = await eligibleAudience(sb, me, marketId);
+    const res = await eligibleAudience(sb, me, marketId, mode);
     // A refused audience is not a reach of zero. Zero would render "nobody
     // qualifies" — a confident claim about somebody's network made from a read
     // that never completed.
@@ -820,7 +919,10 @@ export async function callReachFor(wallet: string, marketId?: number): Promise<C
      * it is the same class of drift as the 32-person gap: two definitions of who
      * can be reached.
      */
-    const [dna, answered] = await Promise.all([dnaCandidates(sb, me), answeredCandidates(sb, me)]);
+    const [dna, answered] = await Promise.all([
+      dnaCandidates(sb, me),
+      answeredCandidates(sb, me, mode),
+    ]);
     if (dna.status === "failed" || answered.status === "failed")
       return { tribe: 0, rivals: 0, forming: 0, failed: true };
     relations = dedupeAudience([...dna.rows, ...answered.rows]).map((c) => c.relationAtCall);

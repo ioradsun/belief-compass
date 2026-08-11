@@ -36,11 +36,20 @@ import {
 } from "@/domain/post-action";
 import { bestEffort, useWalletSession } from "@/hooks/useWalletSession";
 import type { PutResult } from "@/lib/table.server";
+import type { RecordMode } from "@/domain/simulation";
 
 export interface PostActionProps {
   kind: "buy" | "sell" | "create";
   wallet?: string;
   act: ConfirmedAction;
+  /**
+   * WHICH LEDGER THE ACTION LANDED IN. Defaults to REAL, so every caller that
+   * has not learned about Simulation behaves exactly as before. It scopes the
+   * audience, the table capacity, the relay write and the money vocabulary — a
+   * Challenge put up from Simulation reaches only Simulation users, and takes a
+   * Simulation slot.
+   */
+  mode?: RecordMode;
   /** Leave this market for the next question. Absent on a sell, by design. */
   onNextQuestion?: () => void;
   /** Stay here — the sell exit, and the creation's "View Market". */
@@ -57,6 +66,7 @@ export function PostAction({
   kind,
   wallet,
   act,
+  mode = "REAL",
   onNextQuestion,
   onStay,
   onSeeChain,
@@ -65,8 +75,8 @@ export function PostAction({
 }: PostActionProps) {
   const qc = useQueryClient();
   const { ensureSession } = useWalletSession();
-  const { input, parentCall } = usePostActionFacts(kind, wallet, act);
-  const { data: audience } = useAudience(wallet, act.marketId);
+  const { input, parentCall } = usePostActionFacts(kind, wallet, act, mode);
+  const { data: audience } = useAudience(wallet, act.marketId, mode);
 
   /**
    * ONE PRESS'S OUTCOME, and deliberately not part of the experience.
@@ -94,6 +104,7 @@ export function PostAction({
              * or never answered are all refused inside the transaction.
              */
             parentCall,
+            mode,
           },
         }),
       ),
@@ -106,8 +117,8 @@ export function PostAction({
        * not failures to report, they are the CANONICAL STATE arriving late, and
        * the only way the screen can say the true thing is to go and look.
        */
-      void qc.invalidateQueries({ queryKey: tableKey(wallet) });
-      void qc.invalidateQueries({ queryKey: audienceKey(wallet, act.marketId) });
+      void qc.invalidateQueries({ queryKey: tableKey(wallet, mode) });
+      void qc.invalidateQueries({ queryKey: audienceKey(wallet, act.marketId, mode) });
       /**
        * A NULL RESULT IS A NETWORK FAILURE. `bestEffort` swallows the throw, so
        * the absence of a result is the only evidence the request never landed —

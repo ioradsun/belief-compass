@@ -52,6 +52,8 @@ import { LiveTape } from "@/components/LiveTape";
 import { getWarmTape } from "@/lib/live.functions";
 
 import { TakeASide } from "@/components/TakeASide";
+import { SimulationBanner } from "@/components/SimulationBanner";
+import { useSimulationMode } from "@/lib/simulation-mode";
 
 import { SimilarMarkets } from "@/components/SimilarMarkets";
 import { ChallengeRail } from "@/components/ChallengeRail";
@@ -450,6 +452,15 @@ function Feed() {
 
   const navigate = Route.useNavigate();
   const wallet = useEffectiveWallet(searchWallet);
+  /**
+   * WHICH LEDGER THIS SESSION IS IN — read once, here, and passed down.
+   *
+   * The route only needs the boolean: which real-money destinations are closed
+   * while Simulation is active. Everything else about the mode (the balance, the
+   * progress, the exit) belongs to the banner and the order surfaces, which read
+   * the provider themselves.
+   */
+  const { active: simulating } = useSimulationMode();
   // Share attribution: record the open for an arriving ?r= link, and bind this
   // browser's opens to the wallet once one connects. Fails silently.
   useCaptureShareVisit(refCode, selectedMarket, wallet);
@@ -628,6 +639,12 @@ function Feed() {
   // The Conviction Dashboard is a center-panel destination (never a modal): it
   // deep-links, survives refresh, and back returns you to where you opened it.
   const openDashboard = () => {
+    // REAL-MONEY DESTINATIONS ARE CLOSED WHILE SIMULATING. The dashboard is the
+    // complete history of actual trades and Create Market puts a real question on
+    // a real chain; neither belongs one tap from a CC balance with nothing on
+    // screen saying which ledger you crossed into. The banner's always-visible
+    // Exit is the route back to both.
+    if (simulating) return;
     pushCenter();
     navigate({
       search: (prev: Search) => ({
@@ -645,6 +662,7 @@ function Feed() {
   // Creating a market is a first-class center-column destination, not a modal:
   // it deep-links, survives refresh, and back returns you to where you were.
   const openCreate = () => {
+    if (simulating) return;
     pushCenter();
     navigate({
       search: (prev: Search) => ({
@@ -1489,6 +1507,13 @@ function Feed() {
         }`}
       />
 
+      {/* THE MODE, DECLARED ONCE, ABOVE EVERYTHING IT APPLIES TO.
+        Directly beneath the global header and above the three columns, so it is
+        on screen while browsing, ordering, reading a position, a match, a
+        Challenge or a receipt — which is what lets every surface below it stop
+        repeating the word "Simulation". Renders nothing at all in Real Mode. */}
+      <SimulationBanner />
+
       {/* One rail width for both sides in every mode — a single source of truth
         (no 264 vs 344 asymmetry). It also means the Case File's YES/NO columns get
         equal visual authority automatically, with no mode-specific grid. */}
@@ -1552,7 +1577,7 @@ function Feed() {
                     {/* FIRST TEN CONVICTIONS — the brief owns this slot until
                       the reader has taken ten sides, then the rail simply
                       leads with the feed. */}
-                    <TakeASide wallet={wallet} window={win} />
+                    <TakeASide wallet={wallet} />
 
                     <FeedListPanel
                       lens={lens}

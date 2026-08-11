@@ -25,6 +25,7 @@
 import { serviceClient } from "@/lib/supabase-clients";
 import { aliasFor } from "@/lib/wallet-identity";
 import { eligibleAudience, type Sb } from "@/lib/challenge.server";
+import type { RecordMode } from "@/domain/simulation";
 import {
   tableProgress,
   shouldAutoClose,
@@ -167,6 +168,14 @@ export async function putOnTable(
    * market, was addressed to this person, and was actually answered.
    */
   parentCall?: number | null,
+  /**
+   * WHICH LEDGER THIS QUESTION IS BEING PUT UP IN.
+   *
+   * It scopes the audience (a Simulation Challenge reaches only active Simulation
+   * users), the three-slot capacity, and the row itself — so a Challenge put up
+   * in Simulation cannot outlive Simulation or occupy a real slot.
+   */
+  mode: RecordMode = "REAL",
 ): Promise<PutResult> {
   const sb = serviceClient();
   const me = wallet.toLowerCase();
@@ -186,7 +195,7 @@ export async function putOnTable(
    * this market. If one of those reads fails we do not know who to leave out —
    * so nothing is written and the caller is told the audience was unavailable.
    */
-  const resolved = await eligibleAudience(sb, me, marketId);
+  const resolved = await eligibleAudience(sb, me, marketId, mode);
   if (resolved.status === "failed") return { ok: false, reason: "audience_unavailable" };
   const audience = resolved.members.filter((m) => m.wallet !== me);
   if (audience.length === 0) return { ok: false, reason: "no_audience" };
@@ -202,6 +211,7 @@ export async function putOnTable(
      * `neutral`, or `insufficient` with the provenance that let them in.
      */
     p_audience: audience.map((m) => ({ wallet: m.wallet, relation: m.relationAtCall })),
+    p_mode: mode,
   });
 
   if (error) {
@@ -294,13 +304,18 @@ export async function takeOffTable(
  * reads it except Challenge progress. Conviction Match cannot see it. Showing Up
  * cannot see it. The creator sees a count, never a name.
  */
-export async function passCall(wallet: string, marketId: number): Promise<boolean> {
+export async function passCall(
+  wallet: string,
+  marketId: number,
+  mode: RecordMode = "REAL",
+): Promise<boolean> {
   const sb = serviceClient();
   const { error } = await sb
     .from("market_calls")
     .update({ passed_at: new Date().toISOString() })
     .eq("market_id", marketId)
     .eq("responder_wallet", wallet.toLowerCase())
+    .eq("mode", mode)
     .is("responded_at", null)
     .is("passed_at", null);
   if (error) {
@@ -318,7 +333,7 @@ export async function passCall(wallet: string, marketId: number): Promise<boolea
  * schedule means no worker, no cron and no drift between what the creator sees and
  * what the database holds — the close happens the first time anybody looks.
  */
-export async function tableFor(wallet: string): Promise<TableRow[]> {
+export async function tableFor(wallet: string, mode: RecordMode = "REAL"): Promise<TableRow[]> {
   const sb = serviceClient();
   const me = wallet.toLowerCase();
 
@@ -336,6 +351,7 @@ export async function tableFor(wallet: string): Promise<TableRow[]> {
     .from("challenges")
     .select("id, market_id, slot_no, created_at, closed_at, close_reason")
     .eq("challenger_wallet", me)
+    .eq("mode", mode)
     .or(`closed_at.is.null,closed_at.gte.${cutoff}`)
     .order("created_at", { ascending: false });
   // Loudly, then empty. A failed read here must never be reported as "nothing on
