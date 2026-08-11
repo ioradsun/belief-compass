@@ -111,6 +111,16 @@ export function ConvictionReveal({
   const cardBase = 260;
   const cardStep = 150;
   const ctaDelay = cardBase + Math.max(1, story.cards.length) * cardStep + 40;
+  /**
+   * SLOT MODE — the story inside a surface that has already spoken.
+   *
+   * With no `onNext` this is rendered inside the answer surface, which has
+   * already printed the tick's meaning ("You backed YES") one line above. A
+   * second ✓ and a second 30px headline is the duplicate confirmation this
+   * product deleted: in slot mode the story drops both and continues the page
+   * instead of restarting it, in normal flow at its own natural height.
+   */
+  const slot = !onNext;
 
   return (
     /**
@@ -123,33 +133,60 @@ export function ConvictionReveal({
      * and a height rule, so the story compresses instead of overflowing, and
      * `justify-center` only centres when there is genuinely spare room.
      */
-    <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-4 py-[clamp(8px,2.5vh,24px)]">
-      <div className="flex w-full max-w-[440px] flex-col gap-[clamp(10px,2.2vh,20px)]">
-        {/* ✓ — the transaction was only the unlock. */}
-        <Beat delay={0}>
-          <div className="flex items-center justify-center">
-            <span
-              className="grid h-[clamp(26px,4vh,36px)] w-[clamp(26px,4vh,36px)] place-items-center rounded-full text-[clamp(13px,2vh,16px)] font-bold text-[var(--bg)]"
-              style={{ background: sideColor }}
-              aria-hidden
-            >
-              ✓
-            </span>
-          </div>
-        </Beat>
+    <div
+      className={
+        slot
+          ? "w-full"
+          : "flex min-h-0 flex-1 flex-col items-center justify-center px-4 py-[clamp(8px,2.5vh,24px)]"
+      }
+    >
+      <div
+        className={`flex w-full flex-col ${
+          slot ? "gap-2.5" : "max-w-[440px] gap-[clamp(10px,2.2vh,20px)]"
+        }`}
+      >
+        {/* ✓ — the transaction was only the unlock. Absent in slot mode, where
+            the surface above it already acknowledged the call. */}
+        {!slot && (
+          <Beat delay={0}>
+            <div className="flex items-center justify-center">
+              <span
+                className="grid h-[clamp(26px,4vh,36px)] w-[clamp(26px,4vh,36px)] place-items-center rounded-full text-[clamp(13px,2vh,16px)] font-bold text-[var(--bg)]"
+                style={{ background: sideColor }}
+                aria-hidden
+              >
+                ✓
+              </span>
+            </div>
+          </Beat>
+        )}
 
         {/* Headline — The House's voice, or a warm confirmation. */}
         <Beat delay={120}>
-          <div className="text-center">
+          <div className={slot ? "" : "text-center"}>
             <h2
-              className="text-[clamp(18px,min(6vw,4.4vh),30px)] font-semibold leading-tight tracking-[-0.02em]"
+              className={
+                slot
+                  ? "text-[15px] font-semibold leading-snug tracking-[-0.01em]"
+                  : "text-[clamp(18px,min(6vw,4.4vh),30px)] font-semibold leading-tight tracking-[-0.02em]"
+              }
               style={{ color: toneColor(story.tone) }}
             >
               {story.tone === "house" && <span aria-hidden>🏠 </span>}
               {story.headline}
             </h2>
             {story.subheadline && (
-              <p className="mt-1.5 text-[13px] text-[var(--text-muted)]">{story.subheadline}</p>
+              <p
+                className={
+                  slot
+                    ? "mt-1 text-[12px] text-[var(--text-muted)]"
+                    : "mt-1.5 text-[13px] text-[var(--text-muted)]"
+                }
+              >
+                {story.subheadline}
+              </p>
+
+
             )}
           </div>
         </Beat>
