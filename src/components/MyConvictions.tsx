@@ -24,6 +24,8 @@ import { formatMoney } from "@/domain/money";
 import { formatCC } from "@/domain/simulation";
 import { StandOnIt } from "@/components/StandOnIt";
 import { Signed } from "@/components/Signed";
+import { useMarkets } from "@/components/MarketsPanel";
+
 
 import { useDisplayUnit } from "@/lib/display-unit";
 import {
