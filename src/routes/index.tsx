@@ -1523,6 +1523,11 @@ function Feed() {
           className={`${show("mine")} relative row-start-1 h-full min-h-0 max-h-full flex-col overflow-hidden bg-[var(--bg)] px-5 py-6 lg:col-start-1 lg:flex`}
           style={{ borderRight: "1px solid var(--hairline)" }}
         >
+          {/* FIRST TEN CONVICTIONS — the brief owns the top of this rail on
+              every tab and with a Case File open, until the reader has taken
+              ten sides. Only the composer displaces it. */}
+          {!createOpen && <TakeASide wallet={wallet} />}
+
           {createOpen && !ideaDue ? (
             /* WRITING A MARKET the reader chose to write — the everyday rail
                steps aside so nothing under the composer shifts while the AI
