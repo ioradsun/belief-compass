@@ -20,7 +20,7 @@ import { useAccount } from "wagmi";
 import { useWalletSession } from "@/hooks/useWalletSession";
 import { requestConnect } from "@/lib/connect-bridge";
 import { fmtUsd, usdToWei } from "@/domain/order";
-import { QUESTION_MAX, kindForMime } from "@/lib/market-create";
+import { MEDIA_LIMITS, QUESTION_MAX, accept, kindForMime } from "@/lib/market-create";
 import {
   EMBED_HINT,
   PLATFORM_LABEL,
