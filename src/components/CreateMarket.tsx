@@ -93,11 +93,23 @@ export function CreateMarket({
   const [side, setSide] = useState<"YES" | "NO">(saved.side);
   const [amount, setAmount] = useState<number>(saved.amount);
   const [attachment, setAttachment] = useState<Attachment | null>(() => {
-    const a = saved.attachment as { embed?: EmbedMedia } | null;
-    return a?.embed ? { kind: "embed", media: a.embed } : null;
+    const a = saved.attachment as {
+      kind?: string;
+      embed?: EmbedMedia;
+      file?: File;
+      previewUrl?: string;
+      sha256?: string | null;
+    } | null;
+    if (a?.embed) return { kind: "embed", media: a.embed };
+    if (a?.file && a.previewUrl) {
+      return { kind: "file", file: a.file, previewUrl: a.previewUrl, sha256: a.sha256 ?? null };
+    }
+    return null;
   });
   const [localError, setLocalError] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
+
   /** Null until the creator picks. The AI's read is shown, never silently kept. */
   const [category, setCategory] = useState<CategorySlug | null>(saved.category);
   /** Chips hidden until asked for. A creator who already chose stays expanded, so
