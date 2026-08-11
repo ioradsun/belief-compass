@@ -60,7 +60,7 @@ describe("the idea rail never costs the writer a sentence", () => {
     // than invented: invitation, thinking, or an honest empty answer.
     const c = code("src/components/IdeasRail.tsx");
     expect(c).toMatch(/Market ideas/);
-    expect(c).toMatch(/Tap a topic above to see ideas\./);
+    expect(c).not.toMatch(/Tap a topic above to see ideas\./);
     expect(c).toMatch(/questions…/);
   });
 
