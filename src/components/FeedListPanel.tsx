@@ -115,6 +115,7 @@ export function FeedListPanel({
   filters,
   onFilters,
   availableNetworks,
+  onLoadMore,
 }: {
   /** The visible running order, already sequenced by the server. */
   entries: FeedListEntry[];
