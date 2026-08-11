@@ -712,7 +712,9 @@ export function MarketDeck({
             selector (or the sell ticket). Otherwise the buy ticket takes over —
             discovery (Back YES · Back NO · Pass), or the amount + confirm form
             once a side is chosen. The SAME ticket in both cases. */}
-          {dockOwns ? (
+          {postedBar ? (
+            postedBar
+          ) : dockOwns ? (
             dockNode
           ) : (
             <OrderTicket
