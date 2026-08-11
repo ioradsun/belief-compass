@@ -75,6 +75,17 @@ export interface FeedQueue {
    * placeholder of one from being defended as though it were a reading position.
    */
   readonly seeded: boolean;
+  /**
+   * PAGES FETCHED PAST THE FIRST — the reader's own progress through the feed.
+   *
+   * Kept apart from `order` because the two answer to different owners. `order`
+   * is a RANKING the server proposed and may propose again; these are markets
+   * the reader walked far enough to ask for, and a re-rank of page one has no
+   * business deleting page two. Without this, `commit` — which replaces `order`
+   * wholesale with the newest ranking — silently truncated the feed back to its
+   * first page every time a poll landed.
+   */
+  readonly appended: readonly number[];
 }
 
 const EMPTY: readonly number[] = [];
@@ -119,7 +130,32 @@ export function initQueue(
    */
   const admit = opts.admit !== false;
   const withActive = admit && active != null && !ids.includes(active) ? [active, ...ids] : ids;
-  return { order: withActive, activeId: active, incoming: null, seeded: true };
+  return { order: withActive, activeId: active, incoming: null, seeded: true, appended: EMPTY };
+}
+
+/**
+ * THE NEXT PAGE — markets fetched because the reader reached the end of these.
+ *
+ * APPENDING IS THE ONE CHANGE THAT NEEDS NO PERMISSION, and that is why this is
+ * a separate verb rather than another `receiveOrder`. This module's rule is that
+ * the visible order never changes without a commit, and the reason is that
+ * moving a row under someone who is reading it is hostile. Adding rows BELOW
+ * everything on screen moves nothing: every index the reader can see is
+ * unchanged, so there is nobody to disturb and nothing to ask.
+ *
+ * Which is also why paging could not be built out of the existing parts. A
+ * second `receiveOrder` would be held as `incoming` and adopted only at the next
+ * commit — the answer to "give me more" arriving and then waiting for the reader
+ * to run out of the very thing it was fetched to prevent.
+ *
+ * Ids already in the order are dropped rather than moved: a market's place is
+ * where the reader already saw it.
+ */
+export function appendOrder(q: FeedQueue, more: readonly number[]): FeedQueue {
+  const known = new Set(q.order);
+  const add = unique(more).filter((id) => !known.has(id));
+  if (add.length === 0) return q;
+  return { ...q, order: [...q.order, ...add], appended: [...q.appended, ...add] };
 }
 
 /**
@@ -169,12 +205,21 @@ export function arrivalCount(q: FeedQueue): number {
 export function commit(q: FeedQueue): FeedQueue {
   if (!q.incoming) return q;
   const next = [...q.incoming];
+  /**
+   * PAGE TWO SURVIVES A RE-RANK OF PAGE ONE. `incoming` is the newest ranking of
+   * the FIRST page — the base feed query — so adopting it verbatim would drop
+   * every market the reader paged in and hand them a queue that ends where it
+   * ended an hour ago. They are re-appended in the order they were fetched,
+   * which is where they already are on screen.
+   */
+  const inNext = new Set(next);
+  for (const id of q.appended) if (!inNext.has(id)) next.push(id);
   const active = q.activeId;
   if (active != null && !next.includes(active)) {
     const wasAt = q.order.indexOf(active);
     next.splice(wasAt < 0 ? next.length : Math.min(wasAt, next.length), 0, active);
   }
-  return { order: next, activeId: active, incoming: null, seeded: true };
+  return { order: next, activeId: active, incoming: null, seeded: true, appended: q.appended };
 }
 
 /** Where the active market sits in the visible order; -1 when it is not in it. */
@@ -269,4 +314,5 @@ export const emptyQueue: FeedQueue = {
   activeId: null,
   incoming: null,
   seeded: false,
+  appended: EMPTY,
 };

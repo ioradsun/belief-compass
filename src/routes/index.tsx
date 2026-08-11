@@ -29,6 +29,14 @@ import { FeedListPanel, IDEA_ROW_ID, type FeedListEntry } from "@/components/Fee
 const FEED_LOW_WATER = 4;
 /** Floor between two refill requests, so a drained queue cannot loop. */
 const FEED_REFILL_MS = 10_000;
+/**
+ * How many queued ids a page request carries.
+ *
+ * Matches the request schema's own cap on `queuedIds`. Sending more would be
+ * rejected outright, and the ids past this point are the ones furthest from the
+ * reader — the least likely place a duplicate would surface.
+ */
+const MAX_QUEUED = 200;
 import { toLens, type Lens } from "@/domain/feed/lens";
 import { DEFAULT_SENSITIVITY, type Sensitivity } from "@/domain/market-change";
 import { useFeedSensitivity } from "@/lib/feed-sensitivity";
@@ -42,6 +50,7 @@ import {
 import {
   emptyQueue,
   receiveOrder,
+  appendOrder,
   jumpTo,
   advance,
   commit,
@@ -166,11 +175,26 @@ const WINDOW_OPTIONS: { key: VolumeWindow; label: string }[] = [
 // into a single ordered list; the client renders that order and never
 // re-scores, re-sorts or re-filters it. The MODE is a server concept too — it
 // changes the ranking and, for Tribe/Rivals, what is admitted at all.
+/**
+ * THE FEED IS THE FEED, AND CLICKING A MARKET IS NOT A NEW ONE.
+ *
+ * `originMarketId` used to be a parameter here, and being a parameter it was in
+ * the KEY — so opening a market the running order had never seen (a search hit,
+ * an insider row, one of your positions) re-fetched the whole feed re-scored
+ * around that market. A different ranking came back, `receiveOrder` held it as
+ * `incoming`, and the reader was left holding a stale list with a replacement
+ * waiting behind it. The list you were reading changed because you clicked
+ * something.
+ *
+ * The origin signal is not gone — it moved to where it belongs. It is a
+ * parameter of the NEXT PAGE (see `fetchMore` in the route), so what comes after
+ * the market you opened can lean toward it while everything already on screen
+ * stays exactly where it was.
+ */
 const feedQO = (
   wallet: string | undefined,
   window: VolumeWindow = "24h",
   filters: FeedFilters = ALL_FILTERS,
-  originMarketId: number | null = null,
   sensitivity: Sensitivity = DEFAULT_SENSITIVITY,
   lens: Lens = "for_you",
   /**
@@ -191,7 +215,6 @@ const feedQO = (
       wallet ?? null,
       window,
       filterKey(filters),
-      originMarketId,
       sensitivity,
       lens,
       // Admission semantics changed from five centre-stage views to immediate
@@ -212,7 +235,6 @@ const feedQO = (
           momentum: filters.momentum ?? [],
           sensitivity,
           lens,
-          originMarketId,
           ...feedSession(),
         },
       });
@@ -236,7 +258,6 @@ const feedQO = (
             momentum: filters.momentum ?? [],
             sensitivity,
             lens,
-            originMarketId,
           },
         });
       }
@@ -770,8 +791,19 @@ function Feed() {
   const [lens, setLens] = useState<Lens>("for_you");
   // Read inside the active-market effect, which deliberately keys on the market
   // alone — adding `lens` to its deps would re-splice on every lens change.
+  /**
+   * The values `fetchMore` reads at CALL time, not at the time it was built.
+   *
+   * It is invoked from a throttle and from the end of the queue, both of which
+   * can fire after the reader has changed something; closing over the values
+   * would page the previous lens or the previous filter into the current
+   * playlist. `lens` was already mirrored for exactly this reason — the rest
+   * join it rather than a second pattern being invented alongside.
+   */
   const lensRef = useRef<Lens>(lens);
   lensRef.current = lens;
+  const filtersRef = useRef<FeedFilters>(filters);
+  filtersRef.current = filters;
 
   /**
    * How much has to happen before a market is worth showing. A row in the one
@@ -791,6 +823,8 @@ function Feed() {
    * "Next" would re-request the feed and the running order would never settle.
    */
   const [originMarket, setOriginMarket] = useState<number | null>(null);
+  const originRef = useRef<number | null>(originMarket);
+  originRef.current = originMarket;
 
   // The SSR loader prefetched the anonymous 24h feed; adopt it as initialData so
   // the very first render (server AND client) paints the real deck with no
@@ -799,11 +833,11 @@ function Feed() {
   const loaderData = Route.useLoaderData();
   // The loader fetched the anonymous 24h FOR YOU feed. A lens is a different
   // playlist, so adopting the snapshot under one would paint the wrong order.
+  // `originMarket == null` was a condition here and no longer is: the origin has
+  // left the base query entirely, so the loader's snapshot matches this feed
+  // whether or not the reader has since opened something from outside it.
   const initialFeed =
-    win === "24h" &&
-    filterKey(filters) === filterKey(ALL_FILTERS) &&
-    originMarket == null &&
-    lens === "for_you"
+    win === "24h" && filterKey(filters) === filterKey(ALL_FILTERS) && lens === "for_you"
       ? (loaderData?.feed ?? undefined)
       : undefined;
   /**
@@ -818,7 +852,7 @@ function Feed() {
   // Keep the version subscription honest for future readers of the store.
   void feedSessionVersion;
   const { data, isError: isFeedError } = useQuery({
-    ...feedQO(wallet, win, filters, originMarket, sensitivity, lens, ideaGate),
+    ...feedQO(wallet, win, filters, sensitivity, lens, ideaGate),
     // initialDataUpdatedAt dates the snapshot to when the SERVER fetched it, so
     // React Query ages it against staleTime instead of refetching on hydration.
     //
@@ -937,6 +971,8 @@ function Feed() {
   // URL — one source of truth for "what is in the centre" — and the queue is
   // told about it, never the reverse.
   const [queue, setQueue] = useState<FeedQueue>(emptyQueue);
+  const queueRef = useRef<FeedQueue>(queue);
+  queueRef.current = queue;
   const serverOrder = items.flatMap((it) => (it.kind === "market" ? [it.onchainId] : []));
   const serverOrderKey = serverOrder.join(",");
   useEffect(() => {
@@ -1117,12 +1153,75 @@ function Feed() {
    * turning a drained queue into a request loop.
    */
   const refillAtRef = useRef(0);
-  const refillNow = useCallback(() => {
+  /**
+   * FETCH THE NEXT PAGE AND ADD IT TO THE END.
+   *
+   * This used to be `invalidateQueries(["opp-feed"])` — a re-fetch of the SAME
+   * request, which is not paging. It came back as a fresh ranking of page one,
+   * `receiveOrder` held it as `incoming`, and the reader ran out anyway. The
+   * only thing keeping it from returning byte-for-byte what they already had was
+   * `seenIds`, which excludes what was VIEWED and knows nothing about what is
+   * sitting unread in the queue.
+   *
+   * `queuedIds` is the field that closes that gap, and it has existed on the
+   * wire and in the gate the whole time — the server reads it into
+   * `sessionQueued` and the gate returns `queued_this_session` — with no client
+   * ever populating it. Sending it makes the request mean "the next markets,
+   * not these", which is the entire mechanism. The queue's forward tail is what
+   * goes: markets behind the reader are already covered by `seenIds`, and it
+   * keeps the payload bounded no matter how long the session runs.
+   *
+   * THE ORIGIN RIDES HERE, not on the base query. This is the request that
+   * decides what comes NEXT, which is exactly the reach a market opened from
+   * outside the order should have — and it cannot disturb a single row already
+   * on screen, because the answer is appended.
+   */
+  const fetchMore = useCallback(async () => {
     const at = Date.now();
     if (at - refillAtRef.current < FEED_REFILL_MS) return;
     refillAtRef.current = at;
-    void qc.invalidateQueries({ queryKey: ["opp-feed"] });
-  }, [qc]);
+    const q = queueRef.current;
+    const from = q.activeId == null ? 0 : Math.max(0, q.order.indexOf(q.activeId));
+    try {
+      const page = await getOpportunityFeed({
+        data: {
+          wallet: wallet ?? null,
+          sessionToken: wallet ? readSessionToken(wallet) : null,
+          window: win,
+          mode: orderingMode(filtersRef.current),
+          networks: filtersRef.current.networks,
+          topics: filtersRef.current.topics,
+          momentum: filtersRef.current.momentum ?? [],
+          sensitivity,
+          lens: lensRef.current,
+          originMarketId: originRef.current,
+          ...feedSession(),
+          // MAX_QUEUED matches the request schema's own cap; the tail is taken
+          // from the reader forward because that is the part a duplicate would
+          // actually land in.
+          queuedIds: q.order.slice(from, from + MAX_QUEUED),
+        },
+      });
+      if ((page.lens ?? "for_you") !== lensRef.current) return;
+      const ids = page.items.flatMap((it) => (it.kind === "market" ? [it.onchainId] : []));
+      if (ids.length === 0) return;
+      for (const [id, row] of Object.entries(page.rows ?? {})) {
+        if (row) knownRowsRef.current[Number(id)] = row as unknown as MarketRow;
+      }
+      for (const it of page.items) {
+        if (it.kind === "market" && it.primaryReason)
+          reasonsRef.current[it.onchainId] = it.primaryReason;
+      }
+      setQueue((prev) => appendOrder(prev, ids));
+    } catch {
+      // A page that fails to arrive costs the reader nothing they had. The
+      // throttle has already moved, so the next low-water tick tries again.
+    }
+  }, [wallet, win, sensitivity]);
+
+  const refillNow = useCallback(() => {
+    void fetchMore();
+  }, [fetchMore]);
 
   // Forward only — never a carousel. The queue decides what "next" means,
   // including the one case that used to end the session early: running off the
