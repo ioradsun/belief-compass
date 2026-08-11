@@ -1005,7 +1005,7 @@ function Feed() {
    * comes back with no markets AT ALL has the catalogue actually run out, and
    * only then does the dig start again from the top with repeats allowed.
    */
-  const resurfacingRef = useRef(false);
+  const rolledRef = useRef(false);
   const queueRef = useRef<FeedQueue>(queue);
   queueRef.current = queue;
   const serverOrder = items.flatMap((it) => (it.kind === "market" ? [it.onchainId] : []));
@@ -1377,7 +1377,7 @@ function Feed() {
     setCaughtUp(false);
     setPagedOut(false);
     poolPageRef.current = 0;
-    resurfacingRef.current = false;
+    rolledRef.current = false;
     navigate({ search: (prev: Search) => ({ ...prev, m: undefined }) });
   };
 
@@ -1413,7 +1413,7 @@ function Feed() {
     setCaughtUp(false);
     setPagedOut(false);
     poolPageRef.current = 0;
-    resurfacingRef.current = false;
+    rolledRef.current = false;
     resetFeedSession();
     // Starting over drops the thread. Everything else keeps it: walking the
     // queue and switching perspective are both "keep exploring from here",
