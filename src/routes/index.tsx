@@ -1335,9 +1335,12 @@ function Feed() {
     }
   }, [fetchPage]);
 
-  const refillNow = useCallback(() => {
-    void fetchMore();
-  }, [fetchMore]);
+  const refillNow = useCallback(
+    (force = false) => {
+      void fetchMore(force);
+    },
+    [fetchMore],
+  );
 
   // Forward only — never a carousel. The queue decides what "next" means,
   // including the one case that used to end the session early: running off the
