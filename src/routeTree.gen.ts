@@ -26,6 +26,7 @@ import { Route as OgMarketMidRouteImport } from './routes/og/market.$mid'
 import { Route as ApiPublicHomeSnapshotRouteImport } from './routes/api/public/home-snapshot'
 import { Route as ApiPublicHealthRouteImport } from './routes/api/public/health'
 import { Route as ApiPublicBuildIdRouteImport } from './routes/api/public/build-id'
+import { Route as LovableEmailTransactionalPreviewRouteImport } from './routes/lovable/email/transactional/preview'
 import { Route as ApiPublicJobsTapeWarmRouteImport } from './routes/api/public/jobs/tape-warm'
 import { Route as ApiPublicJobsSuggestionGeneratorRouteImport } from './routes/api/public/jobs/suggestion-generator'
 import { Route as ApiPublicJobsPovPollerRouteImport } from './routes/api/public/jobs/pov-poller'
@@ -122,6 +123,12 @@ const ApiPublicBuildIdRoute = ApiPublicBuildIdRouteImport.update({
   path: '/api/public/build-id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LovableEmailTransactionalPreviewRoute =
+  LovableEmailTransactionalPreviewRouteImport.update({
+    id: '/lovable/email/transactional/preview',
+    path: '/lovable/email/transactional/preview',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicJobsTapeWarmRoute = ApiPublicJobsTapeWarmRouteImport.update({
   id: '/api/public/jobs/tape-warm',
   path: '/api/public/jobs/tape-warm',
@@ -209,6 +216,7 @@ export interface FileRoutesByFullPath {
   '/api/public/jobs/pov-poller': typeof ApiPublicJobsPovPollerRoute
   '/api/public/jobs/suggestion-generator': typeof ApiPublicJobsSuggestionGeneratorRoute
   '/api/public/jobs/tape-warm': typeof ApiPublicJobsTapeWarmRoute
+  '/lovable/email/transactional/preview': typeof LovableEmailTransactionalPreviewRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -238,6 +246,7 @@ export interface FileRoutesByTo {
   '/api/public/jobs/pov-poller': typeof ApiPublicJobsPovPollerRoute
   '/api/public/jobs/suggestion-generator': typeof ApiPublicJobsSuggestionGeneratorRoute
   '/api/public/jobs/tape-warm': typeof ApiPublicJobsTapeWarmRoute
+  '/lovable/email/transactional/preview': typeof LovableEmailTransactionalPreviewRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -268,6 +277,7 @@ export interface FileRoutesById {
   '/api/public/jobs/pov-poller': typeof ApiPublicJobsPovPollerRoute
   '/api/public/jobs/suggestion-generator': typeof ApiPublicJobsSuggestionGeneratorRoute
   '/api/public/jobs/tape-warm': typeof ApiPublicJobsTapeWarmRoute
+  '/lovable/email/transactional/preview': typeof LovableEmailTransactionalPreviewRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -299,6 +309,7 @@ export interface FileRouteTypes {
     | '/api/public/jobs/pov-poller'
     | '/api/public/jobs/suggestion-generator'
     | '/api/public/jobs/tape-warm'
+    | '/lovable/email/transactional/preview'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -328,6 +339,7 @@ export interface FileRouteTypes {
     | '/api/public/jobs/pov-poller'
     | '/api/public/jobs/suggestion-generator'
     | '/api/public/jobs/tape-warm'
+    | '/lovable/email/transactional/preview'
   id:
     | '__root__'
     | '/'
@@ -357,6 +369,7 @@ export interface FileRouteTypes {
     | '/api/public/jobs/pov-poller'
     | '/api/public/jobs/suggestion-generator'
     | '/api/public/jobs/tape-warm'
+    | '/lovable/email/transactional/preview'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -387,6 +400,7 @@ export interface RootRouteChildren {
   ApiPublicJobsPovPollerRoute: typeof ApiPublicJobsPovPollerRoute
   ApiPublicJobsSuggestionGeneratorRoute: typeof ApiPublicJobsSuggestionGeneratorRoute
   ApiPublicJobsTapeWarmRoute: typeof ApiPublicJobsTapeWarmRoute
+  LovableEmailTransactionalPreviewRoute: typeof LovableEmailTransactionalPreviewRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -510,6 +524,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicBuildIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/lovable/email/transactional/preview': {
+      id: '/lovable/email/transactional/preview'
+      path: '/lovable/email/transactional/preview'
+      fullPath: '/lovable/email/transactional/preview'
+      preLoaderRoute: typeof LovableEmailTransactionalPreviewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/jobs/tape-warm': {
       id: '/api/public/jobs/tape-warm'
       path: '/api/public/jobs/tape-warm'
@@ -611,6 +632,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicJobsPovPollerRoute: ApiPublicJobsPovPollerRoute,
   ApiPublicJobsSuggestionGeneratorRoute: ApiPublicJobsSuggestionGeneratorRoute,
   ApiPublicJobsTapeWarmRoute: ApiPublicJobsTapeWarmRoute,
+  LovableEmailTransactionalPreviewRoute: LovableEmailTransactionalPreviewRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
