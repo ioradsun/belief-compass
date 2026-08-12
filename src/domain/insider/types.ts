@@ -284,7 +284,13 @@ export interface InsiderActivity {
 // inputs expand from "your DNA" to "your DNA + everything Insider sees here").
 // This mirrors HouseReadState so the existing state machine drops straight in.
 // ─────────────────────────────────────────────────────────────────────────────
-export type InsiderReadStatus = "learning" | "predicted" | "correct" | "incorrect" | "closed";
+export type InsiderReadStatus =
+  | "learning"
+  | "predicted"
+  | "pass_predicted"
+  | "correct"
+  | "incorrect"
+  | "closed";
 
 export interface InsiderRead {
   status: InsiderReadStatus;
@@ -292,18 +298,18 @@ export interface InsiderRead {
   predictedSide?: Side | null;
   /** What the viewer actually did, once a round settles. */
   actualSide?: Side | null;
-  /** Shown ONLY when calibrated — never invented (see house-read.ts). */
-  confidence?: number | null;
   /** Cold start: how many more picks until the Insider will call your move. */
   remainingPicks?: number | null;
   /**
-   * Market-context signal: does the market's aggregate direction (InsiderPulse)
-   * agree with the side we think you'll back? ADDITIVE context only — it never
-   * changes the prediction, which stays the house-read state machine. null/absent
-   * when there is no prediction or the market has no clear direction.
+   * THE ONE LOCKED REASON, revealed only after the choice is complete. Chosen
+   * server-side in priority order (category history → closest matches → overall
+   * behaviour → pass behaviour). Never computed by a surface, never a paragraph.
    */
-  marketAligned?: boolean | null;
+  reason?: string | null;
+  /** This market's category, used only for the broken-pattern comparison. */
+  category?: string | null;
 }
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // THE PER-MARKET RESOURCE — the single logical contract for one market.

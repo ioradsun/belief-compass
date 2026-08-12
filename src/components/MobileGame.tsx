@@ -24,10 +24,8 @@ import type { MarketRow } from "@/components/MarketCard";
 import { pulseLine } from "@/components/MarketCard";
 import { MarketMomentum } from "@/components/MarketVitality";
 import {
-  insiderPulse,
   insiderRead,
   marketStateFacts,
-  pulseFactsFromMarket,
 } from "@/domain/insider";
 import { relationFromGroup } from "@/domain/participant-social";
 import { presentRelationship } from "@/domain/relationship";
@@ -334,15 +332,9 @@ export function MobileGame({
   // a mobile-only variant.
   const insiderRead_ = useMemo(() => {
     if (!viewerWallet) return null;
-    const pulse = insiderPulse(
-      pulseFactsFromMarket({
-        change: marketChange,
-        state: marketStateFacts(row as unknown as Record<string, unknown>),
-        ethUsd,
-      }),
-    );
-    return insiderRead(houseRead ?? null, { pulse });
-  }, [viewerWallet, houseRead, marketChange, row, ethUsd]);
+    return insiderRead(houseRead ?? null);
+  }, [viewerWallet, houseRead]);
+
   /**
    * Whichever proof this ledger has: a mined hash, or a settled Simulation order
    * id. Both verified server-side; the Simulation path writes a separate round so

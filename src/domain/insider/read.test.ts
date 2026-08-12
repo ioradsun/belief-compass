@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { insiderRead } from "./read";
 import type { HouseReadSource } from "../house-read";
-import type { InsiderPulse } from "./types";
 
 const source = (over: Partial<HouseReadSource> = {}): HouseReadSource => ({
   connected: true,
@@ -12,19 +11,6 @@ const source = (over: Partial<HouseReadSource> = {}): HouseReadSource => ({
   closed: false,
   foundation: null,
   ...over,
-});
-
-const pulse = (direction: InsiderPulse["direction"]): InsiderPulse => ({
-  direction,
-  momentum: 0.7,
-  acceleration: 0,
-  activity: 0,
-  participation: 0,
-  capitalFlow: 0,
-  imbalance: 0,
-  volatility: 0,
-  novelty: 0,
-  lastInterestingEventAt: null,
 });
 
 describe("insider read — faithful house-read mapping", () => {
@@ -43,6 +29,10 @@ describe("insider read — faithful house-read mapping", () => {
     expect(r).toMatchObject({ status: "predicted", predictedSide: "YES" });
   });
 
+  it("a predicted PASS is its own read, never a degrade to learning", () => {
+    expect(insiderRead(source({ preview: "PASS" })).status).toBe("pass_predicted");
+  });
+
   it("a settled round reports the result", () => {
     expect(
       insiderRead(source({ closed: true, outcome: "correct", predicted: "YES", actual: "YES" })),
@@ -53,21 +43,22 @@ describe("insider read — faithful house-read mapping", () => {
   });
 });
 
-describe("insider read — additive market context (never changes the prediction)", () => {
-  it("marks agreement when the market moves toward the predicted side", () => {
-    const agree = insiderRead(source({ preview: "YES" }), { pulse: pulse("YES") });
-    expect(agree).toMatchObject({ status: "predicted", predictedSide: "YES", marketAligned: true });
-
-    const disagree = insiderRead(source({ preview: "YES" }), { pulse: pulse("NO") });
-    expect(disagree.marketAligned).toBe(false);
-    // The prediction itself is untouched.
-    expect(disagree.predictedSide).toBe("YES");
+describe("insider read — the locked reason", () => {
+  it("carries only the strongest revealed reason, after the round completes", () => {
+    const r = insiderRead({
+      ...source({ closed: true, outcome: "correct", predicted: "YES", actual: "YES" }),
+      category: "technology",
+      reasons: ["You chose YES in 6 of 8 technology beliefs.", "78% of your matches back YES here."],
+    });
+    expect(r.reason).toBe("You chose YES in 6 of 8 technology beliefs.");
+    expect(r.category).toBe("technology");
   });
 
-  it("adds nothing when the market has no direction or there is no prediction", () => {
-    expect(insiderRead(source({ preview: "YES" }), { pulse: pulse("BALANCED") }).marketAligned).toBeUndefined();
-    expect(insiderRead(source({ preview: "YES" })).marketAligned).toBeUndefined();
-    // Learning state never carries alignment.
-    expect(insiderRead(source(), { pulse: pulse("YES") }).marketAligned).toBeUndefined();
+  it("never attaches a reason to an open prediction", () => {
+    const r = insiderRead({
+      ...source({ preview: "YES" }),
+      reasons: ["You chose YES in 6 of 8 technology beliefs."],
+    });
+    expect(r.reason).toBeUndefined();
   });
 });

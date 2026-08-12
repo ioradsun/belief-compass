@@ -30,10 +30,8 @@ import { expressBelief } from "@/lib/beliefs.functions";
 import { bestEffort, useWalletSession } from "@/hooks/useWalletSession";
 import { MarketMomentum } from "@/components/MarketVitality";
 import {
-  insiderPulse,
   insiderRead,
   marketStateFacts,
-  pulseFactsFromMarket,
 } from "@/domain/insider";
 import { relationFromGroup } from "@/domain/participant-social";
 import { convictionMatch, presentRelationship } from "@/domain/relationship";
@@ -300,15 +298,13 @@ export function MarketDeck({
 
   // THE INSIDER READ — derived by the shared pure engine, so desktop and mobile
   // show the same state from the same data. Only a connected viewer has tells to
-  // read; anonymous browsing shows no row at all. The market's own pulse rides
-  // along as context — it never changes what we predict.
+  // read; anonymous browsing shows no row at all. Market direction is deliberately
+  // NOT part of this — that belongs to Insider Insight.
   const insiderRead_ = useMemo(() => {
     if (!viewerWallet) return null;
-    const pulse = insiderPulse(
-      pulseFactsFromMarket({ change: marketChange, state: marketStateFacts(rr), ethUsd }),
-    );
-    return insiderRead(houseRead ?? null, { pulse });
-  }, [viewerWallet, houseRead, marketChange, rr, ethUsd]);
+    return insiderRead(houseRead ?? null);
+  }, [viewerWallet, houseRead]);
+
 
   const ethWei = usdToWei(amount, ethUsd);
   const { quote, isLoading: quoting } = useBuyQuote(marketId, side === "YES", side ? ethWei : 0n);

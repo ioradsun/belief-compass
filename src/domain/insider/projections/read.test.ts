@@ -1,57 +1,84 @@
 import { describe, expect, it } from "vitest";
-import { houseReadCopy, type HouseReadState } from "../../house-read";
 import type { InsiderRead } from "../types";
 import { INSIDER_READ_LABEL, insiderReadCopy } from "./read";
 
 const predicted: InsiderRead = { status: "predicted", predictedSide: "YES" };
 
-describe("insiderReadCopy", () => {
-  it("says the same words as the state machine, under the Insider's name", () => {
-    const engine = houseReadCopy({ status: "predicted", predictedSide: "YES" } as HouseReadState);
+describe("insiderReadCopy — predict first", () => {
+  it("names the side in one direct sentence, with no evidence attached", () => {
     const copy = insiderReadCopy(predicted);
-    expect(copy.body).toBe(engine.body);
-    expect(copy.side).toBe("YES");
     expect(copy.label).toBe(INSIDER_READ_LABEL);
-    expect(copy.label).not.toContain("House");
+    expect(copy.body).toBe("We have you on ");
+    expect(copy.side).toBe("YES");
+    expect(copy.reason).toBeNull();
   });
 
-  it("keeps result rows plain — no label, tinted verdict", () => {
-    const win = insiderReadCopy({ status: "correct", predictedSide: "NO", actualSide: "NO" });
-    expect(win.label).toBeNull();
+  it("treats a predicted PASS as a real read", () => {
+    const copy = insiderReadCopy({ status: "pass_predicted" });
+    expect(copy.body).toBe("We have you sitting this one out.");
+    expect(copy.label).toBe(INSIDER_READ_LABEL);
+  });
+
+  it("never mentions the market or a percentage", () => {
+    const all = [
+      insiderReadCopy(predicted),
+      insiderReadCopy({ status: "pass_predicted" }),
+      insiderReadCopy({ status: "learning", remainingPicks: 2 }),
+    ];
+    for (const c of all) {
+      const text = `${c.label ?? ""} ${c.body} ${c.reason ?? ""}`.toLowerCase();
+      expect(text).not.toContain("market");
+      expect(text).not.toContain("%");
+      expect(text).not.toContain("we think you");
+    }
+  });
+});
+
+describe("insiderReadCopy — prove it after", () => {
+  it("states the verdict flatly and shows the one locked reason", () => {
+    const win = insiderReadCopy({
+      status: "correct",
+      predictedSide: "YES",
+      actualSide: "YES",
+      reason: "You chose YES in 6 of 8 technology beliefs.",
+    });
+    expect(win.body).toBe("Called it.");
     expect(win.tone).toBe("correct");
-    expect(insiderReadCopy({ status: "incorrect", predictedSide: "NO", actualSide: "YES" }).tone).toBe(
-      "incorrect",
+    expect(win.label).toBeNull();
+    expect(win.reason).toBe("You chose YES in 6 of 8 technology beliefs.");
+  });
+
+  it("compares the pattern with the choice when the read missed", () => {
+    const loss = insiderReadCopy({
+      status: "incorrect",
+      predictedSide: "YES",
+      actualSide: "NO",
+      category: "technology",
+    });
+    expect(loss.body).toBe("You broke the pattern.");
+    expect(loss.tone).toBe("incorrect");
+    expect(loss.reason).toBe("Your technology history leaned YES. You chose NO.");
+  });
+
+  it("still speaks without a category", () => {
+    expect(
+      insiderReadCopy({ status: "incorrect", predictedSide: "NO", actualSide: "YES" }).reason,
+    ).toBe("Your history leaned NO. You chose YES.");
+  });
+});
+
+describe("insiderReadCopy — learning", () => {
+  it("counts down measurably instead of saying 'learning you'", () => {
+    const copy = insiderReadCopy({ status: "learning", remainingPicks: 2 });
+    expect(copy.body).toBe("2 more picks. Then we call your next move.");
+    expect(copy.body.toLowerCase()).not.toContain("learning you");
+    expect(insiderReadCopy({ status: "learning", remainingPicks: 1 }).body).toBe(
+      "1 more pick. Then we call your next move.",
     );
   });
 
-  it("counts down the cold start without calling the reader difficult", () => {
-    const copy = insiderReadCopy({ status: "learning", remainingPicks: 3 });
-    expect(copy.body).toContain("3 more picks");
-    expect(copy.body.toLowerCase()).not.toContain("hard to read");
-  });
-
-  it("shows a percentage only when one was calibrated", () => {
-    expect(insiderReadCopy(predicted).suffix).toBe("");
-    expect(insiderReadCopy({ ...predicted, confidence: 0.78 }).suffix).toContain("78%");
-  });
-
-  it("adds market context as an aside, only when there is a call", () => {
-    expect(insiderReadCopy({ ...predicted, marketAligned: true }).context).toBe("The market agrees.");
-    expect(insiderReadCopy({ ...predicted, marketAligned: false }).context).toContain("other way");
-    expect(insiderReadCopy(predicted).context).toBeNull();
-    expect(
-      insiderReadCopy({ status: "learning", remainingPicks: 2, marketAligned: true }).context,
-    ).toBeNull();
-  });
-
-  it("never lets context replace the prediction", () => {
-    const against = insiderReadCopy({ ...predicted, marketAligned: false });
-    expect(against.side).toBe("YES");
-    expect(against.body).toBe(insiderReadCopy(predicted).body);
-  });
-
   it("degrades to learning when a status arrives without its sides", () => {
-    expect(insiderReadCopy({ status: "correct" }).body).toBe("Learning you…");
+    expect(insiderReadCopy({ status: "correct" }).body).toContain("Then we call your next move.");
     expect(insiderReadCopy({ status: "predicted", predictedSide: null }).label).toBe(
       INSIDER_READ_LABEL,
     );
