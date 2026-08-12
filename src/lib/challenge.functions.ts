@@ -24,6 +24,7 @@ import type {
   PairCalls,
   PairSummary,
 } from "@/lib/challenge.server";
+import type { ChallengePast } from "@/lib/challenge-past.server";
 
 const WALLET = z.string().min(3).max(80);
 /**
@@ -86,11 +87,15 @@ export const getDependability = createServerFn({ method: "GET" })
   });
 
 /**
- * EVERY CHALLENGE EITHER OF US EVER MADE — what "See all" opens.
+ * EVERY CHALLENGE EITHER OF US EVER MADE — the flat, both-directions timeline.
  *
  * Unsigned for the same reason `getChallenges` is: it is the reader's own history,
  * assembled from rows that already name them, and it grants nothing. The one thing
  * it deliberately cannot return is somebody else's pass — see `challengeHistory`.
+ *
+ * Kept for the profile's pair timeline and anything else that wants the raw row
+ * vocabulary. The rail's own history now opens `getChallengePast` instead — a
+ * record grouped by the questions I put up rather than a row per recipient.
  */
 export const getChallengeHistory = createServerFn({ method: "GET" })
   .inputValidator((raw: unknown) => z.object({ wallet: WALLET.nullish() }).parse(raw ?? {}))
@@ -98,6 +103,22 @@ export const getChallengeHistory = createServerFn({ method: "GET" })
     if (!data.wallet) return { entries: [], people: {}, truncated: false };
     const { challengeHistory } = await import("@/lib/challenge.server");
     return challengeHistory(data.wallet);
+  });
+
+/**
+ * PAST CHALLENGES — what happened with the questions I put on the table.
+ *
+ * Unsigned like the rest of the reads here: it is the reader's own social record,
+ * assembled from rows that already name them, and it grants nothing. It never
+ * names a passer or somebody who did not answer — a Challenge shows who SHOWED UP,
+ * and counts the rest.
+ */
+export const getChallengePast = createServerFn({ method: "GET" })
+  .inputValidator((raw: unknown) => z.object({ wallet: WALLET.nullish() }).parse(raw ?? {}))
+  .handler(async ({ data }): Promise<ChallengePast> => {
+    if (!data.wallet) return { items: [], showedUp: [], truncated: false };
+    const { challengePastFor } = await import("@/lib/challenge-past.server");
+    return challengePastFor(data.wallet);
   });
 
 /**

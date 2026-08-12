@@ -248,6 +248,19 @@ export function ChallengeRail({
             </p>
           ) : null}
 
+          {/* NOTHING IN PLAY IS A REAL STATE, AND A COMMON ONE. With finished
+              cards moved to Past Challenges, a reader with no live loop sees an
+              empty column — so it says what is true rather than nothing, and the
+              history link right below is where their outcomes went. Withheld on a
+              failed read, which is not an empty room. `challengeCount` is zero
+              exactly when no card is still live: nobody waiting on you, nothing
+              of yours still gathering answers. */}
+          {!failed && challengeCount === 0 && (
+            <p className="text-[11.5px] leading-snug text-[var(--text-muted)]">
+              Nothing waiting on you right now.
+            </p>
+          )}
+
           {/* ONE LIST, ONE CARD PER QUESTION.
               "Challenged You" and "You Challenged" were the same market twice
               whenever a reader was brought into a question and then relayed it —
@@ -263,11 +276,16 @@ export function ChallengeRail({
               projects both directions into one object with one state, so a card
               now evolves from "Maya brought you in" through "you showed up" to
               "Casey kept it moving" without ever becoming two things. */}
+          {/* CURRENT ONLY. The column is the live social loop — waiting on you,
+              yours still gathering answers, a chain still moving. What finished
+              is not deleted; it moves to Past Challenges below, so this stops
+              being a place to monitor closed outcomes and stays a place to act. */}
           <ChallengeCardList
             wallet={wallet}
             limit={shown + CHALLENGE.maxRecent}
             onSelect={onSelect}
             onPass={pass}
+            activeOnly
           />
 
           {/* MORE, SAID OUT LOUD. A railful is what reads as a set of things

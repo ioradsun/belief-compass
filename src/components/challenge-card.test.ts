@@ -339,23 +339,53 @@ describe("reciprocity reaches the card as a fact, not a score", () => {
 });
 
 /**
- * SEE ALL — the complete history, and the ways it could become a second feed.
+ * PAST CHALLENGES — what became of the questions I put up, told as a story.
+ *
+ * The rail is the live loop; this is the record. It groups by the CHALLENGE EVENT
+ * rather than emitting a row per recipient — the anti-inbox rule the old
+ * row-per-recipient design broke — and it is STILL not a ranked feed, still reuses
+ * the one Sheet, and still never names who did not show up.
  */
-describe("the full history is complete, chronological, and not a feed", () => {
+describe("past challenges tell a story, one event at a time, and are not a feed", () => {
   const history = () => code("src/components/ChallengeHistory.tsx");
 
-  it("is reachable from the rail", () => {
+  it("is reached from the rail through its own link", () => {
     expect(rail()).toMatch(/<ChallengeHistory/);
-    expect(history()).toMatch(/See all/);
+    expect(history()).toMatch(/Challenge History/);
+  });
+
+  it("groups by the challenge event, not one row per recipient", () => {
+    // One question put to thirty people is ONE card, keyed by its market. A row
+    // per recipient was thirty near-identical "WAITING ON …" lines for one act.
+    const c = history();
+    expect(c).toMatch(/groupPast\(/);
+    expect(c).toMatch(/key=\{pc\.marketId\}/);
+  });
+
+  it("leads with showing up, side-blind, and treats agreement as the reveal", () => {
+    // The same invariant the rest of the system holds: turning up is the
+    // headline; which way they went is the quieter thing beneath it.
+    const c = history();
+    expect(c).toMatch(/showedUpLine\(/);
+    expect(c).toMatch(/discoveryLine\(/);
   });
 
   it("runs through no scorer, no ranking and no admission rule", () => {
     // The invariant that keeps this from becoming the Insider tape with a
     // different heading. Insider already answers "what is happening", one tab
-    // across, for everybody; this answers "what have we done", for two people.
+    // across, for everybody; this answers "what have I done".
     const c = history();
     for (const w of ["significance", "score", "rank", "eligib", "admit", "boost", "trending"])
       expect(c.toLowerCase()).not.toContain(w);
+  });
+
+  it("counts who did not show up and never names them", () => {
+    // A responder took a public position and is shown; a pass and silence are
+    // counted and stay a number. Naming them would be the ledger of who did not
+    // turn up this product refuses to keep.
+    const c = history();
+    expect(c).toMatch(/stillOut/);
+    expect(c).toMatch(/shown up/);
   });
 
   it("reuses the one sheet rather than growing a second one", () => {
@@ -364,29 +394,27 @@ describe("the full history is complete, chronological, and not a feed", () => {
     expect(code("src/components/CaseFile.tsx")).toMatch(/<Sheet/);
   });
 
-  it("speaks the same row vocabulary as the profile's own history", () => {
-    // One interaction cannot be described two ways on two screens.
-    expect(history()).toMatch(/historyRows\(/);
-    expect(code("src/components/PersonProfile.tsx")).toMatch(/historyRows\(/);
-  });
-
   it("never reports a failed read as an empty history", () => {
     // Here the confident zero would tell somebody with a year of relationships
     // that they have never challenged anybody.
     const c = history();
     expect(c).toMatch(/isError/);
     expect(c).toMatch(/Could not load your history/);
-    expect(c.indexOf("isError ?")).toBeLessThan(c.indexOf("groups.length === 0"));
+    expect(c.indexOf("isError ?")).toBeLessThan(c.indexOf("nothing ?"));
   });
 
   it("admits when it stopped at its read bound", () => {
     // A bounded read presented as the whole story is the worst possible lie on
     // the one surface whose entire promise is completeness.
     expect(history()).toMatch(/truncated/);
-    expect(code("src/lib/challenge.server.ts")).toMatch(/truncated:/);
+    expect(code("src/lib/challenge-past.server.ts")).toMatch(/truncated:/);
   });
 
   it("costs the rail nothing until somebody asks for it", () => {
     expect(history()).toMatch(/enabled: !!wallet && open/);
+  });
+
+  it("opens on an invitation, never an empty administrative page", () => {
+    expect(history()).toMatch(/No past challenges yet/);
   });
 });

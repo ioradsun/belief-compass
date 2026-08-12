@@ -20,7 +20,7 @@ import { ChallengeCard } from "@/components/ChallengeCard";
 import { ChallengeChainSheet } from "@/components/ChallengeChainSheet";
 import { tableKey } from "@/components/YourTable";
 import { bestEffort, useWalletSession } from "@/hooks/useWalletSession";
-import type { ChallengeCardProjection } from "@/domain/challenge-card";
+import { isLiveCard, type ChallengeCardProjection } from "@/domain/challenge-card";
 
 export const cardsKey = (wallet?: string) => ["challenge-cards", wallet ?? null] as const;
 
@@ -39,6 +39,7 @@ export function ChallengeCardList({
   onSelect,
   onPass,
   onSeeChain,
+  activeOnly = false,
 }: {
   wallet?: string;
   limit?: number;
@@ -49,6 +50,18 @@ export function ChallengeCardList({
    * a chain is something you glance at and close, not a destination.
    */
   onSeeChain?: (marketId: number) => void;
+  /**
+   * CURRENT ONLY — the live social loop, with the finished record left out.
+   *
+   * The rail passes this so its column holds only what is still in play: a
+   * question waiting on the reader, one of theirs still gathering answers, a
+   * chain still moving. Everything terminal — an answer already given, a
+   * Challenge that ran its course — is Past Challenges' job, reached through the
+   * link at the foot of the column. `isLiveCard` is the one predicate both
+   * surfaces read, so a card can never fall between them. Off by default, so
+   * other callers (Markets, the lab) keep the complete list they render today.
+   */
+  activeOnly?: boolean;
 }) {
   const qc = useQueryClient();
   const { ensureSession } = useWalletSession();
@@ -112,7 +125,11 @@ export function ChallengeCardList({
   });
 
   if (!wallet || !cards || cards.length === 0) return null;
-  const shown = limit != null ? cards.slice(0, limit) : cards;
+  // Current-only drops the terminal states BEFORE the limit, so "a railful" is a
+  // railful of live cards rather than a railful that finished ones ate into.
+  const live = activeOnly ? cards.filter((p) => isLiveCard(p.state)) : cards;
+  if (live.length === 0) return null;
+  const shown = limit != null ? live.slice(0, limit) : live;
 
   return (
     <div className="flex flex-col gap-2">
