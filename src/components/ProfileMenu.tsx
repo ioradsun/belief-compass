@@ -308,12 +308,9 @@ export function ProfileMenu({
             )}
           </Suspense>
           {panel === "settings" && (
-            <SettingsPanel
-              onOpenTerms={onOpenTerms}
-              onOpenTrust={onOpenTrust}
-              onClose={() => setPanel(null)}
-            />
+            <SettingsPanel onOpenTerms={onOpenTerms} onClose={() => setPanel(null)} />
           )}
+
         </Modal>
       )}
     </div>
@@ -428,18 +425,14 @@ function SettingsPanel({
       >
         How Conviction Company works
       </a>
-      {onOpenTrust && (
-        <button
-          type="button"
-          onClick={() => {
-            onOpenTrust();
-            onClose();
-          }}
-          className="block w-full rounded-xl px-1 py-2 text-left text-[13px] text-[var(--text)] transition-colors hover:bg-[var(--surface)]"
-        >
-          Transparency &amp; Trust
-        </button>
-      )}
+      <a
+        href="/trust"
+        onClick={onClose}
+        className="block w-full rounded-xl px-1 py-2 text-left text-[13px] text-[var(--text)] transition-colors hover:bg-[var(--surface)]"
+      >
+        Transparency &amp; Trust
+      </a>
+
       {onOpenTerms && (
         <button
           type="button"
