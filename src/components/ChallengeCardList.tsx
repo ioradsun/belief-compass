@@ -137,7 +137,10 @@ export function ChallengeCardList({
   if (!wallet || !cards || cards.length === 0) return null;
   // Current-only drops the terminal states BEFORE the limit, so "a railful" is a
   // railful of live cards rather than a railful that finished ones ate into.
-  const live = activeOnly ? cards.filter((p) => isLiveCard(p.state)) : cards;
+  const current = activeOnly ? cards.filter((p) => isLiveCard(p.state)) : cards;
+  // Direction filters BEFORE the limit too, for the same reason.
+  const live =
+    direction === "all" ? current : current.filter((p) => isOutwardCard(p) === (direction === "mine"));
   if (live.length === 0) return null;
   const shown = limit != null ? live.slice(0, limit) : live;
 
