@@ -149,6 +149,7 @@ import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
 import { useAccount } from "wagmi";
 import { usePositionStream } from "@/lib/realtime/use-position-stream";
 import { usePredictivePrefetch } from "@/lib/realtime/use-predictive-prefetch";
+import { useLoginPrefetch } from "@/lib/realtime/use-login-prefetch";
 import { useIsDesktop } from "@/hooks/use-mobile";
 import { registerPersonFocus } from "@/lib/person-focus";
 
@@ -572,6 +573,10 @@ function Feed() {
   // One viewer-scoped socket keeps the connected wallet's positions live; a
   // belief change refetches only the mounted position slices (server-valued).
   usePositionStream(wallet);
+  // Once a wallet is connected, warm the private surfaces and their first data
+  // page on idle — People and Challenge code + queries — so the first hop after
+  // signing in is a render, not a wait. Never runs for a signed-out visitor.
+  useLoginPrefetch(wallet);
   // Case File is DESKTOP-ONLY: a research surface for side-by-side comparison. A
   // phone is for action, so it never exposes Case File (button, columns, or the
   // ?case flag). Desktop is >= lg, where the three columns actually sit together.
