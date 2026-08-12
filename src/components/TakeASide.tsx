@@ -82,7 +82,7 @@ export function TakeASide({
       <div className="relative flex items-center gap-1.5">
         <span className="h-1.5 w-1.5 rounded-full" style={{ background: "var(--notice)" }} />
         <div className="text-[11px] font-semibold tracking-[0.08em] uppercase text-[var(--notice)]">
-          Build your profile
+          Find your people
         </div>
       </div>
 
