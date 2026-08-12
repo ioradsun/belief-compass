@@ -129,7 +129,11 @@ async function marketCategory(sb: SupabaseClient, marketId: number): Promise<str
   return ((data as { category?: string | null } | null)?.category ?? null) as string | null;
 }
 
-async function answerHistory(sb: SupabaseClient, wallet: string): Promise<AnswerRow[]> {
+async function answerHistory(
+  sb: SupabaseClient,
+  wallet: string,
+  excludeMarketId?: number,
+): Promise<AnswerRow[]> {
   /**
    * THIS IS THE HOUSE'S EVIDENCE ABOUT YOU. Every read of it becomes a claim —
    * how well it knows you, what it has seen you do, whether it has earned the
@@ -143,6 +147,7 @@ async function answerHistory(sb: SupabaseClient, wallet: string): Promise<Answer
       .select("category, actual_action, predicted_action")
       .eq("wallet", wallet)
       .not("actual_action", "is", null)
+      .not("onchain_id", "eq", excludeMarketId ?? -1)
       .order("revealed_at", { ascending: false })
       .limit(400),
     "this wallet's answer history",
@@ -258,7 +263,7 @@ async function buildSignals(
     };
   }
   const [history, rel, beliefs] = await Promise.all([
-    answerHistory(sb, wallet),
+    answerHistory(sb, wallet, marketId),
     relationshipLean(sb, wallet, marketId),
     beliefHistory(sb, wallet, marketId),
   ]);
@@ -409,7 +414,7 @@ export async function loadHouseRead(
         finalized_via: null,
       };
     }
-  } else if (!row.predicted_action && !row.actual_action) {
+  } else if (!row.predicted_action) {
     /**
      * A NO-READ IS NOT A LOCK.
      *
@@ -422,6 +427,11 @@ export async function loadHouseRead(
      * played. So while the round is still OPEN and unpicked, re-read it with
      * everything we know today and persist the upgrade. Once a side is named,
      * or the round closes, it is locked for good.
+     *
+     * A CLOSED ROW THAT NEVER HELD A CALL is the same defect one step later: it
+     * shows the reader a question with no read at all. There is nothing to
+     * protect, so it is filled in too — the history that feeds it excludes this
+     * market, so the fill is not hindsight.
      */
     const read = predictHouse(await buildSignals(sb, wallet, marketId, category, foundationCount));
     if (read.action) {
@@ -436,7 +446,6 @@ export async function loadHouseRead(
         })
         .eq("wallet", wallet)
         .eq("onchain_id", marketId)
-        .is("actual_action", null)
         .is("predicted_action", null);
       row = {
         ...row,
