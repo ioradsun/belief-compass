@@ -21,22 +21,19 @@ const input = z.object({
  * so the client can layer this person onto the public feed without the server
  * rebuilding a whole personalized feed.
  *
- * OWNERSHIP IS VERIFIED FIRST because the payload is the viewer's own private
- * interaction state. An unverified or mismatched session gets an EMPTY overlay,
- * never someone else's: the client then simply renders the public feed
- * unchanged, which is the correct signed-out-shaped behavior.
+ * OWNERSHIP IS PROVEN FIRST, AND A FAILED PROOF PROPAGATES. The payload is the
+ * viewer's own private interaction state, so a rejected `assertWalletOwnership`
+ * is never swallowed and never resolves to the caller-supplied wallet — it
+ * throws, the server function rejects, and the client treats a missing overlay
+ * as "no overlay" and renders the public feed unchanged. A stale or absent
+ * session therefore degrades to the signed-out shape without this function ever
+ * attributing state to a wallet it could not verify. (See wallet-authorship.test.)
  */
 export const getViewerOverlay = createServerFn({ method: "GET" })
   .inputValidator((raw: unknown) => input.parse(raw ?? {}))
   .handler(async ({ data }): Promise<ViewerOverlay> => {
     const { assertWalletOwnership } = await import("@/lib/wallet-session.server");
-    const { resolveViewerOverlay, emptyViewerOverlay } = await import(
-      "@/lib/viewer-overlay.server"
-    );
-    try {
-      const wallet = await assertWalletOwnership(data.wallet, data.sessionToken ?? null);
-      return await resolveViewerOverlay(wallet);
-    } catch {
-      return emptyViewerOverlay(data.wallet.toLowerCase());
-    }
+    const { resolveViewerOverlay } = await import("@/lib/viewer-overlay.server");
+    const wallet = await assertWalletOwnership(data.wallet, data.sessionToken ?? null);
+    return resolveViewerOverlay(wallet);
   });
