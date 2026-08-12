@@ -15,6 +15,25 @@ import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { marketChangeQO, evidenceQO } from "@/lib/market-queries";
 import { getConvictionMarket } from "@/lib/market-create.functions";
+import { getMarketRow } from "@/lib/markets.functions";
+import { getHouseRead, type HouseMode } from "@/lib/house.functions";
+import { houseKey } from "@/lib/house-round";
+
+/**
+ * Decode the next market's picture WHILE THE CURRENT ONE IS STILL BEING READ.
+ *
+ * A warm cache paints the words instantly and then the image arrives a beat
+ * later, which reads as a second, uglier load. The browser will hand back a
+ * decoded frame for free if it was asked early enough, so once the neighbour's
+ * metadata lands we ask for its media the same way the stage will.
+ */
+function warmImage(url: string | null | undefined): void {
+  if (!url || typeof Image === "undefined") return;
+  const img = new Image();
+  img.decoding = "async";
+  img.src = url;
+}
+
 
 /** Immediate neighbors to warm, in likelihood order: next, next+1, previous.
  *  Deduped, current excluded, invalid indices dropped. Pure/testable. */
@@ -31,11 +50,17 @@ export function neighborIds(ids: number[], idx: number): number[] {
   return out;
 }
 
-export function usePredictivePrefetch(ids: number[], activeIdx: number): void {
+export function usePredictivePrefetch(
+  ids: number[],
+  activeIdx: number,
+  viewer?: { wallet?: string | undefined; mode?: HouseMode },
+): void {
   const qc = useQueryClient();
   // A stable string key so the effect only re-runs when the neighbor SET changes,
   // not on every feed poll that returns the same neighbors.
   const key = neighborIds(ids, activeIdx).join(",");
+  const wallet = viewer?.wallet;
+  const mode: HouseMode = viewer?.mode ?? "REAL";
 
   useEffect(() => {
     if (!key || typeof window === "undefined") return;
@@ -47,6 +72,18 @@ export function usePredictivePrefetch(ids: number[], activeIdx: number): void {
       targets.forEach((id, i) => {
         // Deck-core for every neighbor; prefetchQuery no-ops when already fresh.
         void qc.prefetchQuery(marketChangeQO(id));
+        /**
+         * THE ROW ITSELF. The centre will not draw a market until it has the
+         * title and side totals, and arriving from Next used to fetch that after
+         * the switch — the one request standing between a warm cache and an
+         * instant paint. Same key and budget the deck reads, so this is a
+         * readiness probe rather than a second request.
+         */
+        void qc.prefetchQuery({
+          queryKey: ["market-row", id],
+          queryFn: () => getMarketRow({ data: { id } }),
+          staleTime: 15_000,
+        });
         // CREATOR + EVIDENCE FOR EVERY NEIGHBOR, not just the likely-next.
         // This lookup decides whether the market has an evidence page at all,
         // so when it lands after paint the stage grows a second page and the
@@ -54,14 +91,36 @@ export function usePredictivePrefetch(ids: number[], activeIdx: number): void {
         // five-minute-cached row per market: warming it for all three
         // neighbours means the shape of the next market is known before it is
         // shown, which is the difference between a switch and a lurch.
-        void qc.prefetchQuery({
-          queryKey: ["conviction-market", id],
-          queryFn: () => getConvictionMarket({ data: { onchainId: id } }),
-          staleTime: 5 * 60_000,
-        });
-        // Evidence (the believer roster behind the faces) is the heavy one —
-        // still only for the market they are most likely to see next.
-        if (i === 0) void qc.prefetchQuery(evidenceQO(id));
+        void qc
+          .fetchQuery({
+            queryKey: ["conviction-market", id],
+            queryFn: () => getConvictionMarket({ data: { onchainId: id } }),
+            staleTime: 5 * 60_000,
+          })
+          // Only the likely-next market's picture is worth bytes up front.
+          .then((res) => {
+            if (i === 0 && !cancelled)
+              warmImage((res as { market?: { mediaUrl?: string | null } } | null)?.market?.mediaUrl);
+          })
+          .catch(() => {});
+        if (i === 0) {
+          // Evidence (the believer roster behind the faces) is the heavy one —
+          // still only for the market they are most likely to see next.
+          void qc.prefetchQuery(evidenceQO(id));
+          /**
+           * THE INSIDER READ, warmed in the right ledger. It is the slowest row
+           * on the deck and the one that reads as broken when it lags — the
+           * reader sees "still learning you" for a beat on a market the House
+           * already had an opinion about. Only ever for a connected viewer, and
+           * keyed by mode so a Simulation round never warms the real one.
+           */
+          if (wallet)
+            void qc.prefetchQuery({
+              queryKey: houseKey(wallet, id, mode),
+              queryFn: () => getHouseRead({ data: { wallet, marketId: id, mode } }),
+              staleTime: 30_000,
+            });
+        }
       });
     };
 
@@ -77,5 +136,5 @@ export function usePredictivePrefetch(ids: number[], activeIdx: number): void {
       if (idle && typeof ric.cancelIdleCallback === "function") ric.cancelIdleCallback(handle);
       else clearTimeout(handle);
     };
-  }, [qc, key]);
+  }, [qc, key, wallet, mode]);
 }
