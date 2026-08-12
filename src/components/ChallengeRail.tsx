@@ -25,7 +25,7 @@
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ChainList } from "@/components/ChainList";
-import { useChallengeSent } from "@/lib/challenge-signal";
+import { useChallengeFocus, useChallengeSent } from "@/lib/challenge-signal";
 import { useTable } from "@/components/YourTable";
 import { useSimulationMode } from "@/lib/simulation-mode";
 import { hideCall, useOpenCalls, type OpenCalls } from "@/lib/open-calls";

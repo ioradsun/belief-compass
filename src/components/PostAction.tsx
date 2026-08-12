@@ -28,7 +28,7 @@ import { PostActionScreen } from "@/components/PostActionScreen";
 import { PostPositionBar } from "@/components/PostPositionBar";
 import { ChallengePanel } from "@/components/ChallengePanel";
 import { notify } from "@/components/Toasts";
-import { announceChallengeSent } from "@/lib/challenge-signal";
+import { announceChallengeSent, focusChallengeView } from "@/lib/challenge-signal";
 import { usePostActionFacts, type ConfirmedAction } from "@/lib/post-action.adapter";
 import {
   refusalIsCanonical,
@@ -228,7 +228,10 @@ export function PostAction({
           onAct={(cta) => {
             // Challenge never fires from the bar: it opens over the market so
             // the reader can see who it reaches before spending a slot.
-            if (cta.kind === "challenge") return setSheet(true);
+            if (cta.kind === "challenge") {
+              focusChallengeView("mine");
+              return setSheet(true);
+            }
             act_(cta);
           }}
           pending={relay.isPending}
