@@ -54,7 +54,7 @@ export function insiderReadCopy(read: InsiderRead): InsiderReadCopy {
       if (called) {
         return {
           label: INSIDER_READ_LABEL,
-          body: "We have you on ",
+          body: "Your next move: ",
           side: called,
           tone: "neutral",
           reason: null,
@@ -65,7 +65,7 @@ export function insiderReadCopy(read: InsiderRead): InsiderReadCopy {
     case "pass_predicted":
       return {
         label: INSIDER_READ_LABEL,
-        body: "We have you sitting this one out.",
+        body: "You'll sit this one out.",
         side: null,
         tone: "neutral",
         reason: null,
