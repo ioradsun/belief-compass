@@ -150,7 +150,7 @@ export function TakeASide({
             {sim.pending ? "Starting…" : "Try Simulation"}
           </button>
           <p className="relative mt-1.5 text-[11px] leading-relaxed text-[var(--text-muted)]">
-            {SIMULATION_COPY.entrySupport}
+            Play with 1,000 CC. No real money.
           </p>
           {/* ONE QUIET LINE, and it is the honest one: a signature is not a
               transaction, and somebody about to see a wallet prompt deserves to
