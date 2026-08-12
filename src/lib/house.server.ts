@@ -489,12 +489,13 @@ export async function loadHouseRead(
   // Coarse band is safe to leak pre-reveal (intensity only, never the side).
   const band = predictedAction ? confidenceBand(Number(row.confidence ?? 0)) : null;
 
-  // The pre-decision call: once the read is at least a HUNCH we name the side
-  // before the choice. Anything weaker stays sealed — but holding the call back
-  // until near-certainty is what made a well-known player see "learning you" on
-  // market after market.
-  const callable = band === "HUNCH" || band === "READ" || band === "STRONG_READ";
-  const preview = !closed && callable ? predictedAction : null;
+  // THE HOUSE ALWAYS CALLS. If a side is locked on this row, we name it before
+  // the choice — full stop. Gating the preview on a confidence band is what made
+  // a reader with plenty of history keep seeing "a few more picks" on markets
+  // that already had a real prediction stored. Confidence still shapes the band
+  // we surface elsewhere; it no longer decides whether we speak.
+  const preview = !closed ? predictedAction : null;
+
 
 
   // A completed round proves itself, however it completed. Only an OPEN round
