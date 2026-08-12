@@ -650,8 +650,10 @@ function BuyTicket({
   // fee), said only "Insufficient balance", and switched itself off entirely
   // when the ETH/USD rate was missing.
   const afford = affordability({ amountUsd: amount, balanceEth: availEth, ethUsd });
-  const affordCopy = affordabilityCopy(afford);
-  const overBalance = sim ? !simCheck!.ok : !afford.ok;
+  // With no wallet connected there is nothing to check against, so an
+  // affordability warning is noise: the honest next step is "Connect wallet".
+  const affordCopy = ready.connected ? affordabilityCopy(afford) : null;
+  const overBalance = sim ? !simCheck!.ok : ready.connected && !afford.ok;
   const amountError =
     amount <= 0
       ? null
