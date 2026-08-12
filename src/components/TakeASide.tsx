@@ -82,7 +82,7 @@ export function TakeASide({
       <div className="relative flex items-center gap-1.5">
         <span className="h-1.5 w-1.5 rounded-full" style={{ background: "var(--notice)" }} />
         <div className="text-[11px] font-semibold tracking-[0.08em] uppercase text-[var(--notice)]">
-          Find your people
+          Find Your People
         </div>
       </div>
 
@@ -131,7 +131,7 @@ export function TakeASide({
         <p className="relative mt-2.5 text-[12px] leading-relaxed text-[var(--text-muted)]">
           {sim.active
             ? "Take sides on your own reasons. Simulated or real, every conviction counts toward your profile."
-            : "10 calls is all it takes to start finding your people."}
+            : SIMULATION_COPY.entryBody}
         </p>
       )}
 
@@ -147,7 +147,7 @@ export function TakeASide({
             className="relative mt-3 h-9 w-full rounded-[8px] text-[13px] font-semibold transition-opacity disabled:opacity-50"
             style={{ background: "var(--text)", color: "var(--bg)" }}
           >
-            {sim.pending ? "Starting…" : "Try Simulation"}
+            {sim.pending ? "Starting…" : SIMULATION_COPY.entryCta}
           </button>
           <p className="relative mt-1.5 text-[11px] leading-relaxed text-[var(--text-muted)]">
             Play with 1,000 CC. No real money.

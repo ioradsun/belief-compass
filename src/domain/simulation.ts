@@ -358,8 +358,8 @@ export function directionalSide(p: SimulationPosition): "YES" | "NO" | null {
  */
 export const SIMULATION_COPY = {
   line: "Real beliefs. Simulated positions. No real money at risk.",
-  purpose: "Build your Conviction profile without using real money.",
-  bannerSupport: "Build your profile without using real money.",
+  purpose: "Find Your People without using real money.",
+  bannerSupport: "Find Your People",
   graduatedSupport: "Conviction has enough signal to start finding your people.",
   exitConfirmation: "Simulation off. Your progress is saved.",
   /**
@@ -377,7 +377,8 @@ export const SIMULATION_COPY = {
   realBlocked: "This wallet is in Simulation. Reload before placing a real order.",
   verifyWallet: "Verify your wallet to save your progress. No transaction will be sent.",
   entrySupport: `Start with ${formatCC(SIMULATION_START_CC)}. No real money at risk.`,
-  entryBody: "Reach 10 so Conviction can start finding your people.",
+  entryBody: "10 calls is all it takes to start finding your people. Not ready to play with real money.",
+  entryCta: "Enter Simulation Mode",
 } as const;
 
 /** The neutral reason a Challenge is closed by leaving Simulation. Not a pass. */
