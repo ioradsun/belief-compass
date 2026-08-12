@@ -395,12 +395,13 @@ export async function buildOpportunityFeed(
   /**
    * THE CALIBRATION PIN APPLIES ONLY TO THE DEFAULT FOR YOU FEED — the one a new
    * reader lands on, and the one Simulation renders (Simulation is the same feed
-   * under a ledger flag, not a separate selector). An explicit ranked lens or an
-   * active network/topic/momentum filter is a deliberate question the reader
-   * asked, and the Locked 10 do not override it.
+   * under a ledger flag, not a separate selector). An explicit ranked lens, a
+   * social MODE (Tribe/Rivals), or an active network/topic/momentum filter is a
+   * deliberate question the reader asked, and the Locked 10 do not override it.
    */
   const pinEligible =
     lens === "for_you" &&
+    mode === "for_you" &&
     filters.networks.length === 0 &&
     filters.topics.length === 0 &&
     (filters.momentum?.length ?? 0) === 0;
@@ -724,8 +725,14 @@ export async function buildOpportunityFeed(
   const seq = sequenceFeed({
     candidates: ordered,
     idea: ideaResult.idea,
-    // A ranking is taken as given; a blend is sequenced. See sequence.ts.
-    preserveOrder: lens !== "for_you",
+    // A RANKING IS TAKEN AS GIVEN; A BLEND IS SEQUENCED. A ranked lens
+    // (Moving/Most Capital/…) is obviously a ranking — but so is a social MODE.
+    // `orderForMode` ranks Tribe and Rivals by relationship depth and then hands
+    // the list on; sequencing it re-sorted on composite score and threw that
+    // order away, so "Tribe" led with whatever won the generic rhythm instead of
+    // the strongest Tribe market. Only the pure blend — For You lens AND For You
+    // mode — is actually sequenced.
+    preserveOrder: lens !== "for_you" || mode !== "for_you",
     // Repeats never enter a pass. The way back is rolling the pass — see
     // `cycleStartedAt`.
     allowResurface: false,
