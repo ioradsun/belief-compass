@@ -174,6 +174,21 @@ export function putSwr<T>(key: string, value: T, ttlMs: number, now: () => numbe
   store.set(key, { value, expires: now() + ttlMs, refreshing: false });
 }
 
+/**
+ * DROP a key from this isolate's cache, so the next read is a genuine miss.
+ *
+ * `putSwr` writes a value and both `peekSwr` and a fresh `swrCache` return it
+ * until it expires — but `peekSwr` ignores expiry, so overwriting a key with a
+ * short TTL does not make a peek miss. Invalidation needs a real removal: after
+ * the viewer passes or hides a market, the stale overlay slot must be gone, not
+ * merely expired, so the next overlay read rebuilds from the durable projection.
+ * Cross-isolate invalidation is the caller's job (delete the durable row); this
+ * only clears the local slot.
+ */
+export function dropSwr(key: string): void {
+  store.delete(key);
+}
+
 /** Test-only: drop all cached entries and any computation in flight. */
 export function _clearSwrCache(): void {
   store.clear();
