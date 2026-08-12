@@ -1,12 +1,10 @@
 /**
  * MARKETS — the two roles a person can have in a question, and nothing else.
  *
- * THE TAB WAS CALLED POSITIONS AND THAT WAS THE PROBLEM. A position is what you
- * hold; it has no room for the question you WROTE and never backed, and no way
- * to say that authoring outranks holding. So a creator who also bought appeared
- * as a believer in their own market, and the most consequential thing about them
- * — that the question exists because of them — was the one fact the page could
- * not state.
+ * THE TAB IS CALLED POSITIONS. A position is what you hold, but the rail also
+ * needs room for the question you WROTE and never backed, and for the fact that
+ * authoring outranks holding. So the label is "Positions" for readability, while
+ * the internal tab key stays `positions` so no bookmarked URL breaks.
  *
  *   MARKET MAKER   you created it. First, always, and never duplicated below.
  *   BELIEVER       somebody else created it and you hold a position.
@@ -28,6 +26,7 @@
  *
  * ZERO IO, pure, fully testable.
  */
+
 import type { Side } from "@/domain/post-action";
 import {
   completionFor,
@@ -250,7 +249,7 @@ export function sortBelievers(entries: readonly MarketEntry[]): MarketEntry[] {
 
 export const MAKER_TITLE = "Market Maker";
 export const BELIEVER_TITLE = "Believer";
-export const MARKETS_TAB = "Markets";
+export const MARKETS_TAB = "Positions";
 
 /**
  * WORDS THIS PAGE MUST NEVER USE.
