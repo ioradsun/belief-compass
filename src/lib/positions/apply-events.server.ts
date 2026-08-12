@@ -24,6 +24,7 @@ import {
   NULL_CURSOR,
 } from "@/lib/positions/position-core";
 import { transitionKind, type EconSide } from "@/lib/market-state/read-model";
+import { chainDerivedPrices } from "@/lib/market-state/chain-price.server";
 
 type SB = SupabaseClient;
 
@@ -287,6 +288,30 @@ async function loadPrices(
         yesPriceUsd: Number(s.yes_price_usd ?? 0),
         noPriceUsd: Number(s.no_price_usd ?? 0),
       });
+    }
+  }
+
+  // Conviction-native markets have no POV writer to seed market_state prices.
+  // Their opening trade is already canonical at this point, so derive its
+  // observed chain price before applying the position. Without this fallback,
+  // the opening position is committed without stance fields and the immediate
+  // market aggregation confidently publishes $0 / 0 believers until a later
+  // rollup happens to re-evaluate it.
+  const missing = markets.filter((market) => !out.has(market));
+  if (missing.length > 0) {
+    const { data: calibration } = await sb.rpc("eth_usd_calibration");
+    const ethUsd = Number(calibration ?? 0) || 0;
+    if (ethUsd > 0) {
+      await Promise.all(
+        missing.map(async (market) => {
+          const prices = await chainDerivedPrices(sb, market, ethUsd);
+          if (prices.yes == null && prices.no == null) return;
+          out.set(market, {
+            yesPriceUsd: prices.yes ?? 0,
+            noPriceUsd: prices.no ?? 0,
+          });
+        }),
+      );
     }
   }
   return out;

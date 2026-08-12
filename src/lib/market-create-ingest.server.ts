@@ -20,6 +20,7 @@ import { applyCanonicalTradeEvents } from "@/lib/positions/apply-events.server";
 export interface CreationIngestResult {
   events: number;
   pairs: number;
+  applied: number;
 }
 
 export async function ingestCreationTx(
@@ -35,7 +36,7 @@ export async function ingestCreationTx(
     const t = decodeTradeLog(log);
     if (t && Number(t.onchain_id) === Number(marketId)) trades.push(t);
   }
-  if (trades.length === 0) return { events: 0, pairs: 0 };
+  if (trades.length === 0) return { events: 0, pairs: 0, applied: 0 };
 
   const block = await client.getBlock({ blockNumber: receipt.blockNumber });
   const occurredAt = new Date(Number(block.timestamp) * 1000).toISOString();
@@ -54,6 +55,18 @@ export async function ingestCreationTx(
       ]),
     ).values(),
   ];
-  await applyCanonicalTradeEvents(sb, pairs);
-  return { events: rows.length, pairs: pairs.length };
+  const applied = await applyCanonicalTradeEvents(sb, pairs);
+  if (applied.application_failures > 0 || applied.positions_marked_dirty > 0) {
+    throw new Error(
+      `Opening position was not applied (${applied.application_failures} failures, ${applied.positions_marked_dirty} dirty)`,
+    );
+  }
+  if (applied.events_applied === 0 && applied.events_replayed === 0) {
+    throw new Error("Opening position application produced no durable result");
+  }
+  return {
+    events: rows.length,
+    pairs: pairs.length,
+    applied: applied.events_applied,
+  };
 }

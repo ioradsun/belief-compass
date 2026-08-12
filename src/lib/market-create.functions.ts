@@ -360,11 +360,9 @@ export const finalizeMarketCreate = createServerFn({ method: "POST" })
     // THE SEED IS A TRADE. It lives in the creation tx itself, so ingest that
     // receipt now instead of waiting a poller tick — otherwise the creator
     // lands on their brand-new market and sees $0 staked.
-    let creationTradeIngested = false;
     try {
       const { ingestCreationTx } = await import("@/lib/market-create-ingest.server");
-      const ingested = await ingestCreationTx(db, data.txHash, data.marketId);
-      creationTradeIngested = ingested.events > 0;
+      await ingestCreationTx(db, data.txHash, data.marketId);
     } catch {
       // Non-fatal: the poller will pick the same events up (same source_key).
     }
@@ -402,7 +400,10 @@ export const finalizeMarketCreate = createServerFn({ method: "POST" })
       }),
       db.rpc("enqueue_market_refresh", {
         p_market_ids: [data.marketId],
-        p_kind: creationTradeIngested ? "positions" : "activity",
+        // Always request the position-owned pass. If receipt ingestion failed
+        // after persisting the event, an activity-only retry would preserve the
+        // stale zero forever. The queue coalesces duplicate work cheaply.
+        p_kind: "positions",
       }),
     ]).then(() => undefined);
 
