@@ -85,7 +85,7 @@ describe("insider contract", () => {
     // Global-only market: no read until a viewer asks for one.
     expect(market.read).toBeUndefined();
 
-    const read: InsiderRead = { status: "predicted", predictedSide: "YES", confidence: null };
+    const read: InsiderRead = { status: "predicted", predictedSide: "YES" };
     const forViewer: InsiderMarket = { ...market, read };
     expect(forViewer.read?.predictedSide).toBe("YES");
   });
