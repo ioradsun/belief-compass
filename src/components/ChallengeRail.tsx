@@ -324,7 +324,7 @@ export function ChallengeRail({
               failed read, which is not an empty room. `challengeCount` is zero
               exactly when no card is still live: nobody waiting on you, nothing
               of yours still gathering answers. */}
-          {!failed && challengeCount === 0 && (
+          {!failed && view !== "history" && challengeCount === 0 && (
             <p className="text-[11.5px] leading-snug text-[var(--text-muted)]">
               Nothing waiting on you right now.
             </p>
