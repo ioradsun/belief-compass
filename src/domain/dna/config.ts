@@ -42,8 +42,9 @@ export type EvidenceLevel = "insufficient" | "early" | "growing" | "established"
  * unreachable by any cut that is not arbitrary. Measured in production, 419 of
  * the 959 two-market pairs sit exactly there: **44% of them are unplaceable by
  * construction, not by lack of evidence.** At three, every reachable outcome
- * falls cleanly on one side or the other of 67/33. Three is the smallest shared
- * count at which the model can say something about every possible pair.
+ * falls cleanly on one side or the other of the active 45% / 67% cuts. Three is
+ * the smallest shared count at which the model can say something about every
+ * possible pair.
  *
  * Measured: gate 3 labels 813 relationships against 71 at gate 10, and Rival —
  * the one worth having — goes from 5 to 198.
