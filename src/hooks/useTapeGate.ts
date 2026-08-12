@@ -124,6 +124,8 @@ export function useTapeGate<T extends Arrival>(
   // A different tape starts clean: no held rows to offer, no banner promising
   // the previous scope's activity, and the reader back at the top by definition.
   const keyRef = useRef(resetKey);
+  const lastIncoming = useRef<readonly T[] | null>(null);
+
   useEffect(() => {
     heldRef.current = [];
     setPending(0);
