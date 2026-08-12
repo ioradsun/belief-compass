@@ -92,7 +92,8 @@ describe("classifyRelationship", () => {
    * This is the whole argument for three rather than a lower number: at TWO the
    * reachable Matches are 0%, 50% and 100%, and 50% cannot be placed by any cut
    * that is not arbitrary — measured, 44% of two-market pairs sit exactly there.
-   * At three they are 0 / 33 / 67 / 100, and all four land on a side.
+   * At three they are 0 / 33 / 67 / 100, and all four land on a side under the
+   * active 45% / 67% thresholds.
    */
   it.each([
     [3, "tribe"],

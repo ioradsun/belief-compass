@@ -12,7 +12,7 @@
  */
 
 /** Bump when scoring rules, thresholds, or candidate rules change materially. */
-export const DNA_ENGINE_VERSION = 1;
+export const DNA_ENGINE_VERSION = 2;
 
 /** Canonical stored relationship labels (product copy like "Bizarro" stays in UI). */
 export type RelationshipLabel = "twin" | "tribe" | "neutral" | "opp" | "inverse" | "insufficient";
@@ -97,10 +97,11 @@ export interface DnaThresholdConfig {
 export const DNA_THRESHOLDS: DnaThresholdConfig = {
   minSharedOverall: RELATIONSHIP_MIN_SHARED,
   confidenceK: 8,
-  // 67% and 33% are the thirds, which is the whole reason THREE is the gate —
-  // see RELATIONSHIP_MIN_SHARED. Exit widens by five points for hysteresis.
+  // 67% keeps the Tribe gate at the high third; 45% for Rival surfaces natural
+  // opposition without demanding near-perfect disagreement. Exit widens by five
+  // points for hysteresis.
   tribe: { enter: 67, exit: 62 },
-  opp: { enter: 33, exit: 38 },
+  opp: { enter: 45, exit: 50 },
 };
 
 /**
