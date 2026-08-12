@@ -59,14 +59,18 @@ function P({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Card({ title, body }: { title: string; body: string }) {
+function Card({ title, body }: { title: string; body?: string }) {
   return (
     <div
       className="rounded-xl p-4"
       style={{ background: "var(--surface)", border: "1px solid var(--hairline)" }}
     >
       <div className="text-[13px] font-semibold tracking-[-0.01em] text-[var(--text)]">{title}</div>
-      <div className="mt-1.5 text-[13.5px] leading-relaxed text-[var(--text-secondary)]">{body}</div>
+      {body ? (
+        <div className="mt-1.5 text-[13.5px] leading-relaxed text-[var(--text-secondary)]">
+          {body}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -214,7 +218,7 @@ export function TrustContent() {
         lede="This is where the distinction matters."
       >
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <Card title="You control your wallet." body="" />
+          <Card title="You control your wallet." />
           <Card
             title="Conviction"
             body="Controls the experience around the markets — discovery, people, challenges and your history."
