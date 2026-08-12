@@ -639,7 +639,7 @@ export async function finalizeHouseBet(
       })
       .eq("wallet", wallet)
       .eq("onchain_id", marketId)
-      .neq("finalized_via", "bet");
+      .or("finalized_via.is.null,finalized_via.eq.pass");
   }
 
 
@@ -701,7 +701,9 @@ export async function finalizeSimulationBet(
       simulation_order_id: simulationOrderId,
       revealed_at: new Date().toISOString(),
     },
-    { onConflict: "wallet,onchain_id", ignoreDuplicates: true },
+    // Money (simulated or not) overrides a walk-away: a settled buy replaces a
+    // round this wallet had passed. A second buy changes nothing that matters.
+    { onConflict: "wallet,onchain_id" },
   );
 
   return loadHouseRead(wallet, marketId, "SIMULATION");
