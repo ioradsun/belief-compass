@@ -31,7 +31,8 @@ export type HouseReadState =
   | { status: "learning"; remainingPicks?: number }
   | { status: "predicted"; predictedSide: ReadSide; confidence?: number }
   | { status: "correct"; predictedSide: ReadSide; actualSide: ReadSide }
-  | { status: "incorrect"; predictedSide: ReadSide; actualSide: ReadSide };
+  | { status: "incorrect"; predictedSide: ReadSide; actualSide: ReadSide }
+  | { status: "closed" };
 
 /** The shape of a house read this module needs — a structural subset, no IO type. */
 export interface HouseReadSource {
@@ -73,6 +74,12 @@ export function houseReadState(source: HouseReadSource | null | undefined): Hous
       };
     }
   }
+
+  // A finished round must never fall back to the open-round placeholder. PASS
+  // has no directional side to compare and a legacy unscored row may have no
+  // locked call, but both are still completed reads — not a signal that the
+  // House has forgotten the viewer.
+  if (source.closed) return { status: "closed" };
 
   // Cold start — say exactly how many picks are left when we know.
   if (source.foundation) {
@@ -136,6 +143,14 @@ export function houseReadCopy(state: HouseReadState): HouseReadCopy {
         side: null,
         suffix: "",
         tone: "incorrect",
+      };
+    case "closed":
+      return {
+        label: null,
+        body: "This read is closed.",
+        side: null,
+        suffix: "",
+        tone: "neutral",
       };
     case "learning":
     default: {
