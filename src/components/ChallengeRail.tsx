@@ -29,7 +29,14 @@ import { useChallengeSent } from "@/lib/challenge-signal";
 import { useTable } from "@/components/YourTable";
 import { useSimulationMode } from "@/lib/simulation-mode";
 import { hideCall, useOpenCalls, type OpenCalls } from "@/lib/open-calls";
-import { ChallengeCardList } from "@/components/ChallengeCardList";
+import {
+  ChallengeCardList,
+  useChallengeCards,
+  type ChallengeDirection,
+} from "@/components/ChallengeCardList";
+import { isOutwardCard } from "@/components/ChallengeCard";
+import { isLiveCard } from "@/domain/challenge-card";
+import { SlidersHorizontal } from "lucide-react";
 import { passOnCall } from "@/lib/table.functions";
 import { bestEffort, useWalletSession } from "@/hooks/useWalletSession";
 import { CHALLENGE, type Challenge, type CallerRelation } from "@/domain/challenge";
