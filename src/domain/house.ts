@@ -157,7 +157,11 @@ export function predictHouse(s: HouseSignals): HouseRead {
   const catAnswers = c.yes + c.no + c.pass;
   const catDirectional = c.yes + c.no;
 
-  if (cat && catAnswers === 0) {
+  // A category we have never seen this player in. If we barely know them at all,
+  // say so. If we know them WELL elsewhere, we still have a read — it just comes
+  // from their cross-category pattern below, at a discount.
+  const WELL_KNOWN = 8;
+  if (cat && catAnswers === 0 && s.overall.yes + s.overall.no < WELL_KNOWN) {
     const known = s.overall.yes + s.overall.no > 0;
     return noRead(
       "new_category",
@@ -167,6 +171,7 @@ export function predictHouse(s: HouseSignals): HouseRead {
         : "This is a category the House has never seen you in. Your answer here will establish the first signal.",
     );
   }
+
 
   // Pass behaviour first: a category the user reliably passes on is a real read.
   const passRate = catAnswers > 0 ? c.pass / catAnswers : 0;
