@@ -171,6 +171,21 @@ export function ChallengeRail({
    */
   const challengeCount = open.length + (table ?? []).filter((r) => r.closedAtMs == null).length;
 
+  /**
+   * HOW MANY ARE IN EACH DIRECTION — read from the same projection the list
+   * renders, through the same query key, so the filter labels can never count
+   * something the column does not show.
+   */
+  const { data: allCards } = useChallengeCards(wallet);
+  const liveCards = (allCards ?? []).filter((p) => isLiveCard(p.state));
+  const mineCount = liveCards.filter(isOutwardCard).length;
+  const cardCounts = {
+    all: liveCards.length,
+    mine: mineCount,
+    theirs: liveCards.length - mineCount,
+  };
+  const [direction, setDirection] = useState<ChallengeDirection>("all");
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div
