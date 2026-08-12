@@ -104,6 +104,20 @@ function useFreshResponse(newestResponderWallet: string | undefined): boolean {
   return fresh;
 }
 
+/**
+ * WHICH DIRECTION A CARD POINTS — the single source both the card's own dot and
+ * the rail's direction filter read. Two copies of this rule would let the filter
+ * and the label on the card disagree about the same row.
+ */
+export function isOutwardCard(p: ChallengeCardProjection): boolean {
+  return (
+    p.state === "branch_live" ||
+    p.state === "people_showing_up" ||
+    p.state === "chain_moving" ||
+    (p.state === "finished" && p.outgoing != null)
+  );
+}
+
 export interface ChallengeCardProps {
   projection: ChallengeCardProjection;
   /** Open the market. The card never navigates on its own. */
