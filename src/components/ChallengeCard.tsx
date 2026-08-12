@@ -194,11 +194,7 @@ export function ChallengeCard({
    * else. Blue means you are the one asking; amber means somebody is waiting on
    * you. Same colour grammar as the chain rail, said here in words too.
    */
-  const outward =
-    p.state === "branch_live" ||
-    p.state === "people_showing_up" ||
-    p.state === "chain_moving" ||
-    (p.state === "finished" && out != null);
+  const outward = isOutwardCard(p);
 
   const progress = out && progressLine(out);
   const lineage = lineageLine(p.lineage);
