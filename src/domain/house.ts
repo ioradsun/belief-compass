@@ -197,7 +197,26 @@ export function predictHouse(s: HouseSignals): HouseRead {
   const relLean = relTotal > 0 ? ((rel!.yes - rel!.no) / relTotal) * clamp01(rel!.confidence) : 0;
   const relWeight = relTotal > 0 ? sampleConfidence(relTotal, 2) * clamp01(rel!.confidence) : 0;
 
-  const totalWeight = personalWeight + relWeight;
+  /**
+   * THE HOUSE ALWAYS KNOWS SOMETHING ABOUT A PLAYER IT HAS WATCHED.
+   *
+   * A thin CATEGORY is not a thin PERSON. Someone with a long directional
+   * history who lands in a quiet corner used to fall through to "not enough
+   * signal" and read as "still learning you" forever. Their cross-category lean
+   * is weaker evidence than in-category history, so it enters at a discount and
+   * only matters when the category itself is thin — but it is evidence, and
+   * refusing to use it is what made the read feel broken.
+   */
+  const overallDirectional = s.overall.yes + s.overall.no;
+  const overallLean =
+    overallDirectional > 0 ? (s.overall.yes - s.overall.no) / overallDirectional : 0;
+  const catThin = personalWeight < 0.6;
+  const globalWeight =
+    catThin && overallDirectional > 0
+      ? sampleConfidence(overallDirectional, 8) * 0.6 * (1 - personalWeight)
+      : 0;
+
+  const totalWeight = personalWeight + relWeight + globalWeight;
   if (totalWeight === 0) {
     return noRead(
       "weak_sample",
@@ -206,6 +225,7 @@ export function predictHouse(s: HouseSignals): HouseRead {
       ["One more choice will make this category easier to understand."],
     );
   }
+
 
   // Conflicting evidence: both sources are meaningful and point opposite ways.
   const conflicting =
