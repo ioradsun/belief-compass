@@ -1,17 +1,16 @@
 /**
  * THE INSIDER READ — one row, one component, every screen size.
  *
- * The Insider's running attempt to call your next move, rendered as a single
- * integrated row of the market summary card (never its own card or modal). The
- * SAME component and the SAME state serve desktop and mobile — there is no
- * mobile variant, no icon-only fallback, and nothing is hidden at a breakpoint.
+ * PREDICT FIRST, PROVE IT AFTER. Before the choice this is a label and one
+ * sentence — no evidence, no market context. After the choice it states the
+ * verdict and shows the single locked reason it was given.
  *
- * On a narrow screen the sentence WRAPS onto a second line rather than
- * truncating: the message is the feature, so it is never clipped to save space.
+ * The SAME component and the SAME state serve desktop and mobile — no mobile
+ * variant, nothing hidden at a breakpoint. On a narrow screen the sentence WRAPS
+ * rather than truncating: the message is the feature.
  *
  * Presentation only — every word comes from the pure Insider read projection
- * (`domain/insider/projections/read`), so the copy and the state machine can't
- * drift between surfaces.
+ * (`domain/insider/projections/read`), and nothing is calculated here.
  */
 import { insiderReadCopy } from "@/domain/insider";
 import type { InsiderRead as InsiderReadState } from "@/domain/insider";
@@ -26,23 +25,19 @@ export function InsiderRead({
   const copy = insiderReadCopy(read);
   const sideColor = copy.side === "YES" ? "var(--yes)" : "var(--no)";
   // A settled round states the verdict plainly. It deliberately does NOT borrow
-  // the gain/loss palette: green and red mean money on every other surface, and
-  // "the House called it" is not a profit.
+  // the gain/loss palette: green and red mean money on every other surface.
   const bodyColor =
     copy.tone === "neutral" ? "var(--text-secondary)" : "var(--text)";
 
-
   return (
     <div
-      className={`flex min-w-0 items-start text-[12px] leading-snug ${className}`}
-      // The whole row is one sentence for a screen reader, side and context included.
-      aria-label={`Insider Read. ${copy.body}${copy.side ?? ""}${copy.suffix}${
-        copy.context ? ` ${copy.context}` : ""
+      className={`flex min-w-0 flex-col gap-0.5 text-[12px] leading-snug ${className}`}
+      // The whole row is one sentence for a screen reader.
+      aria-label={`Insider Read. ${copy.body}${copy.side ?? ""}${
+        copy.reason ? ` ${copy.reason}` : ""
       }`}
     >
-      {/* min-w-0 + normal wrapping: the sentence flows to a second line on a
-          phone instead of being cut off. */}
-      <p className="m-0 min-w-0 flex-1 break-words">
+      <p className="m-0 min-w-0 break-words">
         {copy.label && <span className="font-semibold text-[var(--text)]">{copy.label} </span>}
         <span style={{ color: bodyColor }}>{copy.body}</span>
         {copy.side && (
@@ -50,12 +45,11 @@ export function InsiderRead({
             {copy.side}
           </span>
         )}
-        {copy.suffix && <span className="text-[var(--text-muted)]">{copy.suffix}</span>}
-        {/* Market context reads as an aside, never as part of the call. */}
-        {copy.context && (
-          <span className="text-[var(--text-muted)]"> {copy.context}</span>
-        )}
       </p>
+      {/* The one locked reason. Only ever present after the choice. */}
+      {copy.reason && (
+        <p className="m-0 min-w-0 break-words text-[var(--text-muted)]">{copy.reason}</p>
+      )}
     </div>
   );
 }
