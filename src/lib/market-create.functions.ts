@@ -369,6 +369,17 @@ export const finalizeMarketCreate = createServerFn({ method: "POST" })
       // Non-fatal: the poller will pick the same events up (same source_key).
     }
 
+    // Creating a market also buys its opening side. Close the Insider round
+    // from that same mined transaction so the creator sees the reveal rather
+    // than being asked to make the move they have already made.
+    try {
+      const { finalizeHouseBet } = await import("@/lib/house.server");
+      await finalizeHouseBet(wallet, data.marketId, row?.side === "NO" ? "NO" : "YES", data.txHash);
+    } catch {
+      // The position remains authoritative; a later reconciliation can repair
+      // this optional read without holding the market creation flow open.
+    }
+
     // Build the read-model row now rather than waiting behind the refresh
     // queue: the creator is about to land on this market.
     try {
