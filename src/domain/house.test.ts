@@ -92,9 +92,10 @@ describe("predictHouse — honest no-read states", () => {
     expect(r.noRead?.detail[0]).toContain("2 of 5");
   });
 
-  it("calls a never-seen category new territory when the player is barely known", () => {
+  it("still calls a never-seen category from the player's overall lean", () => {
     const r = predictHouse({ ...base, overall: { yes: 2, no: 1, pass: 0 } });
-    expect(r.noRead?.kind).toBe("new_category");
+    expect(r.noRead).toBeNull();
+    expect(r.action).toBe("YES");
   });
 
   it("still reads a well-known player in a brand new category, from their overall lean", () => {
@@ -108,21 +109,33 @@ describe("predictHouse — honest no-read states", () => {
     expect(r.action).toBe("YES");
   });
 
-  it("won't bluff when personal history and matches disagree", () => {
+  it("predicts a sit-out when personal history and matches disagree", () => {
     const r = predictHouse({
       ...base,
       inCategory: { yes: 9, no: 1, pass: 0 },
       relationship: { yes: 0, no: 9, confidence: 0.9 },
     });
-    expect(r.action).toBeNull();
-    expect(r.noRead?.kind).toBe("conflicting");
-    expect(r.noRead?.detail.length).toBeGreaterThan(1);
+    expect(r.action).toBe("PASS");
+    expect(r.noRead).toBeNull();
+    expect(r.reasons.length).toBeGreaterThan(1);
   });
 
-  it("returns weak_sample rather than a coin flip", () => {
+  it("never refuses a calibrated player — an even split still gets a call", () => {
     const r = predictHouse({ ...base, inCategory: { yes: 1, no: 1, pass: 0 } });
-    expect(r.action).toBeNull();
-    expect(r.noRead?.kind).toBe("weak_sample");
+    expect(r.noRead).toBeNull();
+    expect(r.action).not.toBeNull();
+  });
+
+  it("reads a sit-out when nothing anywhere leans", () => {
+    const r = predictHouse({
+      ...base,
+      totalAnswers: 6,
+      overall: { yes: 0, no: 0, pass: 6 },
+      inCategory: { yes: 0, no: 0, pass: 0 },
+    });
+    expect(r.action).toBe("PASS");
+    expect(r.noRead).toBeNull();
+    expect(r.reasons.length).toBeGreaterThan(0);
   });
 });
 
@@ -162,7 +175,8 @@ describe("predictHouse — reads", () => {
       inCategory: { yes: 0, no: 0, pass: 1 },
       relationship: { yes: 3, no: 0, confidence: 0 },
     });
-    expect(r.action).toBeNull();
+    // Falls back to the player's own overall lean, not the zero-confidence matches.
+    expect(r.action).toBe("YES");
   });
 
   it("is deterministic — the same signals lock the same read", () => {
