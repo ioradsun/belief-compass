@@ -19,7 +19,7 @@ export type NoReadKind =
   | "no_relationship_signal";
 
 /** Bump when the prediction rules change materially. */
-export const HOUSE_ENGINE_VERSION = 1;
+export const HOUSE_ENGINE_VERSION = 2;
 
 /** Answers needed before the House will read anyone at all. */
 export const FOUNDATION_ANSWERS = 5;
