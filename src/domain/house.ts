@@ -157,20 +157,13 @@ export function predictHouse(s: HouseSignals): HouseRead {
   const catAnswers = c.yes + c.no + c.pass;
   const catDirectional = c.yes + c.no;
 
-  // A category we have never seen this player in. If we barely know them at all,
-  // say so. If we know them WELL elsewhere, we still have a read — it just comes
-  // from their cross-category pattern below, at a discount.
-  const WELL_KNOWN = 8;
-  if (cat && catAnswers === 0 && s.overall.yes + s.overall.no < WELL_KNOWN) {
-    const known = s.overall.yes + s.overall.no > 0;
-    return noRead(
-      "new_category",
-      "New territory",
-      known
-        ? `We know how you think elsewhere, but not ${cat} yet. Your answer here will establish the first signal.`
-        : "This is a category the House has never seen you in. Your answer here will establish the first signal.",
-    );
-  }
+  /**
+   * A NEW CATEGORY IS NOT A NEW PERSON. Once a viewer is past cold start we
+   * always have something: their cross-category lean, their matches on this
+   * market, or — failing both — the fact that they don't engage here, which is
+   * a PASS read, not a refusal. Only `no_user` and `cold_start` refuse now.
+   */
+
 
 
   // Pass behaviour first: a category the user reliably passes on is a real read.
