@@ -8,14 +8,14 @@ describe("insiderReadCopy — predict first", () => {
   it("names the side in one direct sentence, with no evidence attached", () => {
     const copy = insiderReadCopy(predicted);
     expect(copy.label).toBe(INSIDER_READ_LABEL);
-    expect(copy.body).toBe("We have you on ");
+    expect(copy.body).toBe("Your next move: ");
     expect(copy.side).toBe("YES");
     expect(copy.reason).toBeNull();
   });
 
   it("treats a predicted PASS as a real read", () => {
     const copy = insiderReadCopy({ status: "pass_predicted" });
-    expect(copy.body).toBe("We have you sitting this one out.");
+    expect(copy.body).toBe("You'll sit this one out.");
     expect(copy.label).toBe(INSIDER_READ_LABEL);
   });
 
