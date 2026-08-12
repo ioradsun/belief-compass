@@ -109,7 +109,7 @@ describe("classifyRelationship", () => {
   it("labels the number it displays, at the thirds", () => {
     // `agreement` is unrounded; `convictionMatch` rounds. At three shared the
     // outcomes ARE the thirds — 66.67% and 33.33% — so comparing unrounded
-    // against 67/33 put "67% Conviction Match" beside no label on the exact case
+    // against 67/45 put "67% Conviction Match" beside no label on the exact case
     // that makes three the right gate. Caught by the boundary table above.
     const a = range(3).map((i) => f(i, "YES"));
     const twoOfThree = scoreRelationship(
@@ -157,7 +157,7 @@ describe("classifyRelationship", () => {
     const b = range(10).map((i) => f(i, i <= 8 ? "YES" : "NO")); // 80%
     expect(rel(a, b)).toBe("tribe");
   });
-  it("Opp entry: ≤33% over ≥8 shared", () => {
+  it("Opp entry: ≤45% over ≥8 shared", () => {
     const a = range(10).map((i) => f(i, "YES"));
     const b = range(10).map((i) => f(i, i <= 2 ? "YES" : "NO")); // 20%
     expect(rel(a, b)).toBe("opp");
@@ -168,9 +168,9 @@ describe("classifyRelationship", () => {
     expect(rel(a, b)).toBe("neutral");
   });
 
-  it("Opp hysteresis: held Opp survives at 35% (exit 38) but a fresh one is Neutral", () => {
-    const a = range(20).map((i) => f(i, "YES"));
-    const b = range(20).map((i) => f(i, i <= 7 ? "YES" : "NO")); // 7/20 = 35% (between enter 33 and exit 38)
+  it("Opp hysteresis: held Opp survives at 47% (exit 50) but a fresh one is Neutral", () => {
+    const a = range(30).map((i) => f(i, "YES"));
+    const b = range(30).map((i) => f(i, i <= 14 ? "YES" : "NO")); // 14/30 = 46.67% → rounds to 47% (between enter 45 and exit 50)
     expect(rel(a, b, "opp")).toBe("opp");
     expect(rel(a, b, undefined)).toBe("neutral");
   });
