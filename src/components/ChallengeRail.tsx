@@ -334,6 +334,23 @@ export function ChallengeRail({
             </p>
           )}
 
+          {/* A FILTER THAT EMPTIES THE COLUMN HAS TO SAY SO — otherwise the
+              reader reads their own filter as an empty loop. */}
+          {!failed && cardCounts.all > 0 && cardCounts[direction] === 0 && (
+            <p className="text-[11.5px] leading-snug text-[var(--text-muted)]">
+              {direction === "mine"
+                ? "Nothing you started is still running."
+                : "Nobody is waiting on you right now."}{" "}
+              <button
+                type="button"
+                onClick={() => setDirection("all")}
+                className="underline text-[var(--text)]"
+              >
+                Show all
+              </button>
+            </p>
+          )}
+
           {/* ONE LIST, ONE CARD PER QUESTION.
               "Challenged You" and "You Challenged" were the same market twice
               whenever a reader was brought into a question and then relayed it —
