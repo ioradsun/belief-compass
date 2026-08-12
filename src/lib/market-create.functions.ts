@@ -310,7 +310,7 @@ export const finalizeMarketCreate = createServerFn({ method: "POST" })
       })
       .eq("question_id", data.questionId)
       .eq("creator_wallet", wallet)
-      .select("question, category, category_source")
+      .select("question, category, category_source, side")
       .maybeSingle();
     if (error) throw new Error(error.message);
 
