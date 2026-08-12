@@ -311,10 +311,14 @@ const feedQO = (
 const viewerOverlayQO = (wallet: string | undefined) =>
   queryOptions({
     queryKey: ["viewer-overlay", wallet ?? null],
-    queryFn: async () =>
-      wallet
-        ? await getViewerOverlay({ data: { wallet, sessionToken: readSessionToken(wallet) } })
-        : null,
+    queryFn: async () => {
+      if (!wallet) return null;
+      // No proof of ownership yet: the server would (rightly) reject. Treat it
+      // as "no overlay" rather than a thrown query that blanks the screen.
+      const sessionToken = readSessionToken(wallet);
+      if (!sessionToken) return null;
+      return await getViewerOverlay({ data: { wallet, sessionToken } });
+    },
     enabled: !!wallet,
     // A projection read, invalidated server-side the moment the viewer passes,
     // hides or sells — so a slow poll only catches position/follow drift.
