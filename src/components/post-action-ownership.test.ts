@@ -55,8 +55,9 @@ describe("resolvePostAction owns all three closing flows", () => {
     expect(sell).toMatch(/kind="sell"/);
   });
 
-  it("routes every confirmed market creation through the resolver", () => {
-    expect(route()).toMatch(/kind="create"/);
+  it("lands a confirmed market creation on the market without a duplicate closing screen", () => {
+    expect(route()).not.toMatch(/kind="create"/);
+    expect(route()).toMatch(/launch: undefined/);
   });
 
   it("renders one screen, from one call", () => {
