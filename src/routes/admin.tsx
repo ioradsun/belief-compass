@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -94,16 +94,25 @@ function Console({ onLock }: { onLock: () => void }) {
     <main className="mx-auto min-h-[100dvh] max-w-[900px] bg-[var(--bg)] px-6 py-10 text-[var(--text)]">
       <header className="flex items-center justify-between">
         <h1 className="text-[20px] font-semibold">Moderation</h1>
-        <button
-          type="button"
-          onClick={async () => {
-            await adminLogout();
-            onLock();
-          }}
-          className="text-[12px] text-[var(--text-muted)] underline"
-        >
-          Lock
-        </button>
+        <div className="flex items-center gap-4">
+          <Link
+            to="/admin/forge"
+            search={{ job: undefined }}
+            className="text-[12px] text-[var(--text-muted)] underline"
+          >
+            Forge
+          </Link>
+          <button
+            type="button"
+            onClick={async () => {
+              await adminLogout();
+              onLock();
+            }}
+            className="text-[12px] text-[var(--text-muted)] underline"
+          >
+            Lock
+          </button>
+        </div>
       </header>
 
       <h2 className="mt-8 text-[12px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">

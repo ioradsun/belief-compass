@@ -4,66 +4,41 @@
  * A shared password gate, not authentication: one secret, one operator, no
  * per-user identity. The password is compared timing-safely on the server and
  * the unlocked flag lives in an encrypted, http-only session cookie.
+ *
+ * The session machinery itself lives in `admin-session.server.ts` and is loaded
+ * inside handlers, so nothing server-only reaches a client bundle.
  */
 import { createServerFn } from "@tanstack/react-start";
-import { useSession } from "@tanstack/react-start/server";
-
-type AdminSession = { unlocked?: boolean };
-
-function sessionConfig() {
-  return {
-    password: process.env.ADMIN_SESSION_SECRET!,
-    name: "conviction-admin",
-    maxAge: 60 * 60 * 8,
-    cookie: { httpOnly: true, secure: true, sameSite: "lax" as const, path: "/" },
-  };
-}
-
-async function digest(value: string) {
-  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
-  return new Uint8Array(buf);
-}
-
-async function matches(input: string, expected: string) {
-  const [a, b] = await Promise.all([digest(input), digest(expected)]);
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
-  return diff === 0;
-}
-
-async function requireAdmin() {
-  // Not a React hook: `useSession` is TanStack's server-side session reader. The
-  // rules-of-hooks lint only sees the `use` prefix, so it is silenced here rather
-  // than left as the repo's one standing lint error.
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  const session = await useSession<AdminSession>(sessionConfig());
-  if (!session.data.unlocked) throw new Error("Locked.");
-  return session;
-}
 
 export const adminLogin = createServerFn({ method: "POST" })
   .inputValidator((data: { password: string }) => data)
   .handler(async ({ data }) => {
     const expected = process.env.ADMIN_PASSWORD;
     if (!expected) throw new Error("Moderation isn't configured.");
-    if (!(await matches(String(data.password ?? ""), expected))) return { ok: false as const };
-    const session = await useSession<AdminSession>(sessionConfig());
+    const { adminSession, passwordMatches } = await import("./admin-session.server");
+    if (!(await passwordMatches(String(data.password ?? ""), expected))) {
+      return { ok: false as const };
+    }
+    const session = await adminSession();
     await session.update({ unlocked: true });
     return { ok: true as const };
   });
 
 export const adminLogout = createServerFn({ method: "POST" }).handler(async () => {
-  const session = await useSession<AdminSession>(sessionConfig());
+  const { adminSession } = await import("./admin-session.server");
+  const session = await adminSession();
   await session.clear();
   return { ok: true as const };
 });
 
 export const adminStatus = createServerFn({ method: "GET" }).handler(async () => {
-  const session = await useSession<AdminSession>(sessionConfig());
+  const { adminSession } = await import("./admin-session.server");
+  const session = await adminSession();
   return { unlocked: session.data.unlocked === true };
 });
 
 export const adminQueue = createServerFn({ method: "GET" }).handler(async () => {
+  const { requireAdmin } = await import("./admin-session.server");
   await requireAdmin();
   const { serviceClient } = await import("@/lib/supabase-clients");
   const db = serviceClient();
@@ -89,6 +64,7 @@ export const adminQueue = createServerFn({ method: "GET" }).handler(async () => 
 export const adminSetVisibility = createServerFn({ method: "POST" })
   .inputValidator((data: { questionId: string; hidden: boolean; blocked?: boolean }) => data)
   .handler(async ({ data }) => {
+    const { requireAdmin } = await import("./admin-session.server");
     await requireAdmin();
     const { serviceClient } = await import("@/lib/supabase-clients");
     const { error } = await serviceClient()
@@ -105,6 +81,7 @@ export const adminSetVisibility = createServerFn({ method: "POST" })
 export const adminResolveReport = createServerFn({ method: "POST" })
   .inputValidator((data: { id: string; note?: string | null }) => data)
   .handler(async ({ data }) => {
+    const { requireAdmin } = await import("./admin-session.server");
     await requireAdmin();
     const { serviceClient } = await import("@/lib/supabase-clients");
     const { error } = await serviceClient()
