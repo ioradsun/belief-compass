@@ -273,11 +273,11 @@ export function ChallengeRail({
           >
             {(
               [
-                ["theirs", "Incoming", cardCounts.theirs, "var(--no)"],
-                ["mine", "Outgoing", cardCounts.mine, "var(--yes)"],
-                ["history", "History", null, null],
+                ["theirs", "Incoming", "var(--no)"],
+                ["mine", "Outgoing", "var(--yes)"],
+                ["history", "History", null],
               ] as const
-            ).map(([key, label, n, dot]) => (
+            ).map(([key, label, dot]) => (
               <button
                 key={key}
                 type="button"
@@ -298,7 +298,6 @@ export function ChallengeRail({
                   />
                 )}
                 {label}
-                {n != null && n > 0 && <span className="num tabular-nums opacity-60">{n}</span>}
               </button>
             ))}
           </div>
