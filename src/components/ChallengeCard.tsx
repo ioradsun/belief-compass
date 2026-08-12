@@ -342,7 +342,7 @@ export function ChallengeCard({
             onClick={() => onRemove(out.challengeId)}
             className="text-[11px] text-[var(--text-muted)] underline hover:text-[var(--text)]"
           >
-            Take it off the table
+            Withdraw
           </button>
         )}
       </div>

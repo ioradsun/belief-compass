@@ -448,7 +448,7 @@ function ChainCardRow({
                 disabled={closing}
                 className="block w-full whitespace-nowrap rounded-lg px-2 py-1.5 text-left text-[12px] text-[var(--text)] transition-colors hover:bg-[var(--bg)] disabled:opacity-50"
               >
-                Take off the table
+                Withdraw
               </button>
             </div>
           )}
