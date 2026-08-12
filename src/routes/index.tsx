@@ -19,7 +19,6 @@ import {
   feedSession,
   feedSessionVersion,
   rollFeedCycle,
-
   ideaGateOpen,
   resetFeedSession,
   subscribeFeedSession,
@@ -1425,50 +1424,52 @@ function Feed() {
       if (!force && at - refillAtRef.current < FEED_REFILL_MS) return;
       refillAtRef.current = at;
       const q = queueRef.current;
-    for (let dig = 0; dig <= MAX_DIG; dig += 1) {
-      const depth = poolPageRef.current;
-      try {
-        const got = await fetchPage(q, depth);
-        if (got === "more") {
-          // Material arrived, so this pass is alive again — a future dry spell
-          // is allowed its own roll rather than being read as the end.
-          rolledRef.current = false;
-          return;
-        }
-
-        if (got === "bottom") {
-          /**
-           * THE CATALOGUE IS SPENT — ROLL THE PASS.
-           *
-           * Not an ending. Every market the reader touched during this pass
-           * stops excluding anything, the depth resets, and the next request is
-           * ranked from the top of the platform again with today's signal —
-           * today's tribe activity, today's momentum — so a second pass is a
-           * new running order rather than a replay of the last one.
-           *
-           * The one true ending is a rolled pass that STILL comes back empty:
-           * that means the platform itself has nothing, not that the reader has
-           * been through it.
-           */
-          if (rolledRef.current) {
-            setPagedOut(true);
+      for (let dig = 0; dig <= MAX_DIG; dig += 1) {
+        const depth = poolPageRef.current;
+        try {
+          const got = await fetchPage(q, depth);
+          if (got === "more") {
+            // Material arrived, so this pass is alive again — a future dry spell
+            // is allowed its own roll rather than being read as the end.
+            rolledRef.current = false;
             return;
           }
-          rolledRef.current = true;
-          rollFeedCycle();
-          poolPageRef.current = 0;
-          continue;
-        }
 
-        // Picked clean, but the catalogue goes deeper. Advance and ask again.
-        poolPageRef.current = depth + 1;
-      } catch {
-        // A page that fails to arrive costs the reader nothing they had. The
-        // throttle has already moved, so the next low-water tick tries again.
-        return;
+          if (got === "bottom") {
+            /**
+             * THE CATALOGUE IS SPENT — ROLL THE PASS.
+             *
+             * Not an ending. Every market the reader touched during this pass
+             * stops excluding anything, the depth resets, and the next request is
+             * ranked from the top of the platform again with today's signal —
+             * today's tribe activity, today's momentum — so a second pass is a
+             * new running order rather than a replay of the last one.
+             *
+             * The one true ending is a rolled pass that STILL comes back empty:
+             * that means the platform itself has nothing, not that the reader has
+             * been through it.
+             */
+            if (rolledRef.current) {
+              setPagedOut(true);
+              return;
+            }
+            rolledRef.current = true;
+            rollFeedCycle();
+            poolPageRef.current = 0;
+            continue;
+          }
+
+          // Picked clean, but the catalogue goes deeper. Advance and ask again.
+          poolPageRef.current = depth + 1;
+        } catch {
+          // A page that fails to arrive costs the reader nothing they had. The
+          // throttle has already moved, so the next low-water tick tries again.
+          return;
+        }
       }
-    }
-  }, [fetchPage]);
+    },
+    [fetchPage],
+  );
 
   const refillNow = useCallback(
     (force = false) => {
@@ -1881,26 +1882,30 @@ function Feed() {
               </button>
             }
             center={
-              wallet ? (
-                <button
-                  type="button"
-                  onClick={createOpen ? closeCreate : openCreate}
-                  aria-expanded={createOpen}
-                  className="inline-flex h-9 max-w-full items-center gap-1 truncate rounded-full border border-[var(--border-strong)] px-4 text-[13px] font-semibold text-[var(--text-secondary)] transition-colors hover:border-[var(--text)] hover:text-[var(--text)]"
-                >
-                  <span aria-hidden="true">{createOpen ? "✕" : "+"}</span>{" "}
-                  {createOpen ? "Close" : "Conviction"}
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  {...walletIntent}
-                  onClick={() => requestConnect()}
-                  className="inline-flex h-9 max-w-full items-center gap-1 truncate rounded-full border border-[var(--border-strong)] px-4 text-[13px] font-semibold text-[var(--text-secondary)] transition-colors hover:border-[var(--text)] hover:text-[var(--text)]"
-                >
-                  Connect wallet
-                </button>
-              )
+              <>
+                {/* The safety question, one tap from the wallet action. */}
+                <ShieldMark onClick={openTrust} />
+                {wallet ? (
+                  <button
+                    type="button"
+                    onClick={createOpen ? closeCreate : openCreate}
+                    aria-expanded={createOpen}
+                    className="inline-flex h-9 max-w-full items-center gap-1 truncate rounded-full border border-[var(--border-strong)] px-4 text-[13px] font-semibold text-[var(--text-secondary)] transition-colors hover:border-[var(--text)] hover:text-[var(--text)]"
+                  >
+                    <span aria-hidden="true">{createOpen ? "✕" : "+"}</span>{" "}
+                    {createOpen ? "Close" : "Conviction"}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    {...walletIntent}
+                    onClick={() => requestConnect()}
+                    className="inline-flex h-9 max-w-full items-center gap-1 truncate rounded-full border border-[var(--border-strong)] px-4 text-[13px] font-semibold text-[var(--text-secondary)] transition-colors hover:border-[var(--text)] hover:text-[var(--text)]"
+                  >
+                    Connect wallet
+                  </button>
+                )}
+              </>
             }
           />
         }
