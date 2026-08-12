@@ -90,7 +90,12 @@ const one = (q: string) => sql(q);
 
 const ME = "0xsimulator";
 const OTHER = "0xother";
-const MARKET = 7001;
+// A Locked-10 market (src/domain/calibration.ts): conviction now only counts
+// inside 2832–2841, so the market an order settles on has to be one of them for
+// it to advance graduation. 2841 is the top of the range, so MARKET+n used by the
+// challenge-slot tests below sits harmlessly outside it (those never touch the
+// conviction count).
+const MARKET = 2841;
 const TARGET = 10;
 const START = 1000;
 
@@ -160,12 +165,20 @@ const graduate = (wallet = ME, target = TARGET) =>
 const reconcile = (wallet = ME, target = TARGET) =>
   sql(`select coalesce(simulation_reconcile_state(${lit(wallet)}, ${target}), '')`);
 
-/** Give a wallet N convictions, so eligibility can be steered. */
+/**
+ * Give a wallet N convictions, so eligibility can be steered.
+ *
+ * The count is now restricted to the Locked 10 (2832–2841), so convictions must
+ * be seeded INSIDE that range — markets 2832, 2833, … Callers pair this with an
+ * order on MARKET (2841): giveConvictions(9) fills 2832–2840 and the order on
+ * 2841 is the tenth, distinct market. N never exceeds 10, because there are only
+ * ten calibration questions to decide.
+ */
 const giveConvictions = (wallet: string, n: number) => {
   if (n <= 0) return;
   const rows = Array.from(
     { length: n },
-    (_, i) => `(${lit(wallet)}, ${90000 + i}, 'YES', 0.15, 'tap')`,
+    (_, i) => `(${lit(wallet)}, ${2832 + i}, 'YES', 0.15, 'tap')`,
   ).join(",");
   sql(
     `insert into expressed_beliefs (wallet, onchain_id, side, weight, source)
@@ -180,7 +193,8 @@ describe.skipIf(!ready)("the Simulation ledger, on a real cluster", () => {
     );
     sql(`drop table if exists simulation_house_rounds, simulation_orders,
          simulation_positions, simulation_accounts,
-         market_calls, challenges, wallet_beliefs, expressed_beliefs, match_queue cascade`);
+         market_calls, challenges, wallet_beliefs, expressed_beliefs,
+         viewer_market_decisions, match_queue cascade`);
     file("scripts/simulation-schema.sql");
     file("supabase/migrations/20260908000000_put_on_table_atomic.sql");
     // The migration under test lands on the pre-Simulation schema, exactly as it
@@ -190,12 +204,16 @@ describe.skipIf(!ready)("the Simulation ledger, on a real cluster", () => {
     // reconciliation ships as a second one and is tested in that same order —
     // stacked on top of the shipped definitions, replacing them.
     file("supabase/migrations/20260910000000_simulation_lifecycle_reconcile.sql");
+    // Onboarding completion becomes Locked-10 completion: this migration
+    // redefines simulation_conviction_count to fold viewer_market_decisions and
+    // restrict to markets 2832–2841. Stacked last, exactly as in production.
+    file("supabase/migrations/20260911000000_calibration_completion_count.sql");
   });
 
   beforeEach(() => {
     sql(`truncate simulation_house_rounds, simulation_orders, simulation_positions,
          simulation_accounts, market_calls, challenges, wallet_beliefs,
-         expressed_beliefs, match_queue restart identity cascade`);
+         expressed_beliefs, viewer_market_decisions, match_queue restart identity cascade`);
   });
 
   /* ── 2 · Idempotency ─────────────────────────────────────────────────────── */
@@ -676,7 +694,9 @@ describe.skipIf(!ready)("the Simulation ledger, on a real cluster", () => {
 
       activate(graduated);
       giveConvictions(graduated, 9);
-      order({ wallet: graduated, market: MARKET + 1 });
+      // The tenth conviction must land on a Locked market to count, and distinct
+      // from the nine above — MARKET (2841) is exactly that (2832–2840 are seeded).
+      order({ wallet: graduated, market: MARKET });
       graduate(graduated);
 
       // A GRADUATING account can no longer answer, so it must not be asked.

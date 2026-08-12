@@ -1,27 +1,39 @@
 /**
  * Conviction DNA — exact relationship scoring (canonical, pure, v1).
  *
- * ZERO IO. The ONE module that owns DNA scoring. Given two wallets' directional
- * beliefs, agreement is the conviction-weighted fraction of shared markets they
- * take the SAME side on. Confidence (evidence depth) is returned separately and
- * is never folded into agreement.
+ * ZERO IO. The ONE module that owns DNA scoring. Given two wallets' actions,
+ * agreement is the conviction-weighted fraction of shared markets they take the
+ * SAME action on. Confidence (evidence depth) is returned separately and is never
+ * folded into agreement.
  *
- * Only directional beliefs (YES/NO) participate — MIXED/INACTIVE are excluded by
- * construction (DnaFactor.side is YES|NO). Conviction weights are clamped to ≥0.
+ * ACTIONS ARE YES, NO, OR PASS. Directional beliefs (YES/NO) carry conviction and
+ * are what "shared convictions" and the evidence tiers count. A PASS is
+ * non-directional — two people declining the same question share something, so it
+ * counts toward AGREEMENT (both-passed is a match) but never toward the shared-
+ * conviction evidence that mints a strong label. A pass and a stated side are
+ * INCOMPARABLE (not opposites): they are skipped, never scored against each other.
+ * Conviction weights are clamped to ≥0.
  */
-import { confidenceFor, evidenceLevelFor, PAST_WEIGHT, type EvidenceLevel } from "./config";
+import {
+  confidenceFor,
+  evidenceLevelFor,
+  PAST_WEIGHT,
+  PASS_MATCH_WEIGHT,
+  type EvidenceLevel,
+} from "./config";
 
-/** A wallet's directional stake in one market. */
+/** A wallet's action in one market — a directional stake, or a pass. */
 export interface DnaFactor {
   marketId: string | number;
-  side: "YES" | "NO";
-  /** Absolute normalized conviction strength, 0..1. */
+  side: "YES" | "NO" | "PASS";
+  /** Absolute normalized conviction strength, 0..1. A pass carries PASS_MATCH_WEIGHT. */
   conviction: number;
   /**
    * Have they LEFT this position? A remembered side, not a held one.
    *
    * Absent means currently held, so every existing caller keeps its meaning
-   * without a change. See PAST_WEIGHT for what a remembered side is worth.
+   * without a change. See PAST_WEIGHT for what a remembered side is worth. Never
+   * set on a pass.
    */
   past?: boolean;
 }
@@ -57,11 +69,12 @@ export interface DnaScore {
 
 const EPS = 1e-9;
 const key = (m: string | number) => String(m);
+const isAction = (s: string): boolean => s === "YES" || s === "NO" || s === "PASS";
 
 export function scoreRelationship(a: DnaFactor[], b: DnaFactor[]): DnaScore {
   const byId = new Map<string, DnaFactor>();
   for (const x of a) {
-    if (x.side === "YES" || x.side === "NO") byId.set(key(x.marketId), x);
+    if (isAction(x.side)) byId.set(key(x.marketId), x);
   }
 
   let sharedBeliefs = 0;
@@ -74,25 +87,38 @@ export function scoreRelationship(a: DnaFactor[], b: DnaFactor[]): DnaScore {
   let oppositeSideWeight = 0;
 
   for (const y of b) {
-    if (y.side !== "YES" && y.side !== "NO") continue;
+    if (!isAction(y.side)) continue;
     const x = byId.get(key(y.marketId));
     if (!x) continue;
-    sharedBeliefs += 1;
+    const xPass = x.side === "PASS";
+    const yPass = y.side === "PASS";
+    // A pass and a stated side are INCOMPARABLE — one declined, one committed.
+    // Not agreement, not opposition; simply not a shared stance to score.
+    if (xPass !== yPass) continue;
+
     // A shared market is LIVE only while both are still standing in it. If
     // either has left, this is a place the two once met — and the weaker of the
-    // two claims is the honest one to carry.
+    // two claims is the honest one to carry. (A pass is never "past".)
     const live = !x.past && !y.past;
-    if (live) currentShared += 1;
-    else pastShared += 1;
-    const w =
-      Math.sqrt(Math.max(0, x.conviction) * Math.max(0, y.conviction)) * (live ? 1 : PAST_WEIGHT);
+    const convX = xPass ? PASS_MATCH_WEIGHT : Math.max(0, x.conviction);
+    const convY = yPass ? PASS_MATCH_WEIGHT : Math.max(0, y.conviction);
+    const w = Math.sqrt(convX * convY) * (live ? 1 : PAST_WEIGHT);
     sharedWeight += w;
-    if (x.side === y.side) {
-      sameSideBeliefs += 1;
-      sameSideWeight += w;
-    } else {
-      oppositeSideBeliefs += 1;
-      oppositeSideWeight += w;
+    // Both-passed is a match; YES/NO are compared exactly as before.
+    const same = x.side === y.side;
+    if (same) sameSideWeight += w;
+    else oppositeSideWeight += w;
+
+    // A PASS never counts as a shared CONVICTION. The human "shared beliefs"
+    // count, the together/apart tallies and the evidence tiers stay directional,
+    // so mutual indifference shapes the percentage without minting a Twin or a
+    // Circle out of it.
+    if (!xPass) {
+      sharedBeliefs += 1;
+      if (live) currentShared += 1;
+      else pastShared += 1;
+      if (same) sameSideBeliefs += 1;
+      else oppositeSideBeliefs += 1;
     }
   }
   const evidence = currentShared + PAST_WEIGHT * pastShared;

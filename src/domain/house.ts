@@ -45,8 +45,18 @@ export interface HouseSignals {
   category: string | null;
   /** Prior *answered* markets (YES + NO + PASS), excluding this one. */
   totalAnswers: number;
+  /** Integer COUNTS — the lean and the copy that quotes it. */
   overall: { yes: number; no: number; pass: number };
   inCategory: { yes: number; no: number; pass: number };
+  /**
+   * How much the directional evidence is WORTH, not how much of it there is: a
+   * real/remembered position counts 1, a free expressed belief the low expressed
+   * weight. Confidence reads THIS, so ten free calibration taps read as a real
+   * lean but never a certain one. Optional — absent means "trust the counts",
+   * which keeps every existing caller and test scoring exactly as before.
+   */
+  overallDirectionalWeight?: number;
+  inCategoryDirectionalWeight?: number;
   relationship?: RelationshipLean | null;
 }
 
@@ -186,9 +196,13 @@ export function predictHouse(s: HouseSignals): HouseRead {
     }
   }
 
-  // Personal directional lean, −1 (NO) … +1 (YES).
+  // Personal directional lean, −1 (NO) … +1 (YES). The DIRECTION comes from the
+  // counts; the WEIGHT (how sure we are) comes from how much that evidence is
+  // worth — real convictions full, free calibration taps a fraction — so ten
+  // taps can lean the read without making it certain.
   const personalLean = catDirectional > 0 ? (c.yes - c.no) / catDirectional : 0;
-  const personalWeight = sampleConfidence(catDirectional, 3);
+  const catDirectionalWeight = s.inCategoryDirectionalWeight ?? catDirectional;
+  const personalWeight = sampleConfidence(catDirectionalWeight, 3);
 
   const rel = s.relationship ?? null;
   const relTotal = rel ? rel.yes + rel.no : 0;
@@ -208,10 +222,11 @@ export function predictHouse(s: HouseSignals): HouseRead {
   const overallDirectional = s.overall.yes + s.overall.no;
   const overallLean =
     overallDirectional > 0 ? (s.overall.yes - s.overall.no) / overallDirectional : 0;
+  const overallDirectionalWeight = s.overallDirectionalWeight ?? overallDirectional;
   const catThin = personalWeight < 0.6;
   const globalWeight =
     catThin && overallDirectional > 0
-      ? sampleConfidence(overallDirectional, 8) * 0.6 * (1 - personalWeight)
+      ? sampleConfidence(overallDirectionalWeight, 8) * 0.6 * (1 - personalWeight)
       : 0;
 
   /**

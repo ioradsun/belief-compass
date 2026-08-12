@@ -7,6 +7,7 @@
  * position on a market always overrides a free one on the same market.
  */
 import type { DnaFactor } from "@/domain/dna/score";
+import { PASS_MATCH_WEIGHT } from "@/domain/dna/config";
 
 /** Fixed conviction weight for a free expressed belief (vs on-chain 0..1). */
 export const EXPRESSED_WEIGHT = 0.15;
@@ -23,9 +24,16 @@ export const CALIBRATION_TARGET = 5;
  *
  * Five is the point at which a pattern becomes RECOGNIZABLE: the DNA minimum, the
  * moment the Network can compute closest people, and the threshold a Simulation
- * Challenge unlocks at. Ten is the point at which somebody's profile is DONE
- * enough to stop onboarding them — it is what the first-run brief counts toward
- * and what ends Simulation.
+ * Challenge unlocks at, counted from general belief ANYWHERE on the platform. Ten
+ * is the point at which somebody's profile is DONE enough to stop onboarding them
+ * — it is what the first-run brief counts toward and what ends Simulation.
+ *
+ * BUT THE TEN ARE NOT "ANY TEN CONVICTIONS" — they are the Locked 10 calibration
+ * markets (src/domain/calibration.ts), decided in any way (yes/no/pass). The
+ * count lives in `simulation_conviction_count` (restricted to that range; see the
+ * 2026-09-11 migration) and is read by getProfileProgress, the Simulation banner
+ * and the graduation gate alike. Readiness stays on the general belief count, so
+ * the two remain different questions with different populations.
  *
  * They were never the same number and must not be collapsed into one. Raising
  * CALIBRATION_TARGET to 10 to make Simulation graduate correctly would silently
@@ -125,6 +133,20 @@ export const pastFactor = (r: {
   side: r.last_directional_side === "NO" ? "NO" : "YES",
   conviction: 1,
   past: true,
+});
+
+/**
+ * A PASS — a market the viewer declined (viewer_market_decisions.decision =
+ * 'PASS'). Non-directional: it carries no side to agree or disagree with, only
+ * the fact of the decline. It enters DNA as a matchable action at
+ * PASS_MATCH_WEIGHT, so two people who passed the same question read as a little
+ * more aligned — never as opposed, and never as a shared conviction (see
+ * `scoreRelationship`, which weights and gates it).
+ */
+export const passFactor = (r: { market_id: number | string }): DnaFactor => ({
+  marketId: Number(r.market_id),
+  side: "PASS",
+  conviction: PASS_MATCH_WEIGHT,
 });
 
 export interface Readiness {

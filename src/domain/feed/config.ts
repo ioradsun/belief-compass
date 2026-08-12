@@ -176,6 +176,29 @@ export const ORIGIN = {
   MAX_PEOPLE: 40,
 } as const;
 
+/**
+ * DECLINE — repeated passes as a MILD negative interest signal.
+ *
+ * A pass is not a NO. It never touches the YES/NO relationship math, and it never
+ * excludes a market by itself — the passed market leaves discovery on its own
+ * (see COOLDOWNS.PASS_MS). What it does HERE is quieter: markets SEMANTICALLY
+ * similar to the ones a viewer keeps declining rank a little lower.
+ *
+ * The signal is the centroid of the markets they passed. It concentrates only
+ * when the passes agree — declining the same KIND of thing repeatedly — and
+ * washes out when they scatter, so a single pass barely registers. The count
+ * scale below is a second brake on the same idea: the penalty grows with how many
+ * times they have declined, and saturates.
+ *
+ * Bounded small on purpose: the most a fully-similar market loses is MAX_PENALTY
+ * of its 0..1 score. It is a nudge down the order, never a filter.
+ */
+export const DECLINE = {
+  MAX_PENALTY: 0.1,
+  /** Passes beyond this don't deepen the signal — it is already established. */
+  SATURATE_AT: 6,
+} as const;
+
 /** What counts as a material event worth re-showing an already-acted market. */
 export const REENTRY = {
   MIN_ACCELERATION: 2,

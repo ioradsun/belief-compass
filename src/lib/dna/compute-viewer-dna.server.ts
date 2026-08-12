@@ -28,6 +28,7 @@ import {
   onChainFactor,
   expressedFactor,
   pastFactor,
+  passFactor,
   type OnChainBeliefRow,
   type ExpressedBeliefRow,
 } from "@/domain/beliefs";
@@ -135,19 +136,26 @@ export async function computeViewerDna(viewerWallet: string): Promise<ViewerDnaC
   //    conviction someone has left keeps counting at PAST_WEIGHT instead of
   //    vanishing. One query, not two: the live and remembered rows live in the
   //    same table and are told apart by which column is populated.
-  const [{ data: mine }, { data: mineExpressed }] = await Promise.all([
+  const [{ data: mine }, { data: mineExpressed }, { data: minePassed }] = await Promise.all([
     svc
       .from("wallet_beliefs")
       .select("onchain_id, stance_side, conviction, last_directional_side")
       .eq("wallet", viewer)
       .or("stance_side.in.(YES,NO),last_directional_side.in.(YES,NO)"),
     svc.from("expressed_beliefs").select("onchain_id, side, weight").eq("wallet", viewer),
+    // Passes join DNA as a matchable action (see scoreRelationship). They are the
+    // WEAKEST tier — a real or remembered stake on the same market always wins,
+    // which is why they merge in last, losing every conflict.
+    svc.from("viewer_market_decisions").select("market_id").eq("viewer_wallet", viewer).eq("decision", "PASS"),
   ]);
   const mineRows = (mine ?? []) as HistoricBeliefRow[];
-  const viewerFactors = mergeTiers(
-    mineRows.filter(isLive).map(factorFor),
-    ((mineExpressed ?? []) as ExpressedRow[]).map(expressedToFactor),
-    mineRows.filter((r) => !isLive(r)).map(factorFor),
+  const viewerFactors = mergeBeliefFactors(
+    mergeTiers(
+      mineRows.filter(isLive).map(factorFor),
+      ((mineExpressed ?? []) as ExpressedRow[]).map(expressedToFactor),
+      mineRows.filter((r) => !isLive(r)).map(factorFor),
+    ),
+    ((minePassed ?? []) as { market_id: number }[]).map(passFactor),
   );
 
   // Enough for a "closest" read; strong Twin/Tribe labels still need more shared.
@@ -167,10 +175,11 @@ export async function computeViewerDna(viewerWallet: string): Promise<ViewerDnaC
   const candidateOnChain = new Map<string, DnaFactor[]>();
   const candidatePast = new Map<string, DnaFactor[]>();
   const candidateExpressed = new Map<string, DnaFactor[]>();
+  const candidatePassed = new Map<string, DnaFactor[]>();
   for (let i = 0; i < candidateWallets.length; i += 200) {
     const chunk = candidateWallets.slice(i, i + 200);
     if (chunk.length === 0) break;
-    const [{ data: onchain }, { data: expressed }] = await Promise.all([
+    const [{ data: onchain }, { data: expressed }, { data: passed }] = await Promise.all([
       svc
         .from("wallet_beliefs")
         .select("wallet, onchain_id, stance_side, conviction, last_directional_side")
@@ -182,6 +191,15 @@ export async function computeViewerDna(viewerWallet: string): Promise<ViewerDnaC
         .select("wallet, onchain_id, side, weight")
         .in("wallet", chunk)
         .in("onchain_id", viewerMarkets),
+      // Candidate passes, only on markets the viewer also acted on — a shared pass
+      // becomes a match in scoreRelationship; a pass opposite the viewer's stated
+      // side is incomparable and simply ignored there.
+      svc
+        .from("viewer_market_decisions")
+        .select("viewer_wallet, market_id")
+        .eq("decision", "PASS")
+        .in("viewer_wallet", chunk)
+        .in("market_id", viewerMarkets),
     ]);
     for (const r of (onchain ?? []) as HistoricBeliefRow[]) {
       const w = String(r.wallet).toLowerCase();
@@ -196,19 +214,31 @@ export async function computeViewerDna(viewerWallet: string): Promise<ViewerDnaC
       arr.push(expressedToFactor(r));
       candidateExpressed.set(w, arr);
     }
+    for (const r of (passed ?? []) as { viewer_wallet: string; market_id: number }[]) {
+      const w = String(r.viewer_wallet).toLowerCase();
+      const arr = candidatePassed.get(w) ?? [];
+      arr.push(passFactor(r));
+      candidatePassed.set(w, arr);
+    }
   }
   const candidateFactors = new Map<string, DnaFactor[]>();
   for (const w of new Set([
     ...candidateOnChain.keys(),
     ...candidatePast.keys(),
     ...candidateExpressed.keys(),
+    ...candidatePassed.keys(),
   ])) {
     candidateFactors.set(
       w,
-      mergeTiers(
-        candidateOnChain.get(w) ?? [],
-        candidateExpressed.get(w) ?? [],
-        candidatePast.get(w) ?? [],
+      // Directional tiers first; passes merge in last as the weakest, losing any
+      // market where this candidate also has a real or remembered stake.
+      mergeBeliefFactors(
+        mergeTiers(
+          candidateOnChain.get(w) ?? [],
+          candidateExpressed.get(w) ?? [],
+          candidatePast.get(w) ?? [],
+        ),
+        candidatePassed.get(w) ?? [],
       ),
     );
   }

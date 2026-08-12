@@ -133,6 +133,26 @@ export const DNA_THRESHOLDS: DnaThresholdConfig = {
 export const PAST_WEIGHT = 0.25;
 
 /**
+ * WHAT A SHARED PASS IS WORTH in the relationship percentage.
+ *
+ * A pass is not a NO and never a disagreement — but two people who DECLINE the
+ * same question share something real, and the percentage should say so ("we both
+ * passed the same weird ones"). A pass therefore enters the agreement math as a
+ * matchable action: both-passed is agreement, and it is compared only against
+ * other passes (a pass and a stated side are not opposites, they are
+ * incomparable, so they are skipped rather than counted against each other).
+ *
+ * At this fixed weight it counts like a free expressed belief — enough to move
+ * the percentage, never enough to outweigh a money-backed conviction, which still
+ * dominates. It does NOT count toward the shared-CONVICTION evidence that mints
+ * Twin/Tribe labels or Circles: a pass indicates alignment, not conviction depth.
+ *
+ * This is the one dial for "how loud is a shared pass". Raise it to let mutual
+ * indifference speak louder relative to stated belief.
+ */
+export const PASS_MATCH_WEIGHT = 0.15;
+
+/**
  * Per-domain (Circle) evidence floor. Points at the canonical gate rather than
  * holding its own number — a Circle is a relationship claim about a topic, and
  * "enough shared history to say something" cannot mean two different things

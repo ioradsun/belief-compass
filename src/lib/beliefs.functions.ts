@@ -8,7 +8,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { serviceClient } from "@/lib/supabase-clients";
-import { categoryToDomain } from "@/domain/categories";
+import { isCalibrationMarket } from "@/domain/calibration";
 import {
   EXPRESSED_WEIGHT,
   isDirectional,
@@ -105,6 +105,21 @@ export const expressBelief = createServerFn({ method: "POST" })
       },
       { onConflict: "wallet,onchain_id" },
     );
+    // A CALIBRATION answer is a COMPLETED decision. Recording it in the one
+    // decisions ledger (viewer_market_decisions) is what removes the question
+    // from discovery, so a Locked 10 market answered yes/no does not come back —
+    // the same ledger a pass and a purchase already write to. The expressed
+    // belief above still feeds DNA / Network / tribe; this row only marks
+    // "answered". Best-effort: a failed dedup must never fail the belief that
+    // just fed the Network.
+    if (isCalibrationMarket(data.marketId)) {
+      try {
+        const { recordViewerDecision } = await import("@/lib/viewer-decisions.server");
+        await recordViewerDecision(wallet, data.marketId, data.side);
+      } catch {
+        /* the expressed belief stands; the decision is retried on the next answer */
+      }
+    }
     // The DNA version trigger only fires on wallet_beliefs, so a free belief must
     // enqueue the viewer's recompute itself — otherwise the Network never updates.
     await sb.rpc("request_viewer_match_refresh", { p_wallet: wallet });
@@ -123,12 +138,21 @@ export const getViewerReadiness = createServerFn({ method: "GET" })
   });
 
 /**
- * HOW FAR THROUGH THE FIRST TEN — the same count, against the other target.
+ * HOW FAR THROUGH THE LOCKED 10 — onboarding completion, and nothing else.
  *
- * Separate from `getViewerReadiness` on purpose. Readiness answers "can the
- * Network compute closest people yet" (five); this answers "is onboarding done"
- * (ten). Collapsing them would make one of the two lie, and the one that would
- * lie is the one that withholds the Network.
+ * Separate from `getViewerReadiness` on purpose, and now they count DIFFERENT
+ * things. Readiness answers "can the Network compute closest people yet" and
+ * still folds general belief across the platform (five directional convictions,
+ * anywhere) — that number is EVIDENCE. This answers "is onboarding done", and
+ * onboarding is the calibration: DISTINCT Locked-10 markets the viewer has
+ * decided (yes / no / pass).
+ *
+ * It reads the ONE canonical count — `simulation_conviction_count`, restricted to
+ * the Locked 10 (see the 2026-09-11 migration) — the very number the Simulation
+ * banner and the real-money graduation gate read. Deriving it here from a second
+ * source (the old general belief count) is exactly what let this entry-card
+ * number say "10 / 10" for someone who had ten unrelated convictions and had
+ * never touched the calibration. One count, so the three surfaces cannot drift.
  */
 export const getProfileProgress = createServerFn({ method: "GET" })
   .inputValidator((raw: unknown) =>
@@ -137,84 +161,17 @@ export const getProfileProgress = createServerFn({ method: "GET" })
   .handler(async ({ data }): Promise<ProfileProgress> => {
     if (!data.wallet) return profileProgressFor(0);
     const sb = serviceClient();
-    return profileProgressFor(await beliefMarketCount(sb, data.wallet.toLowerCase()));
+    const { data: count, error } = await sb.rpc("simulation_conviction_count", {
+      p_wallet: data.wallet.toLowerCase(),
+    });
+    if (error) throw new Error(error.message);
+    return profileProgressFor(Number(count ?? 0));
   });
-
-const CALIBRATION_QUEUE_SIZE = 16;
-
-export interface CalibrationQuestion {
-  marketId: number;
-  title: string;
-  category: string | null;
-}
 
 /**
- * A curated, domain-diverse queue of calibration questions: the most active
- * markets the viewer hasn't answered yet, round-robined across domains so the
- * first beliefs spread the viewer's DNA across the map instead of clustering.
- * The House Read section walks these; the center orders its queue by them.
+ * THE CALIBRATION SEQUENCE IS NO LONGER SELECTED HERE. It used to be a dynamic,
+ * activity-ranked, domain-round-robined queue chosen at read time; it is now the
+ * server-owned Locked 10 (see @/domain/calibration), pinned to the head of the
+ * For You feed by @/lib/opportunity-feed.server. POV owns the market;
+ * conviction.company owns the sequence, and the sequence is a constant.
  */
-export const getCalibrationQueue = createServerFn({ method: "GET" })
-  .inputValidator((raw: unknown) =>
-    z.object({ wallet: z.string().min(3).nullable().optional() }).parse(raw),
-  )
-  .handler(async ({ data }): Promise<CalibrationQuestion[]> => {
-    if (!data.wallet) return [];
-    const sb = serviceClient();
-    const wallet = data.wallet.toLowerCase();
-
-    /**
-     * EXCLUDED BY THE SAME SET THE COUNT IS BUILT FROM.
-     *
-     * This used to run its own narrower read — currently-directional positions
-     * only — which disagreed with the counter the moment the counter learned
-     * about remembered convictions. A market somebody had backed and since
-     * exited would be offered as unanswered, and answering it would leave their
-     * progress unchanged, because the canonical count already included it. One
-     * function, so "answered" cannot mean two things.
-     */
-    const [answered, marketsRes, stateRes] = await Promise.all([
-      answeredMarkets(sb, wallet),
-      sb.from("markets").select("onchain_id, category, title").limit(600),
-      sb.from("market_state").select("onchain_id, believers_yes, believers_no"),
-    ]);
-
-    const activity = new Map<number, number>();
-    for (const s of (stateRes.data ?? []) as {
-      onchain_id: number;
-      believers_yes: number | null;
-      believers_no: number | null;
-    }[]) {
-      activity.set(
-        Number(s.onchain_id),
-        (Number(s.believers_yes) || 0) + (Number(s.believers_no) || 0),
-      );
-    }
-
-    // Bucket un-answered, titled markets by domain, each bucket sorted by activity.
-    const byDomain = new Map<string, CalibrationQuestion[]>();
-    for (const m of (marketsRes.data ?? []) as {
-      onchain_id: number;
-      category: string | null;
-      title: string | null;
-    }[]) {
-      const id = Number(m.onchain_id);
-      if (answered.has(id) || !m.title) continue;
-      const domain = categoryToDomain(m.category) ?? "other";
-      const arr = byDomain.get(domain) ?? [];
-      arr.push({ marketId: id, title: m.title, category: m.category });
-      byDomain.set(domain, arr);
-    }
-    for (const arr of byDomain.values()) {
-      arr.sort((a, b) => (activity.get(b.marketId) ?? 0) - (activity.get(a.marketId) ?? 0));
-    }
-
-    // Round-robin across domains so early answers span the map.
-    const buckets = [...byDomain.values()];
-    const out: CalibrationQuestion[] = [];
-    for (let i = 0; out.length < CALIBRATION_QUEUE_SIZE && buckets.some((b) => b.length); i++) {
-      const q = buckets[i % buckets.length].shift();
-      if (q) out.push(q);
-    }
-    return out;
-  });

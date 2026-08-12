@@ -337,19 +337,6 @@ describe("the private ledger cannot be read without proving the wallet", () => {
   });
 });
 
-describe("one definition of which markets are already answered", () => {
-  it("the calibration queue excludes the same set the count is built from", () => {
-    // Two definitions meant a market somebody had backed and exited was offered
-    // as unanswered — and answering it left their progress unchanged, because
-    // the canonical count already included it.
-    const c = code("src/lib/beliefs.functions.ts");
-    expect(c).toMatch(/export async function answeredMarkets/);
-    const queue = c.slice(c.indexOf("export const getCalibrationQueue"));
-    expect(queue).toMatch(/answeredMarkets\(sb, wallet\)/);
-    expect(queue).not.toMatch(/\.in\("stance_side", \["YES", "NO"\]\)/);
-  });
-});
-
 describe("the order transaction is atomic and idempotent", () => {
   it("settles or writes nothing — there is no pending order state", () => {
     const sql = readFileSync(join(process.cwd(), MIGRATION), "utf8");

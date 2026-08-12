@@ -51,7 +51,7 @@ ALTER TABLE public.challenges
   ADD CONSTRAINT challenges_parent_call_fkey
   FOREIGN KEY (parent_call) REFERENCES public.market_calls (id);
 
--- The two belief tables `simulation_conviction_count` folds over.
+-- The three belief/decision tables `simulation_conviction_count` folds over.
 CREATE TABLE public.wallet_beliefs (
   wallet                text   NOT NULL,
   onchain_id            bigint NOT NULL,
@@ -69,6 +69,17 @@ CREATE TABLE public.expressed_beliefs (
   source     text        NOT NULL DEFAULT 'tap',
   updated_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (wallet, onchain_id)
+);
+
+-- The decision ledger the conviction count now unions (it is the only place a
+-- PASS lives). RLS is omitted here on purpose: the pg suite runs as the table
+-- owner and tests the function, not the row policy.
+CREATE TABLE public.viewer_market_decisions (
+  viewer_wallet text        NOT NULL,
+  market_id     bigint      NOT NULL,
+  decision      text        NOT NULL CHECK (decision IN ('YES','NO','PASS')),
+  decided_at    timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (viewer_wallet, market_id)
 );
 
 -- The recompute queue the belief write enqueues into, and its entry point.

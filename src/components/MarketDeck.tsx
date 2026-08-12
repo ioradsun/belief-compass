@@ -65,6 +65,7 @@ import {
   stageMediaFrom,
 } from "@/components/MediaStage";
 import { marketTitle } from "@/domain/market-title";
+import { CALIBRATION_TAG, isCalibrationMarket } from "@/domain/calibration";
 
 /**
  * Momentum tags — the six canonical opportunity classifications from the
@@ -568,6 +569,13 @@ export function MarketDeck({
           className="mb-1 flex items-center gap-2"
           style={{ minHeight: "var(--deck-meta, 22px)" }}
         >
+          {/* The Locked 10 wear their calibration marker here — the one signal
+              that says this question is here to read your conviction. */}
+          {isCalibrationMarket(marketId) && (
+            <span className="inline-flex items-center rounded-full border border-[var(--hairline)] bg-[var(--surface)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-secondary)]">
+              {CALIBRATION_TAG}
+            </span>
+          )}
           {cm?.market && (
             <span
               title="Markets created here don't appear on pov.co yet."
