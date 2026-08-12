@@ -138,12 +138,21 @@ export const getViewerReadiness = createServerFn({ method: "GET" })
   });
 
 /**
- * HOW FAR THROUGH THE FIRST TEN — the same count, against the other target.
+ * HOW FAR THROUGH THE LOCKED 10 — onboarding completion, and nothing else.
  *
- * Separate from `getViewerReadiness` on purpose. Readiness answers "can the
- * Network compute closest people yet" (five); this answers "is onboarding done"
- * (ten). Collapsing them would make one of the two lie, and the one that would
- * lie is the one that withholds the Network.
+ * Separate from `getViewerReadiness` on purpose, and now they count DIFFERENT
+ * things. Readiness answers "can the Network compute closest people yet" and
+ * still folds general belief across the platform (five directional convictions,
+ * anywhere) — that number is EVIDENCE. This answers "is onboarding done", and
+ * onboarding is the calibration: DISTINCT Locked-10 markets the viewer has
+ * decided (yes / no / pass).
+ *
+ * It reads the ONE canonical count — `simulation_conviction_count`, restricted to
+ * the Locked 10 (see the 2026-09-11 migration) — the very number the Simulation
+ * banner and the real-money graduation gate read. Deriving it here from a second
+ * source (the old general belief count) is exactly what let this entry-card
+ * number say "10 / 10" for someone who had ten unrelated convictions and had
+ * never touched the calibration. One count, so the three surfaces cannot drift.
  */
 export const getProfileProgress = createServerFn({ method: "GET" })
   .inputValidator((raw: unknown) =>
@@ -152,7 +161,11 @@ export const getProfileProgress = createServerFn({ method: "GET" })
   .handler(async ({ data }): Promise<ProfileProgress> => {
     if (!data.wallet) return profileProgressFor(0);
     const sb = serviceClient();
-    return profileProgressFor(await beliefMarketCount(sb, data.wallet.toLowerCase()));
+    const { data: count, error } = await sb.rpc("simulation_conviction_count", {
+      p_wallet: data.wallet.toLowerCase(),
+    });
+    if (error) throw new Error(error.message);
+    return profileProgressFor(Number(count ?? 0));
   });
 
 /**

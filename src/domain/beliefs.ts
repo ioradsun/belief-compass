@@ -23,9 +23,16 @@ export const CALIBRATION_TARGET = 5;
  *
  * Five is the point at which a pattern becomes RECOGNIZABLE: the DNA minimum, the
  * moment the Network can compute closest people, and the threshold a Simulation
- * Challenge unlocks at. Ten is the point at which somebody's profile is DONE
- * enough to stop onboarding them — it is what the first-run brief counts toward
- * and what ends Simulation.
+ * Challenge unlocks at, counted from general belief ANYWHERE on the platform. Ten
+ * is the point at which somebody's profile is DONE enough to stop onboarding them
+ * — it is what the first-run brief counts toward and what ends Simulation.
+ *
+ * BUT THE TEN ARE NOT "ANY TEN CONVICTIONS" — they are the Locked 10 calibration
+ * markets (src/domain/calibration.ts), decided in any way (yes/no/pass). The
+ * count lives in `simulation_conviction_count` (restricted to that range; see the
+ * 2026-09-11 migration) and is read by getProfileProgress, the Simulation banner
+ * and the graduation gate alike. Readiness stays on the general belief count, so
+ * the two remain different questions with different populations.
  *
  * They were never the same number and must not be collapsed into one. Raising
  * CALIBRATION_TARGET to 10 to make Simulation graduate correctly would silently
