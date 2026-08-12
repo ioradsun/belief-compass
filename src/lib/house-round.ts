@@ -43,19 +43,31 @@ export function useHouseFinalize(
   const wallet = viewerWallet ?? connected;
   const { ensureSession, withSession } = useWalletSession();
   const qc = useQueryClient();
-  const store = (data: HouseReadView | null) => {
-    if (data) qc.setQueryData(houseKey(wallet, marketId, mode), data);
+  /**
+   * A RESULT BELONGS TO THE ROUND THAT ASKED FOR IT, NOT TO WHATEVER IS ON SCREEN
+   * WHEN IT LANDS. Buying, selling and passing all auto-advance to the next
+   * market, so a mutation started here frequently resolves after `marketId` has
+   * already moved on. Writing the answer with the CURRENT market's key put the
+   * previous market's verdict on the next question — the read visibly bled
+   * forward. Each mutation therefore carries the round it was fired for and the
+   * result is stored against that round.
+   */
+  type Settled = { round: ReturnType<typeof houseKey>; data: HouseReadView | null };
+  const store = (r: Settled | null) => {
+    if (r?.data) qc.setQueryData(r.round, r.data);
   };
   // A confirmed decision (buy or pass) removes this market from discovery, so the
   // feed must refresh immediately — not on the next 8s poll — and never show the
   // decided market again.
-  const onDecided = (data: HouseReadView | null) => {
-    store(data);
+  const onDecided = (r: Settled | null) => {
+    store(r);
     void qc.invalidateQueries({ queryKey: ["opp-feed"] });
   };
   const bet = useMutation({
-    mutationFn: async (vars: { side: "YES" | "NO"; proof: RevealProof }) => {
+    mutationFn: async (vars: { side: "YES" | "NO"; proof: RevealProof }): Promise<Settled | null> => {
       if (!wallet) return null;
+      // Frozen at fire time — the round this answer belongs to.
+      const round = houseKey(wallet, marketId, mode);
       if ("simulationOrderId" in vars.proof) {
         /**
          * A SETTLED ORDER ID IS NOT SELF-PROVING, so this one is signed. The
@@ -63,7 +75,7 @@ export function useHouseFinalize(
          * this is a reuse rather than a new prompt.
          */
         const simulationOrderId = vars.proof.simulationOrderId;
-        return bestEffort(() =>
+        const data = await bestEffort(() =>
           withSession(
             (session) =>
               finalizeSimulationReveal({
@@ -72,6 +84,7 @@ export function useHouseFinalize(
             { interactive: false },
           ),
         );
+        return { round, data: data ?? null };
       }
       const { txHash } = vars.proof;
       // NEVER a second prompt. The wallet just signed and paid for this buy; the
@@ -83,17 +96,21 @@ export function useHouseFinalize(
       } catch {
         session = undefined;
       }
-      return finalizeBet({ data: { wallet, marketId, side: vars.side, txHash, session } });
+      const data = await finalizeBet({
+        data: { wallet, marketId, side: vars.side, txHash, session },
+      });
+      return { round, data: data ?? null };
     },
     onSuccess: onDecided,
   });
   const pass = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (): Promise<Settled | null> => {
       if (!wallet) return null;
+      const round = houseKey(wallet, marketId, mode);
       // Free action in both modes: never prompt for a signature just to walk away.
       // A Simulation pass costs no CC and closes only the Simulation round — the
       // real one for this market stays open.
-      return bestEffort(() =>
+      const data = await bestEffort(() =>
         withSession(
           (session) =>
             mode === "SIMULATION"
@@ -102,14 +119,16 @@ export function useHouseFinalize(
           { interactive: false },
         ),
       );
+      return { round, data: data ?? null };
     },
     onSuccess: onDecided,
   });
   const foundation = useMutation({
-    mutationFn: async (vars: { key: string; action: "YES" | "NO" | "PASS" }) => {
+    mutationFn: async (vars: { key: string; action: "YES" | "NO" | "PASS" }): Promise<Settled | null> => {
       if (!wallet) return null;
+      const round = houseKey(wallet, marketId, mode);
       // Free action: only recorded when the wallet already has a session.
-      return bestEffort(() =>
+      const data = await bestEffort(() =>
         withSession(
           (session) =>
             recordFoundation({
@@ -118,9 +137,11 @@ export function useHouseFinalize(
           { interactive: false },
         ),
       );
+      return { round, data: data ?? null };
     },
     onSuccess: store,
   });
+
 
   return {
     betReveal: (side: "YES" | "NO", proof: RevealProof) => bet.mutate({ side, proof }),
