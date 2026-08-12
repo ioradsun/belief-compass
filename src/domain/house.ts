@@ -214,18 +214,37 @@ export function predictHouse(s: HouseSignals): HouseRead {
       ? sampleConfidence(overallDirectional, 8) * 0.6 * (1 - personalWeight)
       : 0;
 
+  /**
+   * THE HOUSE ALWAYS CALLS. Once a viewer is calibrated, silence is itself a
+   * read: no directional evidence anywhere means we expect them to sit this one
+   * out. A predicted PASS carries low confidence and says so through the band —
+   * it never pretends to be a strong call.
+   */
+  const sitOut = (reasons: string[], confidence: number): HouseRead => ({
+    action: "PASS",
+    confidence: clamp01(confidence),
+    reasons: reasons.slice(0, 3),
+    noRead: null,
+    version: HOUSE_ENGINE_VERSION,
+  });
+
   const totalWeight = personalWeight + relWeight + globalWeight;
   if (totalWeight === 0) {
-    return noRead(
-      "weak_sample",
-      "Not enough signal",
-      "There are not enough relevant answers to make a reliable read.",
-      ["One more choice will make this category easier to understand."],
+    return sitOut(
+      [
+        catAnswers > 0
+          ? `You have never taken a side in${cat ? ` ${cat}` : " this category"}.`
+          : `We have not seen you take a side in${cat ? ` ${cat}` : " this territory"} yet.`,
+        s.overall.pass > 0
+          ? `You have passed ${s.overall.pass} time${s.overall.pass === 1 ? "" : "s"} overall.`
+          : "",
+      ].filter(Boolean),
+      0.4,
     );
   }
 
-
   // Conflicting evidence: both sources are meaningful and point opposite ways.
+  // We no longer refuse — a player pulled in two directions usually holds off.
   const conflicting =
     personalWeight >= 0.4 &&
     relWeight >= 0.4 &&
@@ -233,10 +252,7 @@ export function predictHouse(s: HouseSignals): HouseRead {
     Math.sign(relLean) !== 0 &&
     Math.sign(personalLean) !== Math.sign(relLean);
   if (conflicting) {
-    return noRead(
-      "conflicting",
-      "Still learning your tells",
-      "Your previous choices point in both directions. The House won't bluff.",
+    return sitOut(
       [
         `Your own ${cat ?? "recent"} history leans ${personalLean > 0 ? "YES" : "NO"}.`,
         `Your closest matches lean ${relLean > 0 ? "YES" : "NO"}.`,
@@ -244,6 +260,7 @@ export function predictHouse(s: HouseSignals): HouseRead {
           ? `You have passed on this category ${c.pass} time${c.pass === 1 ? "" : "s"}.`
           : "",
       ].filter(Boolean),
+      0.45,
     );
   }
 
@@ -254,15 +271,19 @@ export function predictHouse(s: HouseSignals): HouseRead {
   const passDrag = 1 - Math.min(0.4, passRate * 0.5);
   const confidence = clamp01(Math.abs(blended) * totalWeight * passDrag + 0.35 * Math.abs(blended));
 
-
-  if (confidence < MIN_CONFIDENCE || blended === 0) {
-    return noRead(
-      "weak_sample",
-      "Not enough signal",
-      "There are not enough relevant answers to make a reliable read.",
-      ["One more choice will make this category easier to understand."],
+  // Dead-even evidence is a sit-out, not a coin flip.
+  if (blended === 0) {
+    return sitOut(
+      [
+        catDirectional > 0
+          ? `Your${cat ? ` ${cat}` : ""} history splits ${c.yes}–${c.no}.`
+          : "Nothing in your history leans either way here.",
+        relTotal > 0 ? `Your closest matches split ${rel!.yes}–${rel!.no} on this one.` : "",
+      ].filter(Boolean),
+      0.4,
     );
   }
+
 
   const action: BeliefAction = blended > 0 ? "YES" : "NO";
   const reasons: string[] = [];
