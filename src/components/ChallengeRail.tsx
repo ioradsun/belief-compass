@@ -75,6 +75,7 @@ export function ChallengeRail({
   onSelectPerson,
   insider,
   insiderCount,
+  onOpenHistory,
 }: {
   wallet?: string;
   onSelect: (marketId: number) => void;
@@ -92,6 +93,8 @@ export function ChallengeRail({
   insider: ReactNode;
   /** Stories the tape is holding back — the only number the Insider tab may say. */
   insiderCount?: number;
+  /** Open Past Challenges in the centre column instead of a sheet over the rail. */
+  onOpenHistory?: () => void;
 }) {
   /**
    * NO CHALLENGES MEANS INSIDER. An empty Challenge tab is a dead first screen,
@@ -310,7 +313,12 @@ export function ChallengeRail({
               every challenge, both directions, chronological, complete. It sits
               last because it is the least urgent thing here and because a reader
               only wants it once they have read what is above it. */}
-          <ChallengeHistory wallet={wallet} onSelect={onSelect} onSelectPerson={onSelectPerson} />
+          <ChallengeHistory
+            wallet={wallet}
+            onSelect={onSelect}
+            onSelectPerson={onSelectPerson}
+            onOpen={onOpenHistory}
+          />
         </div>
       )}
     </div>
