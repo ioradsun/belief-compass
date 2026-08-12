@@ -13,6 +13,7 @@ import {
   FRESHNESS,
   FOLLOWS,
   ORIGIN,
+  DECLINE,
   clamp01,
   sat,
   type ScoreComponent,
@@ -124,6 +125,16 @@ export interface ViewerProfile {
   creatorAffinity: Record<string, number>;
   /** Mean embedding of the markets this person actually acted on. */
   tasteEmbedding: number[] | null;
+  /**
+   * Centroid of the markets the viewer has PASSED — the semantic they keep
+   * declining. Feeds a MILD negative in ranking only (see `scoreMarket` and
+   * DECLINE): never a NO, never a filter, never the relationship math. Optional
+   * so a caller that has no decline data — the archetype harness, a hand-built
+   * profile — simply carries no penalty.
+   */
+  declineEmbedding?: number[] | null;
+  /** How many markets the viewer has passed, used to scale the decline penalty. */
+  declineCount?: number;
   /** Market ids this wallet has never been shown before. */
   neverShown: ReadonlySet<number>;
 }
@@ -133,6 +144,8 @@ export const EMPTY_PROFILE: ViewerProfile = {
   topicAffinity: {},
   creatorAffinity: {},
   tasteEmbedding: null,
+  declineEmbedding: null,
+  declineCount: 0,
   neverShown: new Set(),
 };
 
@@ -381,9 +394,24 @@ export function scoreMarket(input: ScoreInput): ScoredMarket {
     }
   }
 
+  /**
+   * REPEATED PASSES, GENTLY. A market like the ones the viewer keeps declining
+   * ranks a little lower — no more than DECLINE.MAX_PENALTY off the whole score,
+   * scaled by how similar it is and how many times they have passed.
+   *
+   * Applied to the TOTAL, never as a component: it must not become a card's
+   * `driver` (a market is never shown because it was down-ranked), and it must not
+   * touch the YES/NO relationship math — a pass is not a NO. The positive
+   * components still decide WHY a card is here; this only decides how far down.
+   */
+  const declinePenalty =
+    DECLINE.MAX_PENALTY *
+    cosine(ai?.embedding ?? null, v.declineEmbedding ?? null) *
+    sat(v.declineCount ?? 0, DECLINE.SATURATE_AT);
+
   return {
     onchainId: s.onchainId,
-    score: Math.round(clamp01(total) * 1000) / 10,
+    score: Math.round(clamp01(total - declinePenalty) * 1000) / 10,
     components,
     driver,
     acceleration: accelerationOf(s),

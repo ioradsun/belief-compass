@@ -295,21 +295,35 @@ export async function loadViewerSignals(
       .map((e) => Number(e.onchain_id))
       .filter((id) => !historySet.has(id)),
   );
+  // Markets the viewer PASSED — the semantic they keep declining. A real trade
+  // overrides a pass (you cannot both decline and act on a market), so anything
+  // already in the traded history is excluded from the decline signal.
+  const passedSet = new Set(
+    ((decisions.data ?? []) as DecisionRow[])
+      .filter((d) => d.decision === "PASS")
+      .map((d) => Number(d.market_id))
+      .filter((id) => !historySet.has(id)),
+  );
   const categories = new Map<string, number>();
   const topics = new Map<string, number>();
   const creators = new Map<string, number>();
   const vectors: { vec: number[]; weight: number }[] = [];
+  const declineVectors: number[][] = [];
 
   const tasteIds = [...historySet, ...expressedSet];
   // Full weight for a traded market, the expressed weight for a free belief.
   const weightOf = (id: number) => (historySet.has(id) ? 1 : EXPRESSED_WEIGHT);
-  if (tasteIds.length) {
+  // One analysis read covers taste AND declined markets; the markets table
+  // (category / creator affinity) is asked only about taste, because a decline is
+  // a semantic signal and never an endorsement of a category or a creator.
+  const analysisIds = [...new Set([...tasteIds, ...passedSet])];
+  if (analysisIds.length) {
     const [mkts, ai] = await Promise.all([
       sb.from("markets").select("onchain_id, category, author_wallet").in("onchain_id", tasteIds),
       sb
         .from("market_ai_analysis")
         .select("onchain_id, category, topic, embedding")
-        .in("onchain_id", tasteIds),
+        .in("onchain_id", analysisIds),
     ]);
     for (const m of (mkts.data ?? []) as {
       onchain_id: number;
@@ -329,12 +343,22 @@ export async function loadViewerSignals(
       topic: string | null;
       embedding: unknown;
     }[]) {
-      const wgt = weightOf(Number(a.onchain_id));
+      const id = Number(a.onchain_id);
+      if (passedSet.has(id)) {
+        // A declined market feeds the decline centroid ONLY — not topic affinity.
+        if (Array.isArray(a.embedding)) declineVectors.push((a.embedding as number[]).map(Number));
+        continue;
+      }
+      const wgt = weightOf(id);
       if (a.topic) topics.set(a.topic, (topics.get(a.topic) ?? 0) + wgt);
       if (Array.isArray(a.embedding))
         vectors.push({ vec: (a.embedding as number[]).map(Number), weight: wgt });
     }
   }
+  // The decline centroid is a plain mean — a pass is a pass, none weightier than
+  // another. `declineCount` scales the penalty downstream so a single pass barely
+  // registers and a repeated one establishes the signal.
+  const declineEmbedding = weightedMean(declineVectors.map((vec) => ({ vec, weight: 1 })));
 
   // "Never shown" = in the current pool, with no recorded interaction at all.
   const neverShown = new Set<number>(marketIds.filter((id) => !states.has(id)));
@@ -350,6 +374,8 @@ export async function loadViewerSignals(
       topicAffinity: normalize(topics),
       creatorAffinity: normalize(creators),
       tasteEmbedding: weightedMean(vectors),
+      declineEmbedding,
+      declineCount: passedSet.size,
       neverShown,
     },
   };
