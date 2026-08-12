@@ -33,6 +33,13 @@ export function useChallengeCards(wallet?: string) {
   });
 }
 
+/**
+ * WHICH HALF OF THE LOOP IS ON SCREEN. Direction is an attribute of one
+ * conversation, not a separate kind of thing — so it filters one list rather
+ * than splitting the column into two.
+ */
+export type ChallengeDirection = "all" | "mine" | "theirs";
+
 export function ChallengeCardList({
   wallet,
   limit,
@@ -40,6 +47,7 @@ export function ChallengeCardList({
   onPass,
   onSeeChain,
   activeOnly = false,
+  direction = "all",
 }: {
   wallet?: string;
   limit?: number;
