@@ -46,27 +46,74 @@ import {
 export const pastKey = (wallet?: string) => ["challenge-past", wallet ?? null] as const;
 
 /**
- * The control and the sheet, together, because they are one affordance.
+ * The control, and where it leads.
  *
- * IT SAYS THE COUNT BEFORE IT IS PRESSED. "Challenge History" alone asks the
- * reader to gamble a tap on whether anything is behind it; the sheet's title says
- * the number of questions they have actually put up. The query only runs once the
- * sheet is open, so an unread history costs the rail nothing.
+ * IT OPENS IN THE CENTRE, NOT OVER IT. A history is something a reader studies —
+ * a sheet on top of the rail it came from is a glance surface. When the host
+ * gives it a destination (`onOpen`) the arrow points LEFT, at the column that
+ * will hold it; without one it falls back to the sheet.
  */
 export function ChallengeHistory({
   wallet,
   onSelect,
   onSelectPerson,
+  onOpen,
 }: {
   wallet?: string;
   onSelect: (marketId: number) => void;
   onSelectPerson?: (personWallet: string) => void;
+  /** Open it in the centre panel instead of a sheet. */
+  onOpen?: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  if (!wallet) return null;
+
+  return (
+    <>
+      {/* THE WAY OUT OF THE RAIL, AND THE ONLY ONE. Everything above it is the
+          live loop and goes quiet; this is where the whole record lives. It sits
+          last because it is the least urgent thing here. */}
+      <button
+        type="button"
+        onClick={() => (onOpen ? onOpen() : setOpen(true))}
+        className="mt-1 block text-[11.5px] text-[var(--text-secondary)] underline-offset-2 transition-colors hover:text-[var(--text)] hover:underline"
+      >
+        {onOpen ? "← Challenge History" : "Challenge History →"}
+      </button>
+
+      {open && (
+        <Sheet onClose={() => setOpen(false)} title="Past Challenges">
+          <ChallengeHistoryPanel
+            wallet={wallet}
+            onSelect={onSelect}
+            onSelectPerson={onSelectPerson}
+            onExplore={() => setOpen(false)}
+          />
+        </Sheet>
+      )}
+    </>
+  );
+}
+
+/**
+ * THE HISTORY ITSELF, with no container of its own — so the same record reads
+ * the same whether it is in the centre column or a sheet.
+ */
+export function ChallengeHistoryPanel({
+  wallet,
+  onSelect,
+  onSelectPerson,
+  onExplore,
+}: {
+  wallet?: string;
+  onSelect: (marketId: number) => void;
+  onSelectPerson?: (personWallet: string) => void;
+  onExplore?: () => void;
+}) {
   const { data, isError } = useQuery({
     queryKey: pastKey(wallet),
     queryFn: () => getChallengePast({ data: { wallet: wallet ?? null } }),
-    enabled: !!wallet && open,
+    enabled: !!wallet,
     staleTime: 60_000,
   });
 
@@ -78,81 +125,51 @@ export function ChallengeHistory({
 
   if (!wallet) return null;
 
+  /* A FAILED READ IS NOT AN EMPTY HISTORY. The confident zero would tell
+     somebody with a year of relationships that they never challenged anybody. */
+  if (isError)
+    return (
+      <p className="py-6 text-[12px] leading-snug text-[var(--text-muted)]">
+        Could not load your history. This is a fault on our side, not an empty one — try again in a
+        moment.
+      </p>
+    );
+  if (data == null)
+    return <p className="py-6 text-[12px] text-[var(--text-muted)]">Reading your history…</p>;
+  if (nothing) return <EmptyState onExplore={() => onExplore?.()} />;
+
   return (
-    <>
-      {/* THE WAY OUT OF THE RAIL, AND THE ONLY ONE. Everything above it is the
-          live loop and goes quiet; this is where the whole record lives. It sits
-          last because it is the least urgent thing here. */}
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="mt-1 block text-[11.5px] text-[var(--text-secondary)] underline-offset-2 transition-colors hover:text-[var(--text)] hover:underline"
-      >
-        Challenge History →
-      </button>
+    <div className="space-y-6 pb-2">
+      {items.length > 0 && <Overview overview={overview} />}
 
-      {open && (
-        <Sheet
-          onClose={() => setOpen(false)}
-          title={
-            <>
-              Past Challenges
-              {items.length > 0 && (
-                <>
-                  {" "}
-                  · <span className="num text-[var(--text-muted)]">{items.length}</span>
-                </>
-              )}
-            </>
-          }
-        >
-          {/* A FAILED READ IS NOT AN EMPTY HISTORY. The confident zero would tell
-              somebody with a year of relationships that they never challenged
-              anybody. */}
-          {isError ? (
-            <p className="py-6 text-[12px] leading-snug text-[var(--text-muted)]">
-              Could not load your history. This is a fault on our side, not an empty one — try again
-              in a moment.
-            </p>
-          ) : data == null ? (
-            <p className="py-6 text-[12px] text-[var(--text-muted)]">Reading your history…</p>
-          ) : nothing ? (
-            <EmptyState onExplore={() => setOpen(false)} />
-          ) : (
-            <div className="space-y-6 pb-2">
-              {items.length > 0 && <Overview overview={overview} />}
+      {eras.map((era) => (
+        <section key={era.key}>
+          <h4 className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
+            {era.label}
+          </h4>
+          <div className="space-y-2.5">
+            {era.items.map((pc) => (
+              <PastCard key={pc.marketId} pc={pc} onSelect={onSelect} />
+            ))}
+          </div>
+        </section>
+      ))}
 
-              {eras.map((era) => (
-                <section key={era.key}>
-                  <h4 className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
-                    {era.label}
-                  </h4>
-                  <div className="space-y-2.5">
-                    {era.items.map((pc) => (
-                      <PastCard key={pc.marketId} pc={pc} onSelect={onSelect} />
-                    ))}
-                  </div>
-                </section>
-              ))}
-
-              {showedUp.length > 0 && (
-                <ShowedUpSection rows={showedUp} onSelect={onSelect} onSelectPerson={onSelectPerson} />
-              )}
-
-              {/* SAID OUT LOUD. A history that stopped at its read bound without
-                  mentioning it would claim a completeness it does not have. */}
-              {data.truncated && (
-                <p className="text-[11px] leading-snug text-[var(--text-muted)]">
-                  Showing your most recent challenges. There are older ones behind these.
-                </p>
-              )}
-            </div>
-          )}
-        </Sheet>
+      {showedUp.length > 0 && (
+        <ShowedUpSection rows={showedUp} onSelect={onSelect} onSelectPerson={onSelectPerson} />
       )}
-    </>
+
+      {/* SAID OUT LOUD. A history that stopped at its read bound without
+          mentioning it would claim a completeness it does not have. */}
+      {data.truncated && (
+        <p className="text-[11px] leading-snug text-[var(--text-muted)]">
+          Showing your most recent challenges. There are older ones behind these.
+        </p>
+      )}
+    </div>
   );
 }
+
 
 /**
  * ORIENTATION, NOT A DASHBOARD. Four numbers that help a reader understand their

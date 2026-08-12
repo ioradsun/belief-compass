@@ -78,6 +78,7 @@ import { useSimulationMode } from "@/lib/simulation-mode";
 
 import { SimilarMarkets } from "@/components/SimilarMarkets";
 import { ChallengeRail } from "@/components/ChallengeRail";
+import { ChallengeHistoryPanel } from "@/components/ChallengeHistory";
 import { DotFilter, type DotOption } from "@/components/DotFilter";
 
 /**
@@ -323,6 +324,8 @@ type Search = {
    * (?create clears, ?m arrives) and the moment has to survive that.
    */
   launch?: number;
+  /** Past Challenges, read in the centre column rather than over the rail. */
+  hist?: true;
   /** Share attribution code — who this visitor arrived via (?r=). */
   r?: string;
   /** Which phone column to open on, when arriving from the menu on another page. */
@@ -353,6 +356,8 @@ export const Route = createFileRoute("/")({
     case: flag(search.case),
     // Conviction Dashboard — the financial story, a center-panel destination.
     dash: flag(search.dash),
+    // Past Challenges — a centre destination, so it deep-links and Back works.
+    hist: flag(search.hist),
     launch:
       search.launch != null && Number.isFinite(Number(search.launch))
         ? Number(search.launch)
@@ -454,7 +459,10 @@ type MobileTab = AppTab;
 
 /** The center-panel destination, as the URL expresses it. `case` is a display
  *  toggle rather than a destination, so it is deliberately not part of it. */
-type CenterView = Pick<Search, "m" | "p" | "dna" | "create" | "terms" | "dash" | "launch">;
+type CenterView = Pick<
+  Search,
+  "m" | "p" | "dna" | "create" | "terms" | "dash" | "hist" | "launch"
+>;
 
 const CLEARED_CENTER: CenterView = {
   m: undefined,
@@ -463,6 +471,7 @@ const CLEARED_CENTER: CenterView = {
   create: undefined,
   terms: undefined,
   dash: undefined,
+  hist: undefined,
   // Carried with the center view so back/forward restores Launch Mode with the
   // market it belongs to, instead of leaving the flag dangling on another one.
   launch: undefined,
@@ -479,6 +488,7 @@ function Feed() {
     terms: termsOpen,
     case: caseOpen,
     dash: dashOpen,
+    hist: histOpen,
     launch: launchId,
     r: refCode,
   } = Route.useSearch();
@@ -580,6 +590,7 @@ function Feed() {
     create: createOpen,
     terms: termsOpen,
     dash: dashOpen,
+    hist: histOpen,
   };
   const centerRef = useRef<CenterView>(centerNow);
   centerRef.current = centerNow;
@@ -731,6 +742,28 @@ function Feed() {
   const closePerson = () => backToPrevious({ ...centerNow, p: undefined });
   const closeDna = () => backToPrevious({ ...centerNow, dna: undefined });
   const closeDash = () => backToPrevious({ ...centerNow, dash: undefined });
+  /**
+   * PAST CHALLENGES IS A PLACE, NOT A SHEET. It is the complete record of what
+   * the reader's questions did — something they read, not glance at — so it
+   * takes the centre column and leaves the same way every other takeover does.
+   */
+  const openHistory = () => {
+    pushCenter();
+    navigate({
+      search: (prev: Search) => ({
+        ...prev,
+        hist: true,
+        p: undefined,
+        dna: undefined,
+        create: undefined,
+        terms: undefined,
+        dash: undefined,
+      }),
+    });
+    setTab("belief");
+    enterProduct();
+  };
+  const closeHistory = () => backToPrevious({ ...centerNow, hist: undefined });
   /** The Case File spans BOTH rails, so the running order displaces it. */
   const closeCase = () => {
     if (caseOpen) navigate({ search: (prev: Search) => ({ ...prev, case: undefined }) });
@@ -758,7 +791,7 @@ function Feed() {
   // person, or the create form must also SELECT the column that renders it —
   // otherwise the phone sits on "Crowd" and the destination is invisible.
   const deepCenter =
-    !!selectedMarket || !!selectedPerson || !!createOpen || !!dashOpen || !!dnaOpen;
+    !!selectedMarket || !!selectedPerson || !!createOpen || !!dashOpen || !!dnaOpen || !!histOpen;
   useEffect(() => {
     if (!tabParam && !deepCenter) return;
     setTab(tabParam ?? "belief");
@@ -1951,6 +1984,19 @@ function Feed() {
                   </Suspense>
                 </PanelBoundary>
               </div>
+            ) : histOpen ? (
+              <div className="min-h-0 flex-1 overflow-y-auto">
+                <BackLink onClick={closeHistory} />
+                <h2 className="mb-3 text-[15px] font-semibold text-[var(--text)]">
+                  Past Challenges
+                </h2>
+                <ChallengeHistoryPanel
+                  wallet={wallet}
+                  onSelect={selectMarket}
+                  onSelectPerson={selectPerson}
+                  onExplore={closeHistory}
+                />
+              </div>
             ) : selectedPerson ? (
               /* The exit lives here rather than inside the panel: both of these
                  components have several early returns (loading, no wallet, not
@@ -2155,6 +2201,7 @@ function Feed() {
                   wallet={wallet}
                   onSelect={selectMarket}
                   onSelectPerson={selectPerson}
+                  onOpenHistory={openHistory}
                   insiderCount={insiderPending}
                   insider={
                     <div className="min-h-0 flex-1 overflow-hidden">
