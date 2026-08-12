@@ -615,21 +615,33 @@ export async function finalizeHouseBet(
     actual_action: BeliefAction | null;
   } | null;
 
-  if (row && !row.actual_action) {
+  /**
+   * MONEY OVERRIDES A WALK-AWAY.
+   *
+   * A pass closes the round, but it is the weakest possible answer: it says the
+   * reader didn't act YET. When they later back the market with a verified,
+   * mined buy, the pass is no longer what they did — and leaving it in place is
+   * what produced "Your history leaned YES. You passed." on a market the reader
+   * had just bought. A bet therefore rewrites a round finalized by a pass. It
+   * never rewrites another bet: that one was already paid for and is final.
+   */
+  const overwritable = row && (!row.actual_action || row.actual_action === "PASS");
+  if (overwritable) {
     await sb
       .from("house_predictions")
       .update({
         actual_action: side,
         actual_side: side,
         actual_tx_hash: txHash,
-        outcome: scoreHouse(normAction(row.predicted_action), side),
+        outcome: scoreHouse(normAction(row!.predicted_action), side),
         revealed_at: new Date().toISOString(),
         finalized_via: "bet",
       })
       .eq("wallet", wallet)
       .eq("onchain_id", marketId)
-      .is("actual_action", null);
+      .neq("finalized_via", "bet");
   }
+
 
   // A confirmed purchase removes this market from discovery (V1). Best-effort:
   // the on-chain buy is authoritative and must never fail because an off-chain
