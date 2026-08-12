@@ -14,7 +14,9 @@ export const APP_TABS: { key: AppTab; label: string; sub: string }[] = [
 export const MENU_PAGES: { to: string; label: string; sub: string }[] = [
   { to: "/how", label: "How it works", sub: "the idea, in plain language" },
   { to: "/value", label: "Why it matters", sub: "what this adds to the ecosystem" },
+  { to: "/trust", label: "Transparency & Trust", sub: "where your money sits, and who can touch it" },
   { to: "/terms", label: "Terms & risk", sub: "what you're agreeing to" },
+
 ];
 
 /**
