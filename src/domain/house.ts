@@ -249,10 +249,13 @@ export function predictHouse(s: HouseSignals): HouseRead {
     );
   }
 
-  const blended = (personalLean * personalWeight + relLean * relWeight) / totalWeight;
+  const blended =
+    (personalLean * personalWeight + relLean * relWeight + overallLean * globalWeight) /
+    totalWeight;
   // Passes make directional predictions less certain, never more.
   const passDrag = 1 - Math.min(0.4, passRate * 0.5);
   const confidence = clamp01(Math.abs(blended) * totalWeight * passDrag + 0.35 * Math.abs(blended));
+
 
   if (confidence < MIN_CONFIDENCE || blended === 0) {
     return noRead(
