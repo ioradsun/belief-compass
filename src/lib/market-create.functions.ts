@@ -360,9 +360,11 @@ export const finalizeMarketCreate = createServerFn({ method: "POST" })
     // THE SEED IS A TRADE. It lives in the creation tx itself, so ingest that
     // receipt now instead of waiting a poller tick — otherwise the creator
     // lands on their brand-new market and sees $0 staked.
+    let creationTradeIngested = false;
     try {
       const { ingestCreationTx } = await import("@/lib/market-create-ingest.server");
-      await ingestCreationTx(db, data.txHash, data.marketId);
+      const ingested = await ingestCreationTx(db, data.txHash, data.marketId);
+      creationTradeIngested = ingested.events > 0;
     } catch {
       // Non-fatal: the poller will pick the same events up (same source_key).
     }
@@ -372,12 +374,26 @@ export const finalizeMarketCreate = createServerFn({ method: "POST" })
     try {
       const { refreshMarket } = await import("@/lib/market-state/refresh-market.server");
       const { data: eth } = await db.rpc("eth_usd_calibration");
-      await refreshMarket(db, data.marketId, Number(eth ?? 0) || 0);
+      const refreshed = await refreshMarket(db, data.marketId, Number(eth ?? 0) || 0);
+      if (!refreshed.ok) throw new Error(refreshed.error ?? "Market refresh failed");
     } catch {
-      await db
-        .rpc("enqueue_market_refresh", { p_market_ids: [data.marketId], p_kind: "activity" })
-        .then(() => undefined);
+      // The durable queue below retries this after the creation request returns.
     }
+
+    // Always schedule one background reconciliation. The receipt can be visible
+    // before the position write is, and refreshMarket reports failures as a
+    // result rather than throwing. Without this durable pass, either race leaves
+    // a correctly indexed seed trade behind a stale $0 market_state row.
+    await Promise.all([
+      db.rpc("enqueue_market_refresh", {
+        p_market_ids: [data.marketId],
+        p_kind: "activity",
+      }),
+      db.rpc("enqueue_market_refresh", {
+        p_market_ids: [data.marketId],
+        p_kind: creationTradeIngested ? "positions" : "activity",
+      }),
+    ]).then(() => undefined);
 
     return { ok: true as const };
   });
