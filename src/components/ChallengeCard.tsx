@@ -241,7 +241,7 @@ export function ChallengeCard({
           aria-hidden
         />
         <span className="text-[10.5px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-          {outward ? "You Challenged" : "Challenged You"}
+          {outward ? "I Challenged" : "Challenged Me"}
         </span>
       </div>
 
