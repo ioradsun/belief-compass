@@ -92,9 +92,20 @@ describe("predictHouse — honest no-read states", () => {
     expect(r.noRead?.detail[0]).toContain("2 of 5");
   });
 
-  it("calls a never-seen category new territory", () => {
-    const r = predictHouse(base);
+  it("calls a never-seen category new territory when the player is barely known", () => {
+    const r = predictHouse({ ...base, overall: { yes: 2, no: 1, pass: 0 } });
     expect(r.noRead?.kind).toBe("new_category");
+  });
+
+  it("still reads a well-known player in a brand new category, from their overall lean", () => {
+    const r = predictHouse({
+      ...base,
+      totalAnswers: 30,
+      overall: { yes: 26, no: 2, pass: 2 },
+      inCategory: { yes: 0, no: 0, pass: 0 },
+    });
+    expect(r.noRead).toBeNull();
+    expect(r.action).toBe("YES");
   });
 
   it("won't bluff when personal history and matches disagree", () => {

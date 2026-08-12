@@ -157,7 +157,11 @@ export function predictHouse(s: HouseSignals): HouseRead {
   const catAnswers = c.yes + c.no + c.pass;
   const catDirectional = c.yes + c.no;
 
-  if (cat && catAnswers === 0) {
+  // A category we have never seen this player in. If we barely know them at all,
+  // say so. If we know them WELL elsewhere, we still have a read — it just comes
+  // from their cross-category pattern below, at a discount.
+  const WELL_KNOWN = 8;
+  if (cat && catAnswers === 0 && s.overall.yes + s.overall.no < WELL_KNOWN) {
     const known = s.overall.yes + s.overall.no > 0;
     return noRead(
       "new_category",
@@ -167,6 +171,7 @@ export function predictHouse(s: HouseSignals): HouseRead {
         : "This is a category the House has never seen you in. Your answer here will establish the first signal.",
     );
   }
+
 
   // Pass behaviour first: a category the user reliably passes on is a real read.
   const passRate = catAnswers > 0 ? c.pass / catAnswers : 0;
@@ -197,7 +202,26 @@ export function predictHouse(s: HouseSignals): HouseRead {
   const relLean = relTotal > 0 ? ((rel!.yes - rel!.no) / relTotal) * clamp01(rel!.confidence) : 0;
   const relWeight = relTotal > 0 ? sampleConfidence(relTotal, 2) * clamp01(rel!.confidence) : 0;
 
-  const totalWeight = personalWeight + relWeight;
+  /**
+   * THE HOUSE ALWAYS KNOWS SOMETHING ABOUT A PLAYER IT HAS WATCHED.
+   *
+   * A thin CATEGORY is not a thin PERSON. Someone with a long directional
+   * history who lands in a quiet corner used to fall through to "not enough
+   * signal" and read as "still learning you" forever. Their cross-category lean
+   * is weaker evidence than in-category history, so it enters at a discount and
+   * only matters when the category itself is thin — but it is evidence, and
+   * refusing to use it is what made the read feel broken.
+   */
+  const overallDirectional = s.overall.yes + s.overall.no;
+  const overallLean =
+    overallDirectional > 0 ? (s.overall.yes - s.overall.no) / overallDirectional : 0;
+  const catThin = personalWeight < 0.6;
+  const globalWeight =
+    catThin && overallDirectional > 0
+      ? sampleConfidence(overallDirectional, 8) * 0.6 * (1 - personalWeight)
+      : 0;
+
+  const totalWeight = personalWeight + relWeight + globalWeight;
   if (totalWeight === 0) {
     return noRead(
       "weak_sample",
@@ -206,6 +230,7 @@ export function predictHouse(s: HouseSignals): HouseRead {
       ["One more choice will make this category easier to understand."],
     );
   }
+
 
   // Conflicting evidence: both sources are meaningful and point opposite ways.
   const conflicting =
@@ -229,10 +254,13 @@ export function predictHouse(s: HouseSignals): HouseRead {
     );
   }
 
-  const blended = (personalLean * personalWeight + relLean * relWeight) / totalWeight;
+  const blended =
+    (personalLean * personalWeight + relLean * relWeight + overallLean * globalWeight) /
+    totalWeight;
   // Passes make directional predictions less certain, never more.
   const passDrag = 1 - Math.min(0.4, passRate * 0.5);
   const confidence = clamp01(Math.abs(blended) * totalWeight * passDrag + 0.35 * Math.abs(blended));
+
 
   if (confidence < MIN_CONFIDENCE || blended === 0) {
     return noRead(
@@ -259,6 +287,12 @@ export function predictHouse(s: HouseSignals): HouseRead {
         : `${share}% of your closest matches back ${action} here.`,
     );
   }
+  if (globalWeight > 0 && overallDirectional > 0) {
+    const same = action === "YES" ? s.overall.yes : s.overall.no;
+    reasons.push(
+      `Across everything you have answered, you take ${action} ${Math.round((same / overallDirectional) * 100)}% of the time.`,
+    );
+  }
   if (c.pass > 0) {
     reasons.push(
       `You pass on ${cat ?? "these"} markets ${Math.round(passRate * 100)}% of the time — you engaged with this one.`,
@@ -266,6 +300,7 @@ export function predictHouse(s: HouseSignals): HouseRead {
   } else if (cat) {
     reasons.push(`You rarely pass on ${cat} markets.`);
   }
+
 
   return {
     action,

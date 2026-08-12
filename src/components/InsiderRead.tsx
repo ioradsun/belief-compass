@@ -25,14 +25,12 @@ export function InsiderRead({
 }) {
   const copy = insiderReadCopy(read);
   const sideColor = copy.side === "YES" ? "var(--yes)" : "var(--no)";
-  // A settled round tints only the verdict, so a win/loss reads instantly
-  // without turning the row into a banner.
+  // A settled round states the verdict plainly. It deliberately does NOT borrow
+  // the gain/loss palette: green and red mean money on every other surface, and
+  // "the House called it" is not a profit.
   const bodyColor =
-    copy.tone === "correct"
-      ? "var(--gain)"
-      : copy.tone === "incorrect"
-        ? "var(--loss)"
-        : "var(--text-secondary)";
+    copy.tone === "neutral" ? "var(--text-secondary)" : "var(--text)";
+
 
   return (
     <div
