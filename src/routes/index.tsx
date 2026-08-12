@@ -779,7 +779,7 @@ function Feed() {
       }),
     });
     setTab("belief");
-    enterProduct();
+    autoCollapse();
   };
   const closeCreate = () => backToPrevious();
   // Terms read in the center column, so leaving the create form is never
@@ -788,7 +788,7 @@ function Feed() {
     pushCenter();
     navigate({ search: (prev: Search) => ({ ...prev, terms: true }) });
     setTab("belief");
-    enterProduct();
+    autoCollapse();
   };
   // Terms are always entered from somewhere; the form is the honest fallback.
   const closeTerms = () => backToPrevious({ ...centerNow, terms: undefined });
@@ -821,7 +821,7 @@ function Feed() {
       }),
     });
     setTab("belief");
-    enterProduct();
+    autoCollapse();
   };
   const closeHistory = () => backToPrevious({ ...centerNow, hist: undefined });
   /** The Case File spans BOTH rails, so the running order displaces it. */
