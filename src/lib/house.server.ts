@@ -488,6 +488,9 @@ export async function loadHouseRead(
   const preview = !closed && callable ? predictedAction : null;
 
 
+  // A completed round proves itself, however it completed. Only an OPEN round
+  // keeps the pick sealed — a pass is still an answer and earns the verdict.
+  const settled = closed && !!predictedAction;
   const headline: { title: string; line: string } | null = betRevealed
     ? revealHeadline(predictedAction, actualAction!)
     : closed
@@ -500,10 +503,10 @@ export async function loadHouseRead(
   return {
     marketId,
     connected: true,
-    predicted: betRevealed ? predictedAction : null,
+    predicted: settled ? predictedAction : null,
     preview,
-    confidence: betRevealed ? Number(row.confidence ?? 0) : null,
-    reasons: betRevealed ? ((row.reasons ?? []) as string[]) : [],
+    confidence: settled ? Number(row.confidence ?? 0) : null,
+    reasons: settled ? ((row.reasons ?? []) as string[]) : [],
     noRead,
     foundation: null,
     band,
@@ -513,12 +516,7 @@ export async function loadHouseRead(
     actual: actualAction,
     // Scored live in Simulation rather than read off the real row: the stored
     // outcome belongs to the real round and would be somebody else's answer.
-    outcome:
-      mode === "SIMULATION"
-        ? actualAction
-          ? scoreHouse(predictedAction, actualAction)
-          : null
-        : row.outcome,
+    outcome: actualAction ? scoreHouse(predictedAction, actualAction) : (mode === "SIMULATION" ? null : row.outcome),
     headline,
     record: recordFor(history),
     category,

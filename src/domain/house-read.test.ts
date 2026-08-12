@@ -67,16 +67,19 @@ describe("houseReadState", () => {
     ).toEqual({ status: "incorrect", predictedSide: "YES", actualSide: "NO" });
   });
 
-  it("keeps a PASS round closed instead of reverting to learning", () => {
+  it("scores a PASS round — passing is a real answer", () => {
     expect(
       houseReadState(src({ closed: true, outcome: "miss", predicted: "YES", actual: "PASS" })),
-    ).toEqual({ status: "closed" });
+    ).toEqual({ status: "incorrect", predictedSide: "YES", actualSide: "PASS" });
+    expect(
+      houseReadState(src({ closed: true, outcome: null, predicted: "PASS", actual: "PASS" })),
+    ).toEqual({ status: "correct", predictedSide: "PASS", actualSide: "PASS" });
   });
 
-  it("keeps an unscored round closed instead of reverting to learning", () => {
+  it("settles an unscored round by comparison rather than showing a dead end", () => {
     expect(
       houseReadState(src({ closed: true, outcome: "unscored", predicted: "YES", actual: "YES" })),
-    ).toEqual({ status: "closed" });
+    ).toEqual({ status: "correct", predictedSide: "YES", actualSide: "YES" });
   });
 
   it("prefers the settled result over an open preview", () => {

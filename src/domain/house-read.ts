@@ -26,12 +26,14 @@
  */
 
 export type ReadSide = "YES" | "NO";
+/** A settled round can also end in a deliberate PASS — that is a real answer. */
+export type ReadPick = "YES" | "NO" | "PASS";
 
 export type HouseReadState =
   | { status: "learning"; remainingPicks?: number }
   | { status: "predicted"; predictedSide: ReadSide; confidence?: number }
-  | { status: "correct"; predictedSide: ReadSide; actualSide: ReadSide }
-  | { status: "incorrect"; predictedSide: ReadSide; actualSide: ReadSide }
+  | { status: "correct"; predictedSide: ReadPick; actualSide: ReadPick }
+  | { status: "incorrect"; predictedSide: ReadPick; actualSide: ReadPick }
   | { status: "closed" };
 
 /** The shape of a house read this module needs — a structural subset, no IO type. */
@@ -53,6 +55,10 @@ export interface HouseReadSource {
 const directional = (v: string | null | undefined): ReadSide | null =>
   v === "YES" || v === "NO" ? v : null;
 
+/** Any settled answer, PASS included. */
+const pick = (v: string | null | undefined): ReadPick | null =>
+  v === "YES" || v === "NO" || v === "PASS" ? v : null;
+
 /**
  * Derive the one current state. Order matters: a finished round reports its
  * result, an open round with a strong read reports the call, everything else is
@@ -63,15 +69,17 @@ export function houseReadState(source: HouseReadSource | null | undefined): Hous
 
   // A settled round: did the House call it? Both sides must be directional —
   // a PASS has no side to compare, so that round simply shows no result.
-  if (source.closed && (source.outcome === "correct" || source.outcome === "miss")) {
-    const predictedSide = directional(source.predicted);
-    const actualSide = directional(source.actual);
+  if (source.closed) {
+    const predictedSide = pick(source.predicted);
+    const actualSide = pick(source.actual);
     if (predictedSide && actualSide) {
-      return {
-        status: source.outcome === "correct" ? "correct" : "incorrect",
-        predictedSide,
-        actualSide,
-      };
+      // A stored outcome wins; otherwise the comparison itself settles it, so a
+      // PASS round never falls through to a dead-end "closed" placeholder.
+      const correct =
+        source.outcome === "correct" || source.outcome === "miss"
+          ? source.outcome === "correct"
+          : predictedSide === actualSide;
+      return { status: correct ? "correct" : "incorrect", predictedSide, actualSide };
     }
   }
 
