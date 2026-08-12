@@ -50,3 +50,38 @@ export function useChallengeSent(): ChallengeSent | null {
     () => null,
   );
 }
+
+/**
+ * TURN THE RAIL TO WHERE THE RESULT WILL LAND, THE MOMENT THE TASK STARTS.
+ *
+ * Pressing Challenge opens the panel over the market; what comes out of it is
+ * an OUTGOING row. Pointing the rail there on the press — not on the send —
+ * means the reader can already see the column their new question joins, so the
+ * send has somewhere visible to land instead of appearing from nowhere.
+ */
+export interface ChallengeFocus {
+  view: "mine" | "theirs";
+  at: number;
+}
+
+let focus: ChallengeFocus | null = null;
+const focusListeners = new Set<() => void>();
+
+export function focusChallengeView(view: ChallengeFocus["view"] = "mine") {
+  focus = { view, at: Date.now() };
+  focusListeners.forEach((l) => l());
+}
+
+const subscribeFocus = (l: () => void) => {
+  focusListeners.add(l);
+  return () => focusListeners.delete(l);
+};
+
+/** The live focus request, or null. Server render always sees null. */
+export function useChallengeFocus(): ChallengeFocus | null {
+  return useSyncExternalStore(
+    subscribeFocus,
+    () => focus,
+    () => null,
+  );
+}
