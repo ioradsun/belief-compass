@@ -96,7 +96,7 @@ export type MatchPerson = {
  * 3h ago" reason could never fire. Adding a field to the ranker means adding it
  * here, in the same change.
  */
-const FEED_COLUMNS = `
+export const FEED_COLUMNS = `
     onchain_id, yes_price_usd, no_price_usd, money_yes_pct, people_yes_pct, people_no_pct,
     believers_yes, believers_no, believers_mixed, directional_believers, divergence,
     volume_total_usd, trending_score,

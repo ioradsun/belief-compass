@@ -7,7 +7,14 @@
  * diversity). The client receives a finished queue and renders it as-is.
  */
 import { COPY_VERSION } from "@/domain/copy-version";
-import { eligibilityFor, reentryFor, type ViewerMarketState } from "@/domain/feed/eligibility";
+import {
+  eligibilityFor,
+  reentryFor,
+  type Eligibility,
+  type ViewerMarketState,
+} from "@/domain/feed/eligibility";
+import { CALIBRATION_IDS, pinnedCalibration } from "@/domain/calibration";
+import { calibrationDecidedFor, fetchCalibrationRows } from "@/lib/calibration.server";
 import {
   scoreMarket,
   type FeedAiAnalysis,
@@ -385,6 +392,18 @@ export async function buildOpportunityFeed(
   // Which question the reader asked. Declared here because it also decides what
   // the card's one sentence leads on, not only the order — see `preferMomentum`.
   const lens: Lens = toLens(input.lens);
+  /**
+   * THE CALIBRATION PIN APPLIES ONLY TO THE DEFAULT FOR YOU FEED — the one a new
+   * reader lands on, and the one Simulation renders (Simulation is the same feed
+   * under a ledger flag, not a separate selector). An explicit ranked lens or an
+   * active network/topic/momentum filter is a deliberate question the reader
+   * asked, and the Locked 10 do not override it.
+   */
+  const pinEligible =
+    lens === "for_you" &&
+    filters.networks.length === 0 &&
+    filters.topics.length === 0 &&
+    (filters.momentum?.length ?? 0) === 0;
   const poolPage = Math.max(0, Math.min(Math.trunc(input.poolPage ?? 0), POOL.maxPages));
   const feed = await listFeed({
     data: { window: win, poolPage, ...(wallet ? { wallet } : {}) },
@@ -418,6 +437,37 @@ export async function buildOpportunityFeed(
    * recorded contact still counts.
    */
   const cycleStartedAt = Math.max(0, Math.trunc(input.cycleStartedAt ?? 0));
+
+  /**
+   * MERGE THE PINNED CALIBRATION ROWS INTO THE POOL — before candidates are
+   * built, so a pinned card is assembled by exactly the same path as every other
+   * card (real signals, real diagnostics, the shape the client already renders).
+   *
+   * `pinIds` is the Locked 10 minus what this viewer has DECIDED (a recorded
+   * yes/no/pass) and minus this session's sightings, in sequence order. The
+   * markets are brand-new and quiet, so they never appear in a ranked pool page —
+   * their rows are read by id. The pin itself is applied AFTER sequencing, below;
+   * here we only make sure the rows are present to build from. A signed-out
+   * reader has decided nothing, so they meet the whole sequence.
+   */
+  let pinIds: number[] = [];
+  if (pinEligible) {
+    const sbPin = serviceClientOrNull();
+    const decided = wallet ? await calibrationDecidedFor(wallet) : new Set<number>();
+    const wanted = pinnedCalibration(decided, sessionSeen);
+    if (wanted.length > 0 && sbPin) {
+      const calibRows = await fetchCalibrationRows(sbPin, wanted);
+      // Keep only ids we actually have a row for, still in sequence order.
+      pinIds = wanted.filter((id) => calibRows.has(id));
+      for (const id of pinIds) {
+        if (!byOnchainId.has(id)) {
+          const r = calibRows.get(id) as Row;
+          rows.push(r);
+          byOnchainId.set(id, r);
+        }
+      }
+    }
+  }
 
   // A rotating epoch keeps the exploration slot moving without reshuffling the
   // rest of the feed between polls.
@@ -596,11 +646,35 @@ export async function buildOpportunityFeed(
   // empties the feed returns an empty feed honestly rather than silently
   // widening back out to All.
   const kept = candidates.filter((c) => {
+    // Pinned calibration markets are handled entirely by the pin below — kept out
+    // of the ranked feed so a decided one never returns and an undecided one is
+    // never ranked into the middle of the queue instead of leading it.
+    if (pinEligible && CALIBRATION_IDS.has(c.onchainId)) return false;
     const facts = filterFacts.get(c.onchainId);
     return facts ? matchesFilters(filters, facts) : true;
   });
 
   const candidateById = new Map(kept.map((c) => [c.onchainId, c]));
+
+  /**
+   * THE PINNED CALIBRATION CANDIDATES — built from the same candidate objects
+   * (so a pinned card carries a real, type-correct payload) but pulled by id in
+   * SEQUENCE ORDER and forced eligible. The pin's only exclusion is "already
+   * decided", computed above; a mere view or scroll must not drop a question the
+   * reader still owes an answer to.
+   */
+  const freshEligibility = (): Eligibility => ({
+    eligible: true,
+    tier: "fresh",
+    reason: null,
+    availableAt: null,
+    resurfaceAt: null,
+  });
+  const candidateAll = new Map(candidates.map((c) => [c.onchainId, c]));
+  const pinnedCandidates: SequenceCandidate[] = pinIds.flatMap((id) => {
+    const c = candidateAll.get(id);
+    return c ? [{ ...c, eligibility: freshEligibility() }] : [];
+  });
 
   /**
    * THE LENS RANKS. For You is the blend and keeps every line of the existing
@@ -647,7 +721,7 @@ export async function buildOpportunityFeed(
           }),
         ).flatMap((m) => candidateById.get(m.onchainId) ?? []);
 
-  const { items, engineVersion, excluded, exhausted } = sequenceFeed({
+  const seq = sequenceFeed({
     candidates: ordered,
     idea: ideaResult.idea,
     // A ranking is taken as given; a blend is sequenced. See sequence.ts.
@@ -658,6 +732,28 @@ export async function buildOpportunityFeed(
 
     ...(input.limit ? { limit: input.limit } : { limit: SEQUENCE.DEFAULT_LIMIT }),
   });
+  const { engineVersion, excluded } = seq;
+  let items: OpportunityFeedItem[] = seq.items;
+  /**
+   * THE LOCKED 10 LEAD, IN SEQUENCE. The pinned calibration questions are force-
+   * ordered ahead of the ranked feed (`preserveOrder`), never scored into it, so
+   * the reader always meets them first and in the authored order. While any
+   * remain, the feed is by definition not exhausted.
+   */
+  let exhausted = seq.exhausted;
+  if (pinnedCandidates.length > 0) {
+    const pinned = sequenceFeed({
+      candidates: pinnedCandidates,
+      preserveOrder: true,
+      allowResurface: false,
+      limit: pinnedCandidates.length,
+    });
+    items = [...pinned.items, ...items];
+    items.forEach((it, i) => {
+      it.position = i;
+    });
+    exhausted = false;
+  }
 
   // Carry the market's classification onto the card for the existing UI badges.
   const byId: Record<number, FeedRowPayload> = {};

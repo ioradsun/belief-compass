@@ -78,6 +78,7 @@ import { marketTitle } from "@/domain/market-title";
 import { compareSides, comparisonStrip, type StripSide } from "@/domain/side-compare";
 
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
+import { CALIBRATION_TAG, isCalibrationMarket } from "@/domain/calibration";
 
 type Phase = "question" | "sides";
 
@@ -443,6 +444,13 @@ export function MobileGame({
   // the single scroll column when there isn't (that layout is unchanged).
   const questionBlock = (
     <div>
+      {/* The Locked 10 wear their calibration marker above the question — the one
+          signal that says "this is here to read your conviction", not the feed. */}
+      {isCalibrationMarket(marketId) && (
+        <span className="mb-2 inline-flex items-center rounded-full border border-[var(--hairline)] bg-[var(--surface)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-secondary)]">
+          {CALIBRATION_TAG}
+        </span>
+      )}
       <div className="flex items-start gap-1.5">
         {/* Two lines of reserved space, the same rule the desktop deck uses, so
           a longer question never pushes the stage or the dock down the screen —
