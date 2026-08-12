@@ -59,6 +59,7 @@ function toState(read: InsiderRead): HouseReadState {
       ...(read.confidence != null ? { confidence: read.confidence } : {}),
     };
   }
+  if (read.status === "closed") return { status: "closed" };
   return {
     status: "learning",
     ...(read.remainingPicks != null ? { remainingPicks: read.remainingPicks } : {}),

@@ -67,16 +67,16 @@ describe("houseReadState", () => {
     ).toEqual({ status: "incorrect", predictedSide: "YES", actualSide: "NO" });
   });
 
-  it("shows no result for a PASS round (no side to compare)", () => {
+  it("keeps a PASS round closed instead of reverting to learning", () => {
     expect(
       houseReadState(src({ closed: true, outcome: "miss", predicted: "YES", actual: "PASS" })),
-    ).toEqual({ status: "learning" });
+    ).toEqual({ status: "closed" });
   });
 
-  it("shows no result for an unscored round", () => {
+  it("keeps an unscored round closed instead of reverting to learning", () => {
     expect(
       houseReadState(src({ closed: true, outcome: "unscored", predicted: "YES", actual: "YES" })),
-    ).toEqual({ status: "learning" });
+    ).toEqual({ status: "closed" });
   });
 
   it("prefers the settled result over an open preview", () => {
@@ -95,6 +95,7 @@ describe("houseReadCopy — the voice", () => {
       houseReadCopy({ status: "predicted", predictedSide: "YES" }),
       houseReadCopy({ status: "correct", predictedSide: "YES", actualSide: "YES" }),
       houseReadCopy({ status: "incorrect", predictedSide: "YES", actualSide: "NO" }),
+      houseReadCopy({ status: "closed" }),
     ];
     for (const c of all) {
       const text = `${c.label ?? ""} ${c.body} ${c.suffix}`.toLowerCase();
@@ -104,6 +105,12 @@ describe("houseReadCopy — the voice", () => {
         expect(text).not.toContain(leak);
       }
     }
+  });
+
+  it("writes a completed non-directional read without saying it is learning", () => {
+    const c = houseReadCopy({ status: "closed" });
+    expect(c.label).toBeNull();
+    expect(c.body).toBe("This read is closed.");
   });
 
   it("writes the default learning line", () => {

@@ -284,7 +284,7 @@ export interface InsiderActivity {
 // inputs expand from "your DNA" to "your DNA + everything Insider sees here").
 // This mirrors HouseReadState so the existing state machine drops straight in.
 // ─────────────────────────────────────────────────────────────────────────────
-export type InsiderReadStatus = "learning" | "predicted" | "correct" | "incorrect";
+export type InsiderReadStatus = "learning" | "predicted" | "correct" | "incorrect" | "closed";
 
 export interface InsiderRead {
   status: InsiderReadStatus;

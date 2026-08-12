@@ -38,6 +38,8 @@ export function fromHouseReadState(
       ? { status: "learning", remainingPicks: state.remainingPicks ?? null }
       : state.status === "predicted"
         ? { status: "predicted", predictedSide: state.predictedSide, confidence: state.confidence ?? null }
+        : state.status === "closed"
+          ? { status: "closed" }
         : {
             status: state.status, // "correct" | "incorrect"
             predictedSide: state.predictedSide,
