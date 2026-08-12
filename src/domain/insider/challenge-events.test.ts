@@ -125,7 +125,7 @@ describe("each event says what it can prove", () => {
   it("reports completion from the lifecycle pair or not at all", () => {
     expect(
       semanticEvent(ev({ kind: "challenge_complete", completion: { showedUp: 8, reached: 11 } })),
-    ).toMatchObject({ headline: "YOUR CHALLENGE IS COMPLETE", support: "8 of 11 showed up." });
+    ).toMatchObject({ headline: "YOUR CHALLENGE IS CLOSED", support: "8 of 11 showed up." });
     expect(
       semanticEvent(ev({ kind: "challenge_complete", completion: { showedUp: 11, reached: 11 } })),
     ).toMatchObject({ headline: "EVERYONE SHOWED UP", support: null });
