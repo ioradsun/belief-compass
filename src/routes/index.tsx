@@ -855,8 +855,8 @@ function Feed() {
   useEffect(() => {
     if (!tabParam && !deepCenter) return;
     setTab(tabParam ?? "belief");
-    landing.collapse();
-  }, [tabParam, deepCenter]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (wallet) landing.collapse();
+  }, [tabParam, deepCenter, wallet]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /**
    * WHOSE MARKETS THE INSIDER COLUMN IS ABOUT.
