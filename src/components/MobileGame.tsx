@@ -24,10 +24,8 @@ import type { MarketRow } from "@/components/MarketCard";
 import { pulseLine } from "@/components/MarketCard";
 import { MarketMomentum } from "@/components/MarketVitality";
 import {
-  insiderPulse,
   insiderRead,
   marketStateFacts,
-  pulseFactsFromMarket,
 } from "@/domain/insider";
 import { relationFromGroup } from "@/domain/participant-social";
 import { presentRelationship } from "@/domain/relationship";

@@ -30,10 +30,8 @@ import { expressBelief } from "@/lib/beliefs.functions";
 import { bestEffort, useWalletSession } from "@/hooks/useWalletSession";
 import { MarketMomentum } from "@/components/MarketVitality";
 import {
-  insiderPulse,
   insiderRead,
   marketStateFacts,
-  pulseFactsFromMarket,
 } from "@/domain/insider";
 import { relationFromGroup } from "@/domain/participant-social";
 import { convictionMatch, presentRelationship } from "@/domain/relationship";
