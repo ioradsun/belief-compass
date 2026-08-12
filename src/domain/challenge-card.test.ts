@@ -379,7 +379,7 @@ describe("how a Challenge ends", () => {
 
   it("reports a partial result plainly", () => {
     expect(completionFor({ reached: 11, showedUp: 8 })).toEqual({
-      headline: "Your Challenge is complete",
+      headline: "Your Challenge is closed",
       support: "8 of 11 showed up.",
     });
   });

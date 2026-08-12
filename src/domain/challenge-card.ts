@@ -394,7 +394,7 @@ export function completionFor(o: Pick<Outgoing, "reached" | "showedUp">): Comple
     return { headline: "Quiet one", support: "Not every question finds its people." };
   if (o.showedUp >= o.reached) return { headline: "Everyone showed up", support: null };
   return {
-    headline: "Your Challenge is complete",
+    headline: "Your Challenge is closed",
     support: `${o.showedUp} of ${o.reached} showed up.`,
   };
 }

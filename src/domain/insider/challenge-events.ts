@@ -220,7 +220,7 @@ export function semanticEvent(i: ChallengeEventInput): SemanticEvent {
         return { ...base, headline: "EVERYONE SHOWED UP", support: null };
       return {
         ...base,
-        headline: "YOUR CHALLENGE IS COMPLETE",
+        headline: "YOUR CHALLENGE IS CLOSED",
         support: c && c.reached > 0 ? `${c.showedUp} of ${c.reached} showed up.` : null,
       };
     }

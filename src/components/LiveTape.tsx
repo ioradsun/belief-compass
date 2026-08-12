@@ -195,7 +195,7 @@ export function LiveTape({
     ? insiderMarketKey(railMarketId as number, { wallet, limit: SIDE_RAIL_FETCH_LIMIT })
     : insiderNowKey({ wallet, marketIds: scopeKey, side, limit, scope });
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isFetching } = useQuery({
     queryKey: key,
     queryFn: async (): Promise<LiveResult> => {
       /* WHEN THE TAPE STOPS MOVING, the two ways it can happen silently are a
@@ -518,7 +518,13 @@ export function LiveTape({
           : ""
       }
     >
-      {isLoading && shown.length === 0 ? (
+      {/* AN EMPTY COLUMN MUST NEVER BE THE FIRST THING A SLOW FETCH SAYS.
+          `isLoading` alone goes false the moment placeholder rows exist, and a
+          scope switch (All ⇄ My Markets) filters those to nothing while the real
+          request is still in flight — so the reader saw "Nothing yet." for a
+          build that was merely slow. Any in-flight fetch with nothing to show
+          renders the skeleton instead; the empty sentence waits for silence. */}
+      {(isLoading || isFetching) && shown.length === 0 ? (
         <ul className="space-y-2" aria-hidden>
           {Array.from({ length: skeletonRows }).map((_, i) => (
             <li key={i} className="h-8 animate-pulse rounded bg-[var(--surface-2)]" />
