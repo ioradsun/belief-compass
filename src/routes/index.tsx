@@ -102,7 +102,6 @@ const INSIDER_SCOPES: readonly DotOption<"all" | "mine">[] = [
 import { IdeasRail } from "@/components/IdeasRail";
 import { AlternatesRail } from "@/components/AlternatesRail";
 import { useOpenCalls } from "@/lib/open-calls";
-import { PostAction } from "@/components/PostAction";
 import { MarketDeck } from "@/components/MarketDeck";
 import { MobileGame } from "@/components/MobileGame";
 import { MarketScene } from "@/components/MarketScene";
@@ -540,7 +539,6 @@ function Feed() {
     case: caseOpen,
     dash: dashOpen,
     hist: histOpen,
-    launch: launchId,
     r: refCode,
   } = Route.useSearch();
 
@@ -694,12 +692,9 @@ function Feed() {
   };
 
   /**
-   * Publishing lands on the new market AND opens Launch Mode.
-   *
-   * `?launch` rather than component state because publishing navigates —
-   * `?create` clears and `?m` arrives — and the "who should see it first?"
-   * moment has to survive that. It is also then a real place: refreshing or
-   * sharing the URL puts a creator back in front of their own recruitment.
+   * Publishing lands directly on the new market. Authorship is already shown
+   * on the market surface; a second full-height launch receipt in the right rail
+   * only duplicates that fact and hides the Challenge / Insider navigation.
    */
   const marketCreated = (marketId: number) => {
     setCaughtUp(false);
@@ -708,7 +703,7 @@ function Feed() {
       search: (prev: Search) => ({
         ...prev,
         m: marketId,
-        launch: marketId,
+        launch: undefined,
         p: undefined,
         dna: undefined,
         create: undefined,
@@ -719,9 +714,6 @@ function Feed() {
     setTab("belief");
     autoCollapse();
   };
-  const closeLaunch = () =>
-    navigate({ search: (prev: Search) => ({ ...prev, launch: undefined }) });
-
   const selectPerson = (personWallet: string) => {
     if (personWallet === selectedPerson) return;
     pushCenter();
@@ -2213,38 +2205,6 @@ function Feed() {
             </Suspense>
           ) : (
             <>
-              {/* CALL FEEDBACK, after publish. It sits ABOVE the rail rather
-                than replacing it: "your people got the call" is a fact about
-                what just happened, not a destination, and the rail underneath
-                is still where anyone's calls to YOU arrive. */}
-              {/* Publish wins when both are true for the same market: "your
-                  market is live" is the larger fact, and a creator who backs
-                  their own question should not have it downgraded. */}
-              {/* THE POST-CREATE CLOSING SCREEN, AND ONLY THAT.
-                  `LaunchRail` used to render here for BOTH a publish and a buy,
-                  which meant a confirmed buy produced two closing screens at
-                  once: this rail deciding one thing about relaying while the
-                  centre's reveal decided another about navigation. The buy
-                  branch is gone — `MarketDeck` owns that moment through the same
-                  resolver — and what is left is the creation, which has no
-                  centre takeover of its own. The route executes the CTA it is
-                  handed; it does not invent one. */}
-              {launchId != null && launchId === shownId ? (
-                <PostAction
-                  kind="create"
-                  wallet={wallet}
-                  act={{
-                    marketId: launchId,
-                    // A creation's seeded side is not known to the route, and
-                    // guessing one would put a position on somebody who took
-                    // none. The resolver renders no side rather than a wrong one.
-                    side: null,
-                    authored: true,
-                    after: null,
-                  }}
-                  onStay={closeLaunch}
-                />
-              ) : null}
               {/* THE RAILS CHANGE JOBS AS THE STORY MOVES.
                   While a market is being written the right column is a SPARK, not
                   a recruiting desk: asking "who should show up?" before the
