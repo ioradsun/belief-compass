@@ -359,6 +359,7 @@ export function ChallengeRail({
             onSelect={onSelect}
             onPass={pass}
             activeOnly
+            direction={direction}
           />
 
           {/* MORE, SAID OUT LOUD. A railful is what reads as a set of things
