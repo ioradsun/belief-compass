@@ -4,6 +4,7 @@ import { AppMenu, type AppTab } from "@/components/AppMenu";
 import { BrandMark } from "@/components/BrandMark";
 import { OmniHeader } from "@/components/OmniHeader";
 import { ProfileMenu } from "@/components/ProfileMenu";
+import { ShieldMark } from "@/components/ShieldMark";
 import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
 import { requestConnect } from "@/lib/connect-bridge";
 import { walletIntent } from "@/lib/wagmi";
@@ -54,24 +55,27 @@ export function InfoPageHeader({ label, children }: { label: string; children?: 
               onSelectPerson={(w) => goHome({ p: w })}
               onOpenMenu={() => setMenuOpen(true)}
               center={
-                wallet ? (
-                  <button
-                    type="button"
-                    onClick={() => goHome({ create: true })}
-                    className="inline-flex h-9 max-w-full items-center gap-1 truncate rounded-full border border-[var(--border-strong)] px-4 text-[13px] font-semibold text-[var(--text-secondary)] transition-colors hover:border-[var(--text)] hover:text-[var(--text)]"
-                  >
-                    <span aria-hidden="true">+</span> Conviction
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    {...walletIntent}
-                    onClick={() => requestConnect()}
-                    className="inline-flex h-9 max-w-full items-center gap-1 truncate rounded-full border border-[var(--border-strong)] px-4 text-[13px] font-semibold text-[var(--text-secondary)] transition-colors hover:border-[var(--text)] hover:text-[var(--text)]"
-                  >
-                    Connect wallet
-                  </button>
-                )
+                <>
+                  <ShieldMark onClick={() => navigate({ to: "/trust" })} />
+                  {wallet ? (
+                    <button
+                      type="button"
+                      onClick={() => goHome({ create: true })}
+                      className="inline-flex h-9 max-w-full items-center gap-1 truncate rounded-full border border-[var(--border-strong)] px-4 text-[13px] font-semibold text-[var(--text-secondary)] transition-colors hover:border-[var(--text)] hover:text-[var(--text)]"
+                    >
+                      <span aria-hidden="true">+</span> Conviction
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      {...walletIntent}
+                      onClick={() => requestConnect()}
+                      className="inline-flex h-9 max-w-full items-center gap-1 truncate rounded-full border border-[var(--border-strong)] px-4 text-[13px] font-semibold text-[var(--text-secondary)] transition-colors hover:border-[var(--text)] hover:text-[var(--text)]"
+                    >
+                      Connect wallet
+                    </button>
+                  )}
+                </>
               }
             />
           </div>
@@ -92,6 +96,10 @@ export function InfoPageHeader({ label, children }: { label: string; children?: 
               <ProfileMenu
                 wallet={wallet}
                 onViewProfile={(w) => goHome({ p: w })}
+                onOpenTrust={() => {
+                  setMenuOpen(false);
+                  navigate({ to: "/trust" });
+                }}
                 onOpenTerms={() => {
                   setMenuOpen(false);
                   navigate({ to: "/terms" });

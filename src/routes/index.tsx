@@ -19,7 +19,6 @@ import {
   feedSession,
   feedSessionVersion,
   rollFeedCycle,
-
   ideaGateOpen,
   resetFeedSession,
   subscribeFeedSession,
@@ -115,6 +114,9 @@ const CaseColumn = lazyRetry(() =>
 const TermsContent = lazyRetry(() =>
   import("@/components/TermsContent").then((m) => ({ default: m.TermsContent })),
 );
+const TrustContent = lazyRetry(() =>
+  import("@/components/TrustContent").then((m) => ({ default: m.TrustContent })),
+);
 
 import { useHouseIdea } from "@/hooks/useHouseIdea";
 import type { ReadySuggestion } from "@/lib/market-suggestion.functions";
@@ -143,6 +145,7 @@ const MyWorld = lazyRetry(() =>
 import { Crosshair } from "lucide-react";
 import { OmniHeader } from "@/components/OmniHeader";
 import { ProfileMenu } from "@/components/ProfileMenu";
+import { ShieldMark } from "@/components/ShieldMark";
 
 import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
 import { useAccount } from "wagmi";
@@ -341,6 +344,8 @@ type Search = {
   dna?: boolean;
   create?: boolean;
   terms?: boolean;
+  /** Transparency & Trust, read in the centre column like Terms. */
+  trust?: boolean;
   case?: boolean;
   dash?: boolean;
   /**
@@ -378,6 +383,7 @@ export const Route = createFileRoute("/")({
     dna: flag(search.dna),
     create: flag(search.create),
     terms: flag(search.terms),
+    trust: flag(search.trust),
     // Case File mode — preserved in the URL so it survives market switches + back/forward.
     case: flag(search.case),
     // Conviction Dashboard — the financial story, a center-panel destination.
@@ -511,7 +517,7 @@ type MobileTab = AppTab;
  *  toggle rather than a destination, so it is deliberately not part of it. */
 type CenterView = Pick<
   Search,
-  "m" | "p" | "dna" | "create" | "terms" | "dash" | "hist" | "launch"
+  "m" | "p" | "dna" | "create" | "terms" | "trust" | "dash" | "hist" | "launch"
 >;
 
 const CLEARED_CENTER: CenterView = {
@@ -520,6 +526,7 @@ const CLEARED_CENTER: CenterView = {
   dna: undefined,
   create: undefined,
   terms: undefined,
+  trust: undefined,
   dash: undefined,
   hist: undefined,
   // Carried with the center view so back/forward restores Launch Mode with the
@@ -536,6 +543,7 @@ function Feed() {
     dna: dnaOpen,
     create: createOpen,
     terms: termsOpen,
+    trust: trustOpen,
     case: caseOpen,
     dash: dashOpen,
     hist: histOpen,
@@ -648,6 +656,7 @@ function Feed() {
     dna: dnaOpen,
     create: createOpen,
     terms: termsOpen,
+    trust: trustOpen,
     dash: dashOpen,
     hist: histOpen,
   };
@@ -680,6 +689,7 @@ function Feed() {
         dna: undefined,
         create: undefined,
         terms: undefined,
+        trust: undefined,
         dash: undefined,
         // Leaving for another market ends Launch Mode. The recruitment panel is
         // about ONE market a creator just made; letting it trail along would
@@ -708,6 +718,7 @@ function Feed() {
         dna: undefined,
         create: undefined,
         terms: undefined,
+        trust: undefined,
         dash: undefined,
       }),
     });
@@ -724,6 +735,7 @@ function Feed() {
         dna: undefined,
         create: undefined,
         terms: undefined,
+        trust: undefined,
         dash: undefined,
       }),
     });
@@ -751,6 +763,7 @@ function Feed() {
         p: undefined,
         create: undefined,
         terms: undefined,
+        trust: undefined,
       }),
     });
     setTab("belief");
@@ -766,6 +779,7 @@ function Feed() {
         ...prev,
         create: true,
         terms: undefined,
+        trust: undefined,
         dna: undefined,
         p: undefined,
         dash: undefined,
@@ -785,6 +799,18 @@ function Feed() {
   };
   // Terms are always entered from somewhere; the form is the honest fallback.
   const closeTerms = () => backToPrevious({ ...centerNow, terms: undefined });
+  /**
+   * TRANSPARENCY & TRUST reads in the centre for the same reason Terms does:
+   * the question "can you take my money?" arrives mid-order, and answering it
+   * should never cost the reader the market they were looking at.
+   */
+  const openTrust = () => {
+    pushCenter();
+    navigate({ search: (prev: Search) => ({ ...prev, trust: true, terms: undefined }) });
+    setTab("belief");
+    autoCollapse();
+  };
+  const closeTrust = () => backToPrevious({ ...centerNow, trust: undefined });
   /**
    * Every centre takeover leaves the same way: back to the view it covered.
    *
@@ -810,6 +836,7 @@ function Feed() {
         dna: undefined,
         create: undefined,
         terms: undefined,
+        trust: undefined,
         dash: undefined,
       }),
     });
@@ -1397,50 +1424,52 @@ function Feed() {
       if (!force && at - refillAtRef.current < FEED_REFILL_MS) return;
       refillAtRef.current = at;
       const q = queueRef.current;
-    for (let dig = 0; dig <= MAX_DIG; dig += 1) {
-      const depth = poolPageRef.current;
-      try {
-        const got = await fetchPage(q, depth);
-        if (got === "more") {
-          // Material arrived, so this pass is alive again — a future dry spell
-          // is allowed its own roll rather than being read as the end.
-          rolledRef.current = false;
-          return;
-        }
-
-        if (got === "bottom") {
-          /**
-           * THE CATALOGUE IS SPENT — ROLL THE PASS.
-           *
-           * Not an ending. Every market the reader touched during this pass
-           * stops excluding anything, the depth resets, and the next request is
-           * ranked from the top of the platform again with today's signal —
-           * today's tribe activity, today's momentum — so a second pass is a
-           * new running order rather than a replay of the last one.
-           *
-           * The one true ending is a rolled pass that STILL comes back empty:
-           * that means the platform itself has nothing, not that the reader has
-           * been through it.
-           */
-          if (rolledRef.current) {
-            setPagedOut(true);
+      for (let dig = 0; dig <= MAX_DIG; dig += 1) {
+        const depth = poolPageRef.current;
+        try {
+          const got = await fetchPage(q, depth);
+          if (got === "more") {
+            // Material arrived, so this pass is alive again — a future dry spell
+            // is allowed its own roll rather than being read as the end.
+            rolledRef.current = false;
             return;
           }
-          rolledRef.current = true;
-          rollFeedCycle();
-          poolPageRef.current = 0;
-          continue;
-        }
 
-        // Picked clean, but the catalogue goes deeper. Advance and ask again.
-        poolPageRef.current = depth + 1;
-      } catch {
-        // A page that fails to arrive costs the reader nothing they had. The
-        // throttle has already moved, so the next low-water tick tries again.
-        return;
+          if (got === "bottom") {
+            /**
+             * THE CATALOGUE IS SPENT — ROLL THE PASS.
+             *
+             * Not an ending. Every market the reader touched during this pass
+             * stops excluding anything, the depth resets, and the next request is
+             * ranked from the top of the platform again with today's signal —
+             * today's tribe activity, today's momentum — so a second pass is a
+             * new running order rather than a replay of the last one.
+             *
+             * The one true ending is a rolled pass that STILL comes back empty:
+             * that means the platform itself has nothing, not that the reader has
+             * been through it.
+             */
+            if (rolledRef.current) {
+              setPagedOut(true);
+              return;
+            }
+            rolledRef.current = true;
+            rollFeedCycle();
+            poolPageRef.current = 0;
+            continue;
+          }
+
+          // Picked clean, but the catalogue goes deeper. Advance and ask again.
+          poolPageRef.current = depth + 1;
+        } catch {
+          // A page that fails to arrive costs the reader nothing they had. The
+          // throttle has already moved, so the next low-water tick tries again.
+          return;
+        }
       }
-    }
-  }, [fetchPage]);
+    },
+    [fetchPage],
+  );
 
   const refillNow = useCallback(
     (force = false) => {
@@ -1652,6 +1681,7 @@ function Feed() {
     !dnaOpen &&
     !createOpen &&
     !termsOpen &&
+    !trustOpen &&
     !dashOpen;
   useEffect(() => {
     sceneWasVisible.current = sceneShowing;
@@ -1807,7 +1837,13 @@ function Feed() {
   // columns become the YES/NO case for the current market (existing intelligence,
   // reorganized). On mobile the Mine/Room tabs relabel to YES Case / NO Case.
   const caseEligible =
-    !!caseOpen && !selectedPerson && !dnaOpen && !createOpen && !termsOpen && !!currentRow;
+    !!caseOpen &&
+    !selectedPerson &&
+    !dnaOpen &&
+    !createOpen &&
+    !termsOpen &&
+    !trustOpen &&
+    !!currentRow;
   const caseActive = isDesktop && caseEligible;
   // Mobile uses the same ?case flag, but as a NO ← MARKET → YES swipe carousel in
   // the center rather than the desktop three-column split.
@@ -1846,26 +1882,30 @@ function Feed() {
               </button>
             }
             center={
-              wallet ? (
-                <button
-                  type="button"
-                  onClick={createOpen ? closeCreate : openCreate}
-                  aria-expanded={createOpen}
-                  className="inline-flex h-9 max-w-full items-center gap-1 truncate rounded-full border border-[var(--border-strong)] px-4 text-[13px] font-semibold text-[var(--text-secondary)] transition-colors hover:border-[var(--text)] hover:text-[var(--text)]"
-                >
-                  <span aria-hidden="true">{createOpen ? "✕" : "+"}</span>{" "}
-                  {createOpen ? "Close" : "Conviction"}
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  {...walletIntent}
-                  onClick={() => requestConnect()}
-                  className="inline-flex h-9 max-w-full items-center gap-1 truncate rounded-full border border-[var(--border-strong)] px-4 text-[13px] font-semibold text-[var(--text-secondary)] transition-colors hover:border-[var(--text)] hover:text-[var(--text)]"
-                >
-                  Connect wallet
-                </button>
-              )
+              <>
+                {/* The safety question, one tap from the wallet action. */}
+                <ShieldMark onClick={openTrust} />
+                {wallet ? (
+                  <button
+                    type="button"
+                    onClick={createOpen ? closeCreate : openCreate}
+                    aria-expanded={createOpen}
+                    className="inline-flex h-9 max-w-full items-center gap-1 truncate rounded-full border border-[var(--border-strong)] px-4 text-[13px] font-semibold text-[var(--text-secondary)] transition-colors hover:border-[var(--text)] hover:text-[var(--text)]"
+                  >
+                    <span aria-hidden="true">{createOpen ? "✕" : "+"}</span>{" "}
+                    {createOpen ? "Close" : "Conviction"}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    {...walletIntent}
+                    onClick={() => requestConnect()}
+                    className="inline-flex h-9 max-w-full items-center gap-1 truncate rounded-full border border-[var(--border-strong)] px-4 text-[13px] font-semibold text-[var(--text-secondary)] transition-colors hover:border-[var(--text)] hover:text-[var(--text)]"
+                  >
+                    Connect wallet
+                  </button>
+                )}
+              </>
             }
           />
         }
@@ -1876,6 +1916,7 @@ function Feed() {
                 wallet={wallet}
                 onViewProfile={selectPerson}
                 onOpenTerms={openTerms}
+                onOpenTrust={openTrust}
                 onOpenDashboard={openDashboard}
                 ethUsd={stableFeed?.ethUsd ?? 0}
               />
@@ -2021,7 +2062,17 @@ function Feed() {
           <div className="mx-auto flex min-h-0 w-full max-w-[920px] flex-1 flex-col">
             {/* Center focus: person profile, DNA overview, or the single-market deck.
               The deck owns its own internal scroll so its dock stays pinned. */}
-            {termsOpen ? (
+            {trustOpen ? (
+              <div className="min-h-0 flex-1 overflow-y-auto">
+                <BackLink onClick={closeTrust} />
+                <h1 className="mb-3 text-[24px] font-semibold tracking-[-0.02em] text-[var(--text)]">
+                  Trust shouldn&apos;t require trust.
+                </h1>
+                <Suspense fallback={<DeckSkeleton />}>
+                  <TrustContent />
+                </Suspense>
+              </div>
+            ) : termsOpen ? (
               <div className="min-h-0 flex-1 overflow-y-auto">
                 <BackLink onClick={closeTerms} />
                 <h1 className="mb-3 text-[24px] font-semibold tracking-[-0.02em] text-[var(--text)]">

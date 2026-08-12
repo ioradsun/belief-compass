@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as ValueRouteImport } from './routes/value'
+import { Route as TrustRouteImport } from './routes/trust'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as Lab9f3c7a21b4RouteImport } from './routes/lab-9f3c7a21b4'
@@ -38,6 +39,11 @@ import { Route as ApiPublicJobsBeliefRollupRouteImport } from './routes/api/publ
 const ValueRoute = ValueRouteImport.update({
   id: '/value',
   path: '/value',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TrustRoute = TrustRouteImport.update({
+  id: '/trust',
+  path: '/trust',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TermsRoute = TermsRouteImport.update({
@@ -176,6 +182,7 @@ export interface FileRoutesByFullPath {
   '/lab-9f3c7a21b4': typeof Lab9f3c7a21b4Route
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/terms': typeof TermsRoute
+  '/trust': typeof TrustRoute
   '/value': typeof ValueRoute
   '/dev/rail': typeof DevRailRoute
   '/dev/transitions': typeof DevTransitionsRoute
@@ -203,6 +210,7 @@ export interface FileRoutesByTo {
   '/lab-9f3c7a21b4': typeof Lab9f3c7a21b4Route
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/terms': typeof TermsRoute
+  '/trust': typeof TrustRoute
   '/value': typeof ValueRoute
   '/dev/rail': typeof DevRailRoute
   '/dev/transitions': typeof DevTransitionsRoute
@@ -231,6 +239,7 @@ export interface FileRoutesById {
   '/lab-9f3c7a21b4': typeof Lab9f3c7a21b4Route
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/terms': typeof TermsRoute
+  '/trust': typeof TrustRoute
   '/value': typeof ValueRoute
   '/dev/rail': typeof DevRailRoute
   '/dev/transitions': typeof DevTransitionsRoute
@@ -260,6 +269,7 @@ export interface FileRouteTypes {
     | '/lab-9f3c7a21b4'
     | '/sitemap.xml'
     | '/terms'
+    | '/trust'
     | '/value'
     | '/dev/rail'
     | '/dev/transitions'
@@ -287,6 +297,7 @@ export interface FileRouteTypes {
     | '/lab-9f3c7a21b4'
     | '/sitemap.xml'
     | '/terms'
+    | '/trust'
     | '/value'
     | '/dev/rail'
     | '/dev/transitions'
@@ -314,6 +325,7 @@ export interface FileRouteTypes {
     | '/lab-9f3c7a21b4'
     | '/sitemap.xml'
     | '/terms'
+    | '/trust'
     | '/value'
     | '/dev/rail'
     | '/dev/transitions'
@@ -342,6 +354,7 @@ export interface RootRouteChildren {
   Lab9f3c7a21b4Route: typeof Lab9f3c7a21b4Route
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   TermsRoute: typeof TermsRoute
+  TrustRoute: typeof TrustRoute
   ValueRoute: typeof ValueRoute
   DevRailRoute: typeof DevRailRoute
   DevTransitionsRoute: typeof DevTransitionsRoute
@@ -370,6 +383,13 @@ declare module '@tanstack/react-router' {
       path: '/value'
       fullPath: '/value'
       preLoaderRoute: typeof ValueRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/trust': {
+      id: '/trust'
+      path: '/trust'
+      fullPath: '/trust'
+      preLoaderRoute: typeof TrustRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/terms': {
@@ -550,6 +570,7 @@ const rootRouteChildren: RootRouteChildren = {
   Lab9f3c7a21b4Route: Lab9f3c7a21b4Route,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   TermsRoute: TermsRoute,
+  TrustRoute: TrustRoute,
   ValueRoute: ValueRoute,
   DevRailRoute: DevRailRoute,
   DevTransitionsRoute: DevTransitionsRoute,
@@ -573,13 +594,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
