@@ -245,7 +245,17 @@ export function ProfileMenu({
           )}
           <Item label="Import POV Wallet" onClick={() => (setPanel("import"), setOpen(false))} />
           <Divider />
+          {onOpenTrust && (
+            <Item
+              label="Transparency & Trust"
+              onClick={() => {
+                onOpenTrust();
+                setOpen(false);
+              }}
+            />
+          )}
           <Item label="Settings" onClick={() => (setPanel("settings"), setOpen(false))} />
+
 
           <Item
             label="Switch Wallet"
