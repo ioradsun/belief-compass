@@ -1253,7 +1253,12 @@ function Feed() {
     activeMarket == null ? -1 : marketRows.findIndex((r) => Number(r.onchain_id) === activeMarket);
   const currentIdx = Math.max(0, foundIdx);
   // Warm the immediate neighbors' deck-core so "Next" (and back) feels local.
-  usePredictivePrefetch(ids, currentIdx);
+  // The viewer's ledger comes along so the Insider Read for the likely-next
+  // market is warmed in the round it will actually be read in.
+  usePredictivePrefetch(ids, currentIdx, {
+    wallet,
+    mode: simulating ? "SIMULATION" : "REAL",
+  });
 
   // Tell the queue where the reader is. The URL decides; this keeps the list's
   // highlight in step and splices in a market the running order has never seen
