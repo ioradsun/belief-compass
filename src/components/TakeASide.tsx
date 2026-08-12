@@ -131,7 +131,7 @@ export function TakeASide({
         <p className="relative mt-2.5 text-[12px] leading-relaxed text-[var(--text-muted)]">
           {sim.active
             ? "Take sides on your own reasons. Simulated or real, every conviction counts toward your profile."
-            : SIMULATION_COPY.entryBody}
+            : "10 calls is all it takes to start finding your people."}
         </p>
       )}
 
