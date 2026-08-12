@@ -9,6 +9,7 @@
 import { serviceClient } from "@/lib/supabase-clients";
 import type { ViewerMarketState } from "@/domain/feed/eligibility";
 import { EMPTY_PROFILE, type ViewerProfile } from "@/domain/feed/score";
+import { EXPRESSED_WEIGHT } from "@/domain/beliefs";
 import { loadFollowing } from "@/lib/follows.functions";
 import { ORIGIN } from "@/domain/feed/config";
 
@@ -119,15 +120,27 @@ type BeliefRow = {
   last_trade_at: string | null;
 };
 
-function mean(vectors: number[][]): number[] | null {
-  if (vectors.length === 0) return null;
-  const dim = vectors[0]!.length;
+/**
+ * The taste embedding is a WEIGHTED mean: a market the viewer actually traded
+ * counts at full weight, a free expressed belief (a calibration answer, or any
+ * other tap) at the low expressed weight. So the first feed leans on the ten
+ * calibration answers, and every real position pulls the centroid toward what
+ * the viewer actually does. A vacuous item (no weight, empty vector) is skipped
+ * rather than dragging the centroid toward the origin.
+ */
+function weightedMean(items: { vec: number[]; weight: number }[]): number[] | null {
+  const usable = items.filter((it) => it.weight > 0 && it.vec.length > 0);
+  if (usable.length === 0) return null;
+  const dim = usable[0]!.vec.length;
   const out = new Array<number>(dim).fill(0);
-  for (const v of vectors) {
-    if (v.length !== dim) continue;
-    for (let i = 0; i < dim; i += 1) out[i]! += v[i]!;
+  let total = 0;
+  for (const { vec, weight } of usable) {
+    if (vec.length !== dim) continue;
+    for (let i = 0; i < dim; i += 1) out[i]! += vec[i]! * weight;
+    total += weight;
   }
-  return out.map((x) => x / vectors.length);
+  if (total === 0) return null;
+  return out.map((x) => x / total);
 }
 
 function normalize(counts: Map<string, number>): Record<string, number> {
@@ -153,7 +166,7 @@ export async function loadViewerSignals(
     states.set(id, { ...(states.get(id) ?? {}), ...patch });
   };
 
-  const [events, decisions, beliefs, history, following] = await Promise.all([
+  const [events, decisions, beliefs, history, expressed, following] = await Promise.all([
     sb
       .from("viewer_market_events")
       .select("market_id, kind, count, last_at")
@@ -173,6 +186,10 @@ export async function loadViewerSignals(
       .in("stance_side", ["YES", "NO"])
       .order("last_trade_at", { ascending: false, nullsFirst: false })
       .limit(200),
+    // Free expressed beliefs — the ten calibration answers, and any other tap.
+    // They are WEAK taste evidence: enough to shape the first feed a new person
+    // sees, never enough to outweigh what they actually trade.
+    sb.from("expressed_beliefs").select("onchain_id").eq("wallet", w).limit(200),
     loadFollowing(sb, w),
   ]);
 
@@ -264,40 +281,58 @@ export async function loadViewerSignals(
     }
   }
 
-  // Affinity + taste embedding from the markets this person actually acted on.
-  const historyIds = ((history.data ?? []) as { onchain_id: number }[]).map((h) =>
-    Number(h.onchain_id),
+  // Affinity + taste embedding. Markets the viewer actually TRADED count at full
+  // weight; the free expressed beliefs — the ten calibration answers and any
+  // other tap — count at the low expressed weight, so they shape the first feed
+  // and are then progressively overpowered by real behaviour. A market the viewer
+  // both answered and later traded is history, not a second weak vote: the
+  // expressed ids exclude anything already in the traded history.
+  const historySet = new Set(
+    ((history.data ?? []) as { onchain_id: number }[]).map((h) => Number(h.onchain_id)),
+  );
+  const expressedSet = new Set(
+    ((expressed.data ?? []) as { onchain_id: number }[])
+      .map((e) => Number(e.onchain_id))
+      .filter((id) => !historySet.has(id)),
   );
   const categories = new Map<string, number>();
   const topics = new Map<string, number>();
   const creators = new Map<string, number>();
-  const vectors: number[][] = [];
+  const vectors: { vec: number[]; weight: number }[] = [];
 
-  if (historyIds.length) {
+  const tasteIds = [...historySet, ...expressedSet];
+  // Full weight for a traded market, the expressed weight for a free belief.
+  const weightOf = (id: number) => (historySet.has(id) ? 1 : EXPRESSED_WEIGHT);
+  if (tasteIds.length) {
     const [mkts, ai] = await Promise.all([
-      sb.from("markets").select("onchain_id, category, author_wallet").in("onchain_id", historyIds),
+      sb.from("markets").select("onchain_id, category, author_wallet").in("onchain_id", tasteIds),
       sb
         .from("market_ai_analysis")
         .select("onchain_id, category, topic, embedding")
-        .in("onchain_id", historyIds),
+        .in("onchain_id", tasteIds),
     ]);
     for (const m of (mkts.data ?? []) as {
+      onchain_id: number;
       category: string | null;
       author_wallet: string | null;
     }[]) {
-      if (m.category) categories.set(m.category, (categories.get(m.category) ?? 0) + 1);
+      const wgt = weightOf(Number(m.onchain_id));
+      if (m.category) categories.set(m.category, (categories.get(m.category) ?? 0) + wgt);
       if (m.author_wallet) {
         const a = m.author_wallet.toLowerCase();
-        creators.set(a, (creators.get(a) ?? 0) + 1);
+        creators.set(a, (creators.get(a) ?? 0) + wgt);
       }
     }
     for (const a of (ai.data ?? []) as {
+      onchain_id: number;
       category: string | null;
       topic: string | null;
       embedding: unknown;
     }[]) {
-      if (a.topic) topics.set(a.topic, (topics.get(a.topic) ?? 0) + 1);
-      if (Array.isArray(a.embedding)) vectors.push((a.embedding as number[]).map(Number));
+      const wgt = weightOf(Number(a.onchain_id));
+      if (a.topic) topics.set(a.topic, (topics.get(a.topic) ?? 0) + wgt);
+      if (Array.isArray(a.embedding))
+        vectors.push({ vec: (a.embedding as number[]).map(Number), weight: wgt });
     }
   }
 
@@ -314,7 +349,7 @@ export async function loadViewerSignals(
       categoryAffinity: normalize(categories),
       topicAffinity: normalize(topics),
       creatorAffinity: normalize(creators),
-      tasteEmbedding: mean(vectors),
+      tasteEmbedding: weightedMean(vectors),
       neverShown,
     },
   };
