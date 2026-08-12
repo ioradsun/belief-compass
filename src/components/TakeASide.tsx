@@ -1,5 +1,5 @@
 /**
- * BUILD YOUR PROFILE — the first-run brief, and the door into Simulation.
+ * FIND YOUR PEOPLE — the first-run brief, and the door into Simulation.
  *
  * A new reader's problem is not "what is happening in this market", it is "what
  * am I supposed to DO here". So for the first ten convictions this card takes the
@@ -82,7 +82,7 @@ export function TakeASide({
       <div className="relative flex items-center gap-1.5">
         <span className="h-1.5 w-1.5 rounded-full" style={{ background: "var(--notice)" }} />
         <div className="text-[11px] font-semibold tracking-[0.08em] uppercase text-[var(--notice)]">
-          Build your profile
+          Find your people
         </div>
       </div>
 
@@ -131,7 +131,7 @@ export function TakeASide({
         <p className="relative mt-2.5 text-[12px] leading-relaxed text-[var(--text-muted)]">
           {sim.active
             ? "Take sides on your own reasons. Simulated or real, every conviction counts toward your profile."
-            : SIMULATION_COPY.entryBody}
+            : "10 calls is all it takes to start finding your people."}
         </p>
       )}
 
@@ -150,7 +150,7 @@ export function TakeASide({
             {sim.pending ? "Starting…" : "Try Simulation"}
           </button>
           <p className="relative mt-1.5 text-[11px] leading-relaxed text-[var(--text-muted)]">
-            {SIMULATION_COPY.entrySupport}
+            Play with 1,000 CC. No real money.
           </p>
           {/* ONE QUIET LINE, and it is the honest one: a signature is not a
               transaction, and somebody about to see a wallet prompt deserves to
