@@ -16,7 +16,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { getChallengeCards } from "@/lib/challenge.functions";
 import { putOnTable, takeOffTable } from "@/lib/table.functions";
-import { ChallengeCard } from "@/components/ChallengeCard";
+import { ChallengeCard, isOutwardCard } from "@/components/ChallengeCard";
 import { ChallengeChainSheet } from "@/components/ChallengeChainSheet";
 import { tableKey } from "@/components/YourTable";
 import { bestEffort, useWalletSession } from "@/hooks/useWalletSession";
