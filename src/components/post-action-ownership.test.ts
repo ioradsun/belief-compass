@@ -38,7 +38,11 @@ describe("resolvePostAction owns all three closing flows", () => {
      */
     for (const f of ["src/components/MarketDeck.tsx", "src/components/MobileGame.tsx"]) {
       const c = code(f);
-      const buy = c.slice(c.indexOf("if (trade.isSuccess"));
+      // Anchored on the completed-buy gate both surfaces share. Desktop draws it
+      // as an in-place order bar (`const posted = trade.isSuccess && side …`),
+      // mobile as a full screen (`if (trade.isSuccess && side …)`) — either way
+      // the close is a `<PostAction kind="buy">`, never a hand-rolled screen.
+      const buy = c.slice(c.indexOf("trade.isSuccess && side"));
       expect(buy, f).toMatch(/<PostAction\b/);
       expect(buy, f).toMatch(/kind="buy"/);
     }
@@ -112,10 +116,15 @@ describe("the competing owners are gone, not merely bypassed", () => {
     // post-buy surface passes neither, so no CTA renders there.
     expect(c).toMatch(/onNext\?: \(\) => void/);
     expect(c).toMatch(/\{onNext && \(/);
-    const deck = code("src/components/MarketDeck.tsx");
-    expect(deck).toMatch(/reveal=\{<ConvictionReveal story=\{reveal\} side=\{side\} \/>\}/);
-    // No navigation handed to it from the deck — that is the resolver's job.
-    expect(deck).not.toMatch(/<ConvictionReveal[\s\S]{0,200}onNext=/);
+    // Desktop's completed buy now transforms the order bar in place (variant="bar")
+    // and draws no full reveal, so the post-buy ConvictionReveal lives on mobile —
+    // where it must still draw the story and be handed no destination.
+    const mobile = code("src/components/MobileGame.tsx");
+    expect(mobile).toMatch(/reveal=\{<ConvictionReveal story=\{reveal\} side=\{side\} \/>\}/);
+    // No navigation handed to it — that is the resolver's job.
+    expect(mobile).not.toMatch(/<ConvictionReveal[\s\S]{0,200}onNext=/);
+    // And the deck no longer wires its own reveal navigation either.
+    expect(code("src/components/MarketDeck.tsx")).not.toMatch(/<ConvictionReveal[\s\S]{0,200}onNext=/);
   });
 
   it("leaves the route executing a CTA rather than inventing one", () => {
