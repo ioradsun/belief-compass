@@ -93,7 +93,6 @@ describe("rolling the pass re-admits everything", () => {
     ["an opened case file", { openedAt: agoMs(3 * HOUR) }],
     ["a pass", { passedAt: agoMs(3 * HOUR), passCount: 3 }],
     ["a full exit", { soldAt: agoMs(3 * HOUR) }],
-    ["a position taken before the pass", { activePosition: true, positionAt: agoMs(3 * HOUR) }],
   ])("%s from a spent pass is fresh again", (_label, state) => {
     const e = gate(state);
     expect(e.eligible).toBe(true);
@@ -104,10 +103,16 @@ describe("rolling the pass re-admits everything", () => {
     expect(gate({ hiddenAt: agoMs(3 * HOUR) }).reason).toBe("hidden");
   });
 
-  it("a position with no known trade time stays out until it is sold", () => {
-    // No timestamp means no way to say which pass it belongs to; the safe
-    // reading of "you are holding this right now" is that it is current.
+  /**
+   * A HELD POSITION IS THE EXCEPTION TO THE ROLL. Rolling the pass recycles the
+   * questions the reader did not answer; money on a side IS an answer, and it
+   * stands until they exit. Re-entry, not the roll, brings it back.
+   */
+  it("a position stays out no matter how old the trade is", () => {
     expect(gate({ activePosition: true }).reason).toBe("active_position");
+    expect(gate({ activePosition: true, positionAt: agoMs(3 * HOUR) }).reason).toBe(
+      "active_position",
+    );
   });
 
   it("with no pass boundary at all, every recorded contact still counts", () => {
