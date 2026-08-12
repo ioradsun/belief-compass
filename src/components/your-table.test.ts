@@ -67,7 +67,7 @@ describe("the outbound card claims only what the server proved", () => {
 describe("taking it off the table", () => {
   it("is casual, and destroys nothing", () => {
     const c = yours();
-    expect(c).toMatch(/Take off the table/);
+    expect(c).toMatch(/Withdraw/);
     expect(c).not.toMatch(/Delete|Cancel|Remove Challenge/i);
   });
 
