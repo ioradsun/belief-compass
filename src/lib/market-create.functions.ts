@@ -357,6 +357,16 @@ export const finalizeMarketCreate = createServerFn({ method: "POST" })
       .then(() => undefined);
 
 
+    // THE SEED IS A TRADE. It lives in the creation tx itself, so ingest that
+    // receipt now instead of waiting a poller tick — otherwise the creator
+    // lands on their brand-new market and sees $0 staked.
+    try {
+      const { ingestCreationTx } = await import("@/lib/market-create-ingest.server");
+      await ingestCreationTx(db, data.txHash, data.marketId);
+    } catch {
+      // Non-fatal: the poller will pick the same events up (same source_key).
+    }
+
     // Build the read-model row now rather than waiting behind the refresh
     // queue: the creator is about to land on this market.
     try {
@@ -368,6 +378,7 @@ export const finalizeMarketCreate = createServerFn({ method: "POST" })
         .rpc("enqueue_market_refresh", { p_market_ids: [data.marketId], p_kind: "activity" })
         .then(() => undefined);
     }
+
     return { ok: true as const };
   });
 
