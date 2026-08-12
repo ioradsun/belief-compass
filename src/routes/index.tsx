@@ -664,7 +664,7 @@ function Feed() {
     const prev = centerStack.current.pop();
     navigate({ search: (s: Search) => ({ ...s, ...CLEARED_CENTER, ...(prev ?? fallback) }) });
     setTab("belief");
-    enterProduct();
+    autoCollapse();
   };
 
   // One selection flow for the whole app. Clicking a position/Live row sets ?m; a
@@ -689,7 +689,7 @@ function Feed() {
       }),
     });
     setTab("belief");
-    enterProduct();
+    autoCollapse();
   };
 
   /**
@@ -716,7 +716,7 @@ function Feed() {
       }),
     });
     setTab("belief");
-    enterProduct();
+    autoCollapse();
   };
   const closeLaunch = () =>
     navigate({ search: (prev: Search) => ({ ...prev, launch: undefined }) });
@@ -735,7 +735,7 @@ function Feed() {
       }),
     });
     setTab("belief");
-    enterProduct();
+    autoCollapse();
   };
 
   // Universal behaviour: any avatar anywhere opens that profile in the center.
@@ -761,7 +761,7 @@ function Feed() {
       }),
     });
     setTab("belief");
-    enterProduct();
+    autoCollapse();
   };
   // Creating a market is a first-class center-column destination, not a modal:
   // it deep-links, survives refresh, and back returns you to where you were.
