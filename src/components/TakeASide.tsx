@@ -1,5 +1,5 @@
 /**
- * BUILD YOUR PROFILE — the first-run brief, and the door into Simulation.
+ * FIND YOUR PEOPLE — the first-run brief, and the door into Simulation.
  *
  * A new reader's problem is not "what is happening in this market", it is "what
  * am I supposed to DO here". So for the first ten convictions this card takes the
