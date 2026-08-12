@@ -115,6 +115,9 @@ const CaseColumn = lazyRetry(() =>
 const TermsContent = lazyRetry(() =>
   import("@/components/TermsContent").then((m) => ({ default: m.TermsContent })),
 );
+const TrustContent = lazyRetry(() =>
+  import("@/components/TrustContent").then((m) => ({ default: m.TrustContent })),
+);
 
 import { useHouseIdea } from "@/hooks/useHouseIdea";
 import type { ReadySuggestion } from "@/lib/market-suggestion.functions";
@@ -143,6 +146,7 @@ const MyWorld = lazyRetry(() =>
 import { Crosshair } from "lucide-react";
 import { OmniHeader } from "@/components/OmniHeader";
 import { ProfileMenu } from "@/components/ProfileMenu";
+import { ShieldMark } from "@/components/ShieldMark";
 
 import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
 import { useAccount } from "wagmi";
@@ -341,6 +345,8 @@ type Search = {
   dna?: boolean;
   create?: boolean;
   terms?: boolean;
+  /** Transparency & Trust, read in the centre column like Terms. */
+  trust?: boolean;
   case?: boolean;
   dash?: boolean;
   /**
@@ -378,6 +384,7 @@ export const Route = createFileRoute("/")({
     dna: flag(search.dna),
     create: flag(search.create),
     terms: flag(search.terms),
+    trust: flag(search.trust),
     // Case File mode — preserved in the URL so it survives market switches + back/forward.
     case: flag(search.case),
     // Conviction Dashboard — the financial story, a center-panel destination.
@@ -511,7 +518,7 @@ type MobileTab = AppTab;
  *  toggle rather than a destination, so it is deliberately not part of it. */
 type CenterView = Pick<
   Search,
-  "m" | "p" | "dna" | "create" | "terms" | "dash" | "hist" | "launch"
+  "m" | "p" | "dna" | "create" | "terms" | "trust" | "dash" | "hist" | "launch"
 >;
 
 const CLEARED_CENTER: CenterView = {
@@ -520,6 +527,7 @@ const CLEARED_CENTER: CenterView = {
   dna: undefined,
   create: undefined,
   terms: undefined,
+  trust: undefined,
   dash: undefined,
   hist: undefined,
   // Carried with the center view so back/forward restores Launch Mode with the
@@ -536,6 +544,7 @@ function Feed() {
     dna: dnaOpen,
     create: createOpen,
     terms: termsOpen,
+    trust: trustOpen,
     case: caseOpen,
     dash: dashOpen,
     hist: histOpen,
@@ -648,6 +657,7 @@ function Feed() {
     dna: dnaOpen,
     create: createOpen,
     terms: termsOpen,
+    trust: trustOpen,
     dash: dashOpen,
     hist: histOpen,
   };
@@ -680,6 +690,7 @@ function Feed() {
         dna: undefined,
         create: undefined,
         terms: undefined,
+        trust: undefined,
         dash: undefined,
         // Leaving for another market ends Launch Mode. The recruitment panel is
         // about ONE market a creator just made; letting it trail along would
@@ -708,6 +719,7 @@ function Feed() {
         dna: undefined,
         create: undefined,
         terms: undefined,
+        trust: undefined,
         dash: undefined,
       }),
     });
@@ -724,6 +736,7 @@ function Feed() {
         dna: undefined,
         create: undefined,
         terms: undefined,
+        trust: undefined,
         dash: undefined,
       }),
     });
@@ -751,6 +764,7 @@ function Feed() {
         p: undefined,
         create: undefined,
         terms: undefined,
+        trust: undefined,
       }),
     });
     setTab("belief");
@@ -766,6 +780,7 @@ function Feed() {
         ...prev,
         create: true,
         terms: undefined,
+        trust: undefined,
         dna: undefined,
         p: undefined,
         dash: undefined,
@@ -785,6 +800,18 @@ function Feed() {
   };
   // Terms are always entered from somewhere; the form is the honest fallback.
   const closeTerms = () => backToPrevious({ ...centerNow, terms: undefined });
+  /**
+   * TRANSPARENCY & TRUST reads in the centre for the same reason Terms does:
+   * the question "can you take my money?" arrives mid-order, and answering it
+   * should never cost the reader the market they were looking at.
+   */
+  const openTrust = () => {
+    pushCenter();
+    navigate({ search: (prev: Search) => ({ ...prev, trust: true, terms: undefined }) });
+    setTab("belief");
+    autoCollapse();
+  };
+  const closeTrust = () => backToPrevious({ ...centerNow, trust: undefined });
   /**
    * Every centre takeover leaves the same way: back to the view it covered.
    *
@@ -810,6 +837,7 @@ function Feed() {
         dna: undefined,
         create: undefined,
         terms: undefined,
+        trust: undefined,
         dash: undefined,
       }),
     });
@@ -1652,6 +1680,7 @@ function Feed() {
     !dnaOpen &&
     !createOpen &&
     !termsOpen &&
+    !trustOpen &&
     !dashOpen;
   useEffect(() => {
     sceneWasVisible.current = sceneShowing;
@@ -1807,7 +1836,13 @@ function Feed() {
   // columns become the YES/NO case for the current market (existing intelligence,
   // reorganized). On mobile the Mine/Room tabs relabel to YES Case / NO Case.
   const caseEligible =
-    !!caseOpen && !selectedPerson && !dnaOpen && !createOpen && !termsOpen && !!currentRow;
+    !!caseOpen &&
+    !selectedPerson &&
+    !dnaOpen &&
+    !createOpen &&
+    !termsOpen &&
+    !trustOpen &&
+    !!currentRow;
   const caseActive = isDesktop && caseEligible;
   // Mobile uses the same ?case flag, but as a NO ← MARKET → YES swipe carousel in
   // the center rather than the desktop three-column split.
@@ -1876,6 +1911,7 @@ function Feed() {
                 wallet={wallet}
                 onViewProfile={selectPerson}
                 onOpenTerms={openTerms}
+                onOpenTrust={openTrust}
                 onOpenDashboard={openDashboard}
                 ethUsd={stableFeed?.ethUsd ?? 0}
               />
@@ -2021,7 +2057,17 @@ function Feed() {
           <div className="mx-auto flex min-h-0 w-full max-w-[920px] flex-1 flex-col">
             {/* Center focus: person profile, DNA overview, or the single-market deck.
               The deck owns its own internal scroll so its dock stays pinned. */}
-            {termsOpen ? (
+            {trustOpen ? (
+              <div className="min-h-0 flex-1 overflow-y-auto">
+                <BackLink onClick={closeTrust} />
+                <h1 className="mb-3 text-[24px] font-semibold tracking-[-0.02em] text-[var(--text)]">
+                  Trust shouldn&apos;t require trust.
+                </h1>
+                <Suspense fallback={<DeckSkeleton />}>
+                  <TrustContent />
+                </Suspense>
+              </div>
+            ) : termsOpen ? (
               <div className="min-h-0 flex-1 overflow-y-auto">
                 <BackLink onClick={closeTerms} />
                 <h1 className="mb-3 text-[24px] font-semibold tracking-[-0.02em] text-[var(--text)]">
