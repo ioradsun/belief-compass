@@ -21,8 +21,8 @@ import { Route as DevVoiceRouteImport } from './routes/dev.voice'
 import { Route as DevTransitionsRouteImport } from './routes/dev.transitions'
 import { Route as DevRailRouteImport } from './routes/dev.rail'
 import { Route as OgMarketMidRouteImport } from './routes/og/market.$mid'
-import { Route as ApiPublicHealthRouteImport } from './routes/api/public/health'
 import { Route as ApiPublicHomeSnapshotRouteImport } from './routes/api/public/home-snapshot'
+import { Route as ApiPublicHealthRouteImport } from './routes/api/public/health'
 import { Route as ApiPublicBuildIdRouteImport } from './routes/api/public/build-id'
 import { Route as ApiPublicJobsTapeWarmRouteImport } from './routes/api/public/jobs/tape-warm'
 import { Route as ApiPublicJobsSuggestionGeneratorRouteImport } from './routes/api/public/jobs/suggestion-generator'
@@ -95,14 +95,14 @@ const OgMarketMidRoute = OgMarketMidRouteImport.update({
   path: '/og/market/$mid',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiPublicHealthRoute = ApiPublicHealthRouteImport.update({
-  id: '/api/public/health',
-  path: '/api/public/health',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ApiPublicHomeSnapshotRoute = ApiPublicHomeSnapshotRouteImport.update({
   id: '/api/public/home-snapshot',
   path: '/api/public/home-snapshot',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicHealthRoute = ApiPublicHealthRouteImport.update({
+  id: '/api/public/health',
+  path: '/api/public/health',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiPublicBuildIdRoute = ApiPublicBuildIdRouteImport.update({
@@ -449,18 +449,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OgMarketMidRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/public/health': {
-      id: '/api/public/health'
-      path: '/api/public/health'
-      fullPath: '/api/public/health'
-      preLoaderRoute: typeof ApiPublicHealthRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/api/public/home-snapshot': {
       id: '/api/public/home-snapshot'
       path: '/api/public/home-snapshot'
       fullPath: '/api/public/home-snapshot'
       preLoaderRoute: typeof ApiPublicHomeSnapshotRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/health': {
+      id: '/api/public/health'
+      path: '/api/public/health'
+      fullPath: '/api/public/health'
+      preLoaderRoute: typeof ApiPublicHealthRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/build-id': {
