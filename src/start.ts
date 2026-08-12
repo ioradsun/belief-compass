@@ -16,6 +16,10 @@ import { attachSupabaseAuth } from "@/integrations/supabase/auth-attacher";
 // render the error page (which would be reported as a blank-screen runtime error).
 
 const errorMiddleware = createMiddleware().server(async ({ next, request }) => {
+  // Internal /lovable/* routes authenticate themselves; never wrap or gate them.
+  if (request && new URL(request.url).pathname.startsWith("/lovable/")) {
+    return next();
+  }
   try {
     return await next();
   } catch (error) {
@@ -37,7 +41,9 @@ const errorMiddleware = createMiddleware().server(async ({ next, request }) => {
 // file opts out, so re-add it explicitly to keep server functions protected
 // from cross-site requests.
 const csrfMiddleware = createCsrfMiddleware({
-  filter: (ctx) => ctx.handlerType === "serverFn",
+  filter: (ctx) =>
+    ctx.handlerType === "serverFn" &&
+    !new URL(ctx.request.url).pathname.startsWith("/lovable/"),
 });
 
 export const startInstance = createStart(() => ({

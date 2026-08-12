@@ -7,6 +7,11 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
+import { loadEnv } from "vite";
+
+// Server routes (e.g. /lovable/email/*) read non-VITE_ env vars from process.env.
+// Client-visible vars stay limited to the VITE_ injection handled by the preset.
+Object.assign(process.env, loadEnv(process.env.NODE_ENV || "development", process.cwd(), ""));
 
 // Fresh id per build — inlined into the client bundle AND read by the server
 // build-id endpoint, so VersionWatcher can detect and hard-reload stale tabs.
@@ -197,6 +202,16 @@ export default defineConfig({
         "blakejs",
         "pino",
       ],
+    },
+
+    resolve: {
+      alias: {
+        // React Email pulls `entities`; a nested v7 copy would break SSR
+        // (v7 removed ./lib/decode.js). Pin every import to the hoisted v4.5.0.
+        "entities/lib/decode.js": fileURLToPath(new URL("./node_modules/entities/lib/decode.js", import.meta.url)),
+        "entities/lib/encode.js": fileURLToPath(new URL("./node_modules/entities/lib/encode.js", import.meta.url)),
+        entities: fileURLToPath(new URL("./node_modules/entities", import.meta.url)),
+      },
     },
 
     plugins: [eventsShimInBrowser, stubWalletConnectorsOnServer, stubWalletConnectorsModule],
