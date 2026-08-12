@@ -13,6 +13,7 @@ import {
 } from "@/lib/markets.functions";
 import { marketChangeQO } from "@/lib/market-queries";
 import { getOpportunityFeed, getWarmFeed } from "@/lib/opportunity-feed.functions";
+import { getHomeSnapshot } from "@/lib/home-snapshot.functions";
 import {
   feedSession,
   feedSessionVersion,
@@ -403,6 +404,30 @@ export const Route = createFileRoute("/")({
   // skeleton forever. Never start server work you do not wait for.
   loader: async () => {
     try {
+      // ONE READ FIRST. The front door is PUBLISHED, not assembled on arrival:
+      // Explore, Insider and the first markets' numbers are one versioned,
+      // paint-only snapshot (see lib/home-snapshot.server), rebuilt in the
+      // background so no ranking, aggregation or cold build ever stands between
+      // the reader and the first useful screen. A warm isolate peeks it
+      // in-process; a cold one does ONE durable read in place of the three
+      // separate warm reads this loader used to make. The pieces are trimmed and
+      // marked partial, so the client still fetches the live feed/tape right
+      // after — old snapshot now, fresh data a moment later.
+      const snapshot = await getHomeSnapshot();
+      if (snapshot?.explore) {
+        return {
+          feed: snapshot.explore,
+          tape: snapshot.insider ?? null,
+          deck: snapshot.marketCore ?? null,
+          fetchedAt: Date.now(),
+        };
+      }
+
+      // FALLBACK — the snapshot has not been published yet (a fresh deploy
+      // before the warmer ran, or a persist that has not landed). Read the
+      // individual warm surfaces exactly as this loader always did, so the front
+      // door can never regress below what it did before the snapshot existed.
+      //
       // WARM-ONLY. The shell must not wait on the feed build: on a cold isolate
       // that read cost 10s of TTFB and the landing page could not paint at all.
       // A warm isolate still SSRs a real market; a cold one ships the shell now

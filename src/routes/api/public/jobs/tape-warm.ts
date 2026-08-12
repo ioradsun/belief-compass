@@ -15,7 +15,9 @@ import { createFileRoute } from "@tanstack/react-router";
 import { assertIngestBearer } from "@/lib/service-supabase.server";
 import { buildTape } from "@/lib/insider/build.server";
 import { writeTapeSeed, type TapeResult } from "@/lib/insider/seed.server";
-import { writeDeckSeed, DECK_SEED_MARKETS } from "@/lib/deck-seed.server";
+import { writeDeckSeed, DECK_SEED_MARKETS, type DeckSeed } from "@/lib/deck-seed.server";
+import { assembleHomeSnapshot, persistHomeSnapshot } from "@/lib/home-snapshot.server";
+import type { OpportunityFeedResult } from "@/lib/opportunity-feed.server";
 
 
 export const Route = createFileRoute("/api/public/jobs/tape-warm")({
@@ -45,9 +47,13 @@ export const Route = createFileRoute("/api/public/jobs/tape-warm")({
           // too, so a deploy empties them and the first real visitor would
           // otherwise pay for both builds while looking at a skeleton.
           let deck = 0;
+          // Held past the deck block so the unified snapshot below can reuse
+          // exactly what was already built — publishing costs no extra queries.
+          let feed: OpportunityFeedResult | null = null;
+          let entries: DeckSeed = {};
           try {
             const { opportunityFeed } = await import("@/lib/opportunity-feed.server");
-            const feed = await opportunityFeed({ window: "24h" });
+            feed = await opportunityFeed({ window: "24h" });
             const ids = feed.items
               .filter((i) => i.kind === "market")
               .slice(0, DECK_SEED_MARKETS)
@@ -56,7 +62,7 @@ export const Route = createFileRoute("/api/public/jobs/tape-warm")({
             const cores = await Promise.all(
               ids.map(async (id) => [String(id), await readMarketChange(id)] as const),
             );
-            const entries = Object.fromEntries(cores);
+            entries = Object.fromEntries(cores);
             await writeDeckSeed(entries);
             deck = cores.length;
           } catch (e) {
@@ -64,10 +70,25 @@ export const Route = createFileRoute("/api/public/jobs/tape-warm")({
             console.error("[tape-warm] deck warm failed:", e instanceof Error ? e.message : e);
           }
 
+          // PUBLISH THE UNIFIED HOME SNAPSHOT. Explore, Insider and the first
+          // markets' numbers as ONE versioned, paint-only row, so the front door
+          // reads a single object instead of three separate warm surfaces. Built
+          // from what this job already has in hand, and never allowed to fail it.
+          let snapshot = false;
+          try {
+            await persistHomeSnapshot(
+              assembleHomeSnapshot({ explore: feed, insider: built, marketCore: entries }),
+            );
+            snapshot = true;
+          } catch (e) {
+            console.error("[tape-warm] home snapshot failed:", e instanceof Error ? e.message : e);
+          }
+
           return Response.json({
             ok: true,
             rows: built.rows.length,
             deck,
+            snapshot,
             copyVersion: built.copyVersion,
             ms: Date.now() - started,
           });

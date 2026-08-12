@@ -160,6 +160,20 @@ export function peekSwr<T>(key: string): T | undefined {
   return (store.get(key) as Entry<T> | undefined)?.value;
 }
 
+/**
+ * SEED THE CACHE with a value computed out of band.
+ *
+ * `swrCache` fills a key by running its factory on a miss, but some values are
+ * produced elsewhere: a background job that has just built a snapshot, or an SSR
+ * read that paid for a durable row once and wants the next read on this isolate
+ * to be free. This writes the slot exactly as a completed computation would, so
+ * a subsequent `peekSwr`/`swrCache` treats it as a fresh entry until it expires.
+ * It never joins or cancels an in-flight build; it only sets the stored value.
+ */
+export function putSwr<T>(key: string, value: T, ttlMs: number, now: () => number = Date.now): void {
+  store.set(key, { value, expires: now() + ttlMs, refreshing: false });
+}
+
 /** Test-only: drop all cached entries and any computation in flight. */
 export function _clearSwrCache(): void {
   store.clear();
