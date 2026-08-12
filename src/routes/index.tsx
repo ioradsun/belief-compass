@@ -104,6 +104,7 @@ import { useOpenCalls } from "@/lib/open-calls";
 import { MarketDeck } from "@/components/MarketDeck";
 import { MobileGame } from "@/components/MobileGame";
 import { MarketScene } from "@/components/MarketScene";
+import { DnaFirstReveal } from "@/components/DnaFirstReveal";
 
 import { DeckSkeleton } from "@/components/DeckSkeleton";
 import { PanelBoundary } from "@/components/PanelBoundary";
@@ -564,7 +565,7 @@ function Feed() {
    * progress, the exit) belongs to the banner and the order surfaces, which read
    * the provider themselves.
    */
-  const { active: simulating } = useSimulationMode();
+  const { active: simulating, profileProgress } = useSimulationMode();
   // Share attribution: record the open for an arriving ?r= link, and bind this
   // browser's opens to the wallet once one connects. Fails silently.
   useCaptureShareVisit(refCode, selectedMarket, wallet);
@@ -2190,8 +2191,21 @@ function Feed() {
                 selecting a market while the feed happened to be empty rendered
                 "No markets yet" over a perfectly loadable market — the deck
                 never mounted at all. A row in hand is a market to show. */
-              <MarketScene marketId={shownId}>
-                {!isDesktop ? (
+              <div className="flex min-h-0 flex-1 flex-col">
+                {/* THE PAYOFF FOR THE LOCKED 10. Once calibration is complete the
+                    center surfaces the single strongest relationship the ten
+                    turned up — a Twin, Tribe or Rival with real shared counts —
+                    and invites the reader into their convictions, leaving the
+                    House below as the next thing to prove. Self-retiring and
+                    one-time; it renders nothing until the evidence is real, so it
+                    is silent for everyone still calibrating. */}
+                {wallet && profileProgress.complete && (
+                  <div className="shrink-0 [&:not(:empty)]:pb-2">
+                    <DnaFirstReveal viewerWallet={wallet} onSelectPerson={selectPerson} />
+                  </div>
+                )}
+                <MarketScene marketId={shownId}>
+                  {!isDesktop ? (
                   /* MOBILE — The Conviction Game. Its own experience: the
                     question first, the crowd only after the decision.
                     Deliberately NOT keyed on the market id: a key here remounts
@@ -2218,7 +2232,8 @@ function Feed() {
                     reason={reasonByMarket[Number(currentRow.onchain_id)] ?? null}
                   />
                 )}
-              </MarketScene>
+                </MarketScene>
+              </div>
             ) : feedFailed ? (
               // The request failed, or never settled. A skeleton here would be a
               // promise the app cannot keep.
