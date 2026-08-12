@@ -616,9 +616,15 @@ function Feed() {
     navigate({ search: (prev: Search) => ({ ...prev, case: prev.case ? undefined : true }) });
   };
   // Brand introduction layer. Intentional product interactions (opening a
-  // market, a person, DNA) collapse it; nothing else does.
-  const landing = useLandingPanelState();
+  // market, a person, DNA) collapse it; nothing else does. Auto-collapse is only
+  // allowed when a wallet is already known — otherwise the panel stays open as
+  // the invitation to connect. A persisted collapsed state is also ignored when
+  // no wallet is cached, so returning without a session re-opens the panel.
+  const landing = useLandingPanelState(!!wallet);
   const enterProduct = landing.collapse;
+  const autoCollapse = useCallback(() => {
+    if (wallet) landing.collapse();
+  }, [wallet, landing.collapse]);
   const qc = useQueryClient();
   // Discovery end-state: the viewer has decided on every eligible market. Set when
   // "Next" runs off the end of the sequence; cleared by selecting a market or
@@ -659,7 +665,7 @@ function Feed() {
     const prev = centerStack.current.pop();
     navigate({ search: (s: Search) => ({ ...s, ...CLEARED_CENTER, ...(prev ?? fallback) }) });
     setTab("belief");
-    enterProduct();
+    autoCollapse();
   };
 
   // One selection flow for the whole app. Clicking a position/Live row sets ?m; a
@@ -684,7 +690,7 @@ function Feed() {
       }),
     });
     setTab("belief");
-    enterProduct();
+    autoCollapse();
   };
 
   /**
@@ -711,7 +717,7 @@ function Feed() {
       }),
     });
     setTab("belief");
-    enterProduct();
+    autoCollapse();
   };
   const closeLaunch = () =>
     navigate({ search: (prev: Search) => ({ ...prev, launch: undefined }) });
@@ -730,7 +736,7 @@ function Feed() {
       }),
     });
     setTab("belief");
-    enterProduct();
+    autoCollapse();
   };
 
   // Universal behaviour: any avatar anywhere opens that profile in the center.
@@ -756,7 +762,7 @@ function Feed() {
       }),
     });
     setTab("belief");
-    enterProduct();
+    autoCollapse();
   };
   // Creating a market is a first-class center-column destination, not a modal:
   // it deep-links, survives refresh, and back returns you to where you were.
@@ -774,7 +780,7 @@ function Feed() {
       }),
     });
     setTab("belief");
-    enterProduct();
+    autoCollapse();
   };
   const closeCreate = () => backToPrevious();
   // Terms read in the center column, so leaving the create form is never
@@ -783,7 +789,7 @@ function Feed() {
     pushCenter();
     navigate({ search: (prev: Search) => ({ ...prev, terms: true }) });
     setTab("belief");
-    enterProduct();
+    autoCollapse();
   };
   // Terms are always entered from somewhere; the form is the honest fallback.
   const closeTerms = () => backToPrevious({ ...centerNow, terms: undefined });
@@ -816,7 +822,7 @@ function Feed() {
       }),
     });
     setTab("belief");
-    enterProduct();
+    autoCollapse();
   };
   const closeHistory = () => backToPrevious({ ...centerNow, hist: undefined });
   /** The Case File spans BOTH rails, so the running order displaces it. */
@@ -850,8 +856,8 @@ function Feed() {
   useEffect(() => {
     if (!tabParam && !deepCenter) return;
     setTab(tabParam ?? "belief");
-    landing.collapse();
-  }, [tabParam, deepCenter]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (wallet) landing.collapse();
+  }, [tabParam, deepCenter, wallet]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /**
    * WHOSE MARKETS THE INSIDER COLUMN IS ABOUT.

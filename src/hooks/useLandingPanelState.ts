@@ -8,8 +8,13 @@ const KEY = "conviction.landing-panel";
  * First visit → expanded. Once the user explicitly enters or collapses, that
  * choice persists across visits. Only explicit decisions are stored; nothing
  * responsive or temporary is ever written.
+ *
+ * `allowCollapsed` lets the caller decide whether a persisted "collapsed"
+ * state is allowed to restore. When no wallet is connected in cache the panel
+ * should stay open as an invitation to connect, so callers can pass `false` and
+ * any saved collapsed state is ignored until a wallet is present.
  */
-export function useLandingPanelState() {
+export function useLandingPanelState(allowCollapsed = true) {
   // Default to the FIRST-VISIT state ("expanded") for SSR/hydration parity, so the
   // first paint already matches what a first-time visitor should see — no
   // collapsed→expanded flip on load. The effect below only ever *collapses*, and
@@ -25,9 +30,11 @@ export function useLandingPanelState() {
     } catch {
       saved = null;
     }
-    setState(saved === "collapsed" || saved === "expanded" ? saved : "expanded");
+    const restored =
+      saved === "collapsed" || saved === "expanded" ? saved : "expanded";
+    setState(allowCollapsed ? restored : "expanded");
     setHydrated(true);
-  }, []);
+  }, [allowCollapsed]);
 
   const persist = useCallback((next: LandingPanelState) => {
     setState(next);
