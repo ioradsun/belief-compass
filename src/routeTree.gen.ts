@@ -22,6 +22,7 @@ import { Route as DevTransitionsRouteImport } from './routes/dev.transitions'
 import { Route as DevRailRouteImport } from './routes/dev.rail'
 import { Route as OgMarketMidRouteImport } from './routes/og/market.$mid'
 import { Route as ApiPublicHealthRouteImport } from './routes/api/public/health'
+import { Route as ApiPublicHomeSnapshotRouteImport } from './routes/api/public/home-snapshot'
 import { Route as ApiPublicBuildIdRouteImport } from './routes/api/public/build-id'
 import { Route as ApiPublicJobsTapeWarmRouteImport } from './routes/api/public/jobs/tape-warm'
 import { Route as ApiPublicJobsSuggestionGeneratorRouteImport } from './routes/api/public/jobs/suggestion-generator'
@@ -97,6 +98,11 @@ const OgMarketMidRoute = OgMarketMidRouteImport.update({
 const ApiPublicHealthRoute = ApiPublicHealthRouteImport.update({
   id: '/api/public/health',
   path: '/api/public/health',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicHomeSnapshotRoute = ApiPublicHomeSnapshotRouteImport.update({
+  id: '/api/public/home-snapshot',
+  path: '/api/public/home-snapshot',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiPublicBuildIdRoute = ApiPublicBuildIdRouteImport.update({
@@ -177,6 +183,7 @@ export interface FileRoutesByFullPath {
   '/m/$mid': typeof MMidRoute
   '/api/public/build-id': typeof ApiPublicBuildIdRoute
   '/api/public/health': typeof ApiPublicHealthRoute
+  '/api/public/home-snapshot': typeof ApiPublicHomeSnapshotRoute
   '/og/market/$mid': typeof OgMarketMidRoute
   '/api/public/jobs/belief-rollup': typeof ApiPublicJobsBeliefRollupRoute
   '/api/public/jobs/chain-poller': typeof ApiPublicJobsChainPollerRoute
@@ -203,6 +210,7 @@ export interface FileRoutesByTo {
   '/m/$mid': typeof MMidRoute
   '/api/public/build-id': typeof ApiPublicBuildIdRoute
   '/api/public/health': typeof ApiPublicHealthRoute
+  '/api/public/home-snapshot': typeof ApiPublicHomeSnapshotRoute
   '/og/market/$mid': typeof OgMarketMidRoute
   '/api/public/jobs/belief-rollup': typeof ApiPublicJobsBeliefRollupRoute
   '/api/public/jobs/chain-poller': typeof ApiPublicJobsChainPollerRoute
@@ -230,6 +238,7 @@ export interface FileRoutesById {
   '/m/$mid': typeof MMidRoute
   '/api/public/build-id': typeof ApiPublicBuildIdRoute
   '/api/public/health': typeof ApiPublicHealthRoute
+  '/api/public/home-snapshot': typeof ApiPublicHomeSnapshotRoute
   '/og/market/$mid': typeof OgMarketMidRoute
   '/api/public/jobs/belief-rollup': typeof ApiPublicJobsBeliefRollupRoute
   '/api/public/jobs/chain-poller': typeof ApiPublicJobsChainPollerRoute
@@ -258,6 +267,7 @@ export interface FileRouteTypes {
     | '/m/$mid'
     | '/api/public/build-id'
     | '/api/public/health'
+    | '/api/public/home-snapshot'
     | '/og/market/$mid'
     | '/api/public/jobs/belief-rollup'
     | '/api/public/jobs/chain-poller'
@@ -284,6 +294,7 @@ export interface FileRouteTypes {
     | '/m/$mid'
     | '/api/public/build-id'
     | '/api/public/health'
+    | '/api/public/home-snapshot'
     | '/og/market/$mid'
     | '/api/public/jobs/belief-rollup'
     | '/api/public/jobs/chain-poller'
@@ -310,6 +321,7 @@ export interface FileRouteTypes {
     | '/m/$mid'
     | '/api/public/build-id'
     | '/api/public/health'
+    | '/api/public/home-snapshot'
     | '/og/market/$mid'
     | '/api/public/jobs/belief-rollup'
     | '/api/public/jobs/chain-poller'
@@ -337,6 +349,7 @@ export interface RootRouteChildren {
   MMidRoute: typeof MMidRoute
   ApiPublicBuildIdRoute: typeof ApiPublicBuildIdRoute
   ApiPublicHealthRoute: typeof ApiPublicHealthRoute
+  ApiPublicHomeSnapshotRoute: typeof ApiPublicHomeSnapshotRoute
   OgMarketMidRoute: typeof OgMarketMidRoute
   ApiPublicJobsBeliefRollupRoute: typeof ApiPublicJobsBeliefRollupRoute
   ApiPublicJobsChainPollerRoute: typeof ApiPublicJobsChainPollerRoute
@@ -443,6 +456,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHealthRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/home-snapshot': {
+      id: '/api/public/home-snapshot'
+      path: '/api/public/home-snapshot'
+      fullPath: '/api/public/home-snapshot'
+      preLoaderRoute: typeof ApiPublicHomeSnapshotRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/build-id': {
       id: '/api/public/build-id'
       path: '/api/public/build-id'
@@ -537,6 +557,7 @@ const rootRouteChildren: RootRouteChildren = {
   MMidRoute: MMidRoute,
   ApiPublicBuildIdRoute: ApiPublicBuildIdRoute,
   ApiPublicHealthRoute: ApiPublicHealthRoute,
+  ApiPublicHomeSnapshotRoute: ApiPublicHomeSnapshotRoute,
   OgMarketMidRoute: OgMarketMidRoute,
   ApiPublicJobsBeliefRollupRoute: ApiPublicJobsBeliefRollupRoute,
   ApiPublicJobsChainPollerRoute: ApiPublicJobsChainPollerRoute,

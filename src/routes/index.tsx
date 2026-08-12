@@ -13,6 +13,8 @@ import {
 } from "@/lib/markets.functions";
 import { marketChangeQO } from "@/lib/market-queries";
 import { getOpportunityFeed, getWarmFeed } from "@/lib/opportunity-feed.functions";
+import { getHomeSnapshot } from "@/lib/home-snapshot.functions";
+import { getViewerOverlay } from "@/lib/viewer-overlay.functions";
 import {
   feedSession,
   feedSessionVersion,
@@ -147,6 +149,7 @@ import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
 import { useAccount } from "wagmi";
 import { usePositionStream } from "@/lib/realtime/use-position-stream";
 import { usePredictivePrefetch } from "@/lib/realtime/use-predictive-prefetch";
+import { useLoginPrefetch } from "@/lib/realtime/use-login-prefetch";
 import { useIsDesktop } from "@/hooks/use-mobile";
 import { registerPersonFocus } from "@/lib/person-focus";
 
@@ -252,15 +255,14 @@ const feedQO = (
         },
       });
       try {
-        // Personalization is an enhancement, never a gate to seeing markets. If
-        // a wallet-specific overlay stalls, fall back to the same chain-backed
-        // anonymous feed the server renders instead of holding a skeleton.
-        return await Promise.race([
-          request,
-          new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error("personalized feed timed out")), 4_000),
-          ),
-        ]);
+        // NO RACE. The public home snapshot is already painted (placeholderData
+        // below), so the personalized feed never has to beat a clock to avoid a
+        // blank screen — authentication IMPROVES the feed, it does not delay it.
+        // Await the real request; only a genuine error falls back to the anon
+        // feed, never a 4s timer that threw away a build about to succeed. The
+        // small per-viewer bits (held, hidden) arrive faster still, over the
+        // separate viewer-overlay query, and are layered onto the public list.
+        return await request;
       } catch {
         return await getOpportunityFeed({
           data: {
@@ -291,6 +293,31 @@ const feedQO = (
     // normal poll cadence.
     staleTime: 15_000,
     // Never blank the feed while a poll (or a window switch) is in flight.
+    placeholderData: (prev) => prev,
+  });
+
+/**
+ * THE VIEWER OVERLAY — this person layered onto the public feed.
+ *
+ * Small, viewer-global and cheap: which markets they hold, and which they have
+ * passed or hidden. Fetched SEPARATELY from the feed so authentication never
+ * delays the public screen — the snapshot paints, then this arrives and the
+ * unseen tail is personalized. Session token rides along so the server can
+ * verify ownership before handing back private interaction state; a signed-out
+ * or unverified viewer gets an empty overlay and the public list is unchanged.
+ */
+const viewerOverlayQO = (wallet: string | undefined) =>
+  queryOptions({
+    queryKey: ["viewer-overlay", wallet ?? null],
+    queryFn: async () =>
+      wallet
+        ? await getViewerOverlay({ data: { wallet, sessionToken: readSessionToken(wallet) } })
+        : null,
+    enabled: !!wallet,
+    // A projection read, invalidated server-side the moment the viewer passes,
+    // hides or sells — so a slow poll only catches position/follow drift.
+    staleTime: 20_000,
+    refetchInterval: 60_000,
     placeholderData: (prev) => prev,
   });
 
@@ -403,6 +430,30 @@ export const Route = createFileRoute("/")({
   // skeleton forever. Never start server work you do not wait for.
   loader: async () => {
     try {
+      // ONE READ FIRST. The front door is PUBLISHED, not assembled on arrival:
+      // Explore, Insider and the first markets' numbers are one versioned,
+      // paint-only snapshot (see lib/home-snapshot.server), rebuilt in the
+      // background so no ranking, aggregation or cold build ever stands between
+      // the reader and the first useful screen. A warm isolate peeks it
+      // in-process; a cold one does ONE durable read in place of the three
+      // separate warm reads this loader used to make. The pieces are trimmed and
+      // marked partial, so the client still fetches the live feed/tape right
+      // after — old snapshot now, fresh data a moment later.
+      const snapshot = await getHomeSnapshot();
+      if (snapshot?.explore) {
+        return {
+          feed: snapshot.explore,
+          tape: snapshot.insider ?? null,
+          deck: snapshot.marketCore ?? null,
+          fetchedAt: Date.now(),
+        };
+      }
+
+      // FALLBACK — the snapshot has not been published yet (a fresh deploy
+      // before the warmer ran, or a persist that has not landed). Read the
+      // individual warm surfaces exactly as this loader always did, so the front
+      // door can never regress below what it did before the snapshot existed.
+      //
       // WARM-ONLY. The shell must not wait on the feed build: on a cold isolate
       // that read cost 10s of TTFB and the landing page could not paint at all.
       // A warm isolate still SSRs a real market; a cold one ships the shell now
@@ -522,6 +573,10 @@ function Feed() {
   // One viewer-scoped socket keeps the connected wallet's positions live; a
   // belief change refetches only the mounted position slices (server-valued).
   usePositionStream(wallet);
+  // Once a wallet is connected, warm the private surfaces and their first data
+  // page on idle — People and Challenge code + queries — so the first hop after
+  // signing in is a render, not a wait. Never runs for a signed-out visitor.
+  useLoginPrefetch(wallet);
   // Case File is DESKTOP-ONLY: a research surface for side-by-side comparison. A
   // phone is for action, so it never exposes Case File (button, columns, or the
   // ?case flag). Desktop is >= lg, where the three columns actually sit together.
@@ -917,6 +972,16 @@ function Feed() {
       : {}),
   });
 
+  // THE VIEWER OVERLAY — this person, layered onto the public feed. Fetched on
+  // its own query so it never sits in front of the public paint: the snapshot is
+  // already on screen, and this arrives to personalize the unseen tail. A hidden
+  // market is a durable decision the personalized feed will also drop, so it is
+  // the one piece safe to apply to the public list immediately; everything else
+  // the overlay carries (held) the feed itself reconciles a moment later. Empty
+  // for a signed-out or unverified viewer, so the public list is untouched.
+  const { data: viewerOverlay } = useQuery(viewerOverlayQO(wallet));
+  const hiddenMarketSet = new Set(viewerOverlay?.hiddenMarketIds ?? []);
+
   /**
    * THE DECK CORE THE SHELL ALREADY PAID FOR. The loader read the warm/seeded
    * trade tape for the markets it is about to paint; putting it in the cache
@@ -1076,10 +1141,16 @@ function Feed() {
    * button, the held order is adopted the moment the reader moves on to another
    * market. A playlist does not interrupt to announce that it grew.
    */
-  const feedEntries: FeedListEntry[] = queue.order.map((id) => ({
-    onchainId: id,
-    reason: reasonByMarket[id] ?? null,
-  }));
+  const feedEntries: FeedListEntry[] = queue.order
+    // The viewer overlay, applied to the public list: drop markets this person
+    // hid. A no-op until the overlay loads with hidden ids (signed-out or a
+    // viewer with none filters nothing), and it only touches the LIST — the
+    // centre deck reads the active market from `rows`, never from here.
+    .filter((id) => !hiddenMarketSet.has(id))
+    .map((id) => ({
+      onchainId: id,
+      reason: reasonByMarket[id] ?? null,
+    }));
 
   /**
    * HAS THE CHOSEN LENS GENUINELY RUN OUT?

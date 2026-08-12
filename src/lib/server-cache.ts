@@ -160,6 +160,35 @@ export function peekSwr<T>(key: string): T | undefined {
   return (store.get(key) as Entry<T> | undefined)?.value;
 }
 
+/**
+ * SEED THE CACHE with a value computed out of band.
+ *
+ * `swrCache` fills a key by running its factory on a miss, but some values are
+ * produced elsewhere: a background job that has just built a snapshot, or an SSR
+ * read that paid for a durable row once and wants the next read on this isolate
+ * to be free. This writes the slot exactly as a completed computation would, so
+ * a subsequent `peekSwr`/`swrCache` treats it as a fresh entry until it expires.
+ * It never joins or cancels an in-flight build; it only sets the stored value.
+ */
+export function putSwr<T>(key: string, value: T, ttlMs: number, now: () => number = Date.now): void {
+  store.set(key, { value, expires: now() + ttlMs, refreshing: false });
+}
+
+/**
+ * DROP a key from this isolate's cache, so the next read is a genuine miss.
+ *
+ * `putSwr` writes a value and both `peekSwr` and a fresh `swrCache` return it
+ * until it expires — but `peekSwr` ignores expiry, so overwriting a key with a
+ * short TTL does not make a peek miss. Invalidation needs a real removal: after
+ * the viewer passes or hides a market, the stale overlay slot must be gone, not
+ * merely expired, so the next overlay read rebuilds from the durable projection.
+ * Cross-isolate invalidation is the caller's job (delete the durable row); this
+ * only clears the local slot.
+ */
+export function dropSwr(key: string): void {
+  store.delete(key);
+}
+
 /** Test-only: drop all cached entries and any computation in flight. */
 export function _clearSwrCache(): void {
   store.clear();

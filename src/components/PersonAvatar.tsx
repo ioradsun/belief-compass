@@ -16,6 +16,17 @@ import { useState } from "react";
 import { focusPerson } from "@/lib/person-focus";
 import { aliasFor, hueFor, initialsFor } from "@/lib/wallet-identity";
 
+/**
+ * INTENT PREFETCH. Hovering or focusing a face is the reader saying they may
+ * open it — so warm the profile chunk now, and opening it is a render instead of
+ * a wait for its JavaScript. Idempotent and cheap: Vite serves one chunk however
+ * many faces are hovered, and it no-ops once loaded. This is the code half; a
+ * connected viewer's people data is already warmed by useLoginPrefetch.
+ */
+const warmPerson = () => {
+  void import("@/components/PersonProfile");
+};
+
 export function PersonAvatar({
   wallet,
   name,
@@ -48,6 +59,9 @@ export function PersonAvatar({
               e.stopPropagation();
               focusPerson(wallet);
             },
+            // Hover or keyboard-focus is intent — warm the profile chunk before the tap.
+            onMouseEnter: warmPerson,
+            onFocus: warmPerson,
             title: `Open ${label}`,
             "aria-label": `Open ${label}'s profile`,
           }

@@ -332,6 +332,19 @@ export async function recordViewerMarketEvent(
     p_market: marketId,
     p_kind: kind,
   });
+  // A pass, hide or sale changes what the viewer holds or has excluded, so the
+  // cached overlay projection must rebuild on the next read. A view/open does
+  // not, and rebuilding on every scroll would defeat the cache. Dynamic import
+  // breaks the module cycle (the overlay reads this file's signals). Best-effort:
+  // a failed invalidation just means the freshness window catches the change.
+  if (kind === "pass" || kind === "hide" || kind === "sold") {
+    try {
+      const { invalidateViewerFeedState } = await import("@/lib/viewer-overlay.server");
+      await invalidateViewerFeedState(wallet);
+    } catch {
+      // Telemetry and its projection must never break browsing.
+    }
+  }
 }
 
 /** Stored AI meaning for the markets currently in play. */
