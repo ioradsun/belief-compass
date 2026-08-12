@@ -161,7 +161,9 @@ export function ChallengeCard({
       support = p.incoming?.respondedSide ? `You backed ${p.incoming.respondedSide}.` : null;
       break;
     case "branch_live":
-      headline = "Your branch is live";
+      /* THE DIRECTION LINE ABOVE ALREADY SAYS "You Challenged", so this state has
+         no second sentence of its own — the reach is the fact worth printing. */
+      headline = null;
       support = out && tablesLine(out.reached);
       break;
     case "people_showing_up":
@@ -186,6 +188,17 @@ export function ChallengeCard({
       throw new Error(`unhandled card state: ${String(never)}`);
     }
   }
+
+  /**
+   * WHICH WAY THIS CARD POINTS — the one thing a reader needs before anything
+   * else. Blue means you are the one asking; amber means somebody is waiting on
+   * you. Same colour grammar as the chain rail, said here in words too.
+   */
+  const outward =
+    p.state === "branch_live" ||
+    p.state === "people_showing_up" ||
+    p.state === "chain_moving" ||
+    (p.state === "finished" && out != null);
 
   const progress = out && progressLine(out);
   const lineage = lineageLine(p.lineage);
@@ -220,6 +233,18 @@ export function ChallengeCard({
           </p>
         </div>
       )}
+      {/* THE DIRECTION, AS A DOT AND A WORD. */}
+      <div className="mb-1 flex items-center gap-1.5">
+        <span
+          className="h-1.5 w-1.5 shrink-0 rounded-full"
+          style={{ background: outward ? "var(--yes)" : "var(--no)" }}
+          aria-hidden
+        />
+        <span className="text-[10.5px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+          {outward ? "You Challenged" : "Challenged You"}
+        </span>
+      </div>
+
       {headline && (
         <p className="text-[13px] font-semibold leading-snug text-[var(--text)]">{headline}</p>
       )}
