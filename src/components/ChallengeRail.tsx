@@ -45,7 +45,7 @@ import { backAndForthLine, outcomeLine, runEndedLine } from "@/domain/dependabil
 import { RELATIONSHIP_MIN_SHARED } from "@/domain/dna/config";
 import { relationshipTone } from "@/lib/dna-labels";
 import { PersonAvatar } from "@/components/PersonAvatar";
-import { ChallengeHistory } from "@/components/ChallengeHistory";
+import { ChallengeHistoryPanel } from "@/components/ChallengeHistory";
 
 type Tab = "challenge" | "insider";
 
@@ -191,7 +191,9 @@ export function ChallengeRail({
     mine: mineCount,
     theirs: liveCards.length - mineCount,
   };
-  const [direction, setDirection] = useState<ChallengeDirection>("all");
+  /** Incoming first: it is the only one with an obligation attached. */
+  const [view, setView] = useState<"theirs" | "mine" | "history">("theirs");
+  const direction: ChallengeDirection = view === "mine" ? "mine" : "theirs";
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -259,53 +261,47 @@ export function ChallengeRail({
            and a free slot is an invitation. Tabs over that were a control asking
            the reader to sort a stack of three. */
         <div className="min-h-0 flex-1 space-y-2 overflow-y-auto">
-          {/* DIRECTION IS AN ATTRIBUTE, NOT A TAB. "I Challenged" and
-              "Challenged Me" are two ends of one conversation — a third tab
-              would cut a chain in half and give the reader two empty states to
-              read. A segmented control filters the same list in place, and the
-              counts are said out loud so nothing is hidden behind an icon. */}
-          {!failed && cardCounts.all > 0 && (
-            <div
-              className="flex items-center gap-1 rounded-[9px] p-0.5"
-              role="group"
-              aria-label="Filter challenges by direction"
-            >
-              <SlidersHorizontal
-                size={12}
-                className="mx-1 shrink-0 text-[var(--text-muted)]"
-                aria-hidden
-              />
-              {(
-                [
-                  ["all", "All", cardCounts.all],
-                  ["mine", "I Challenged", cardCounts.mine],
-                  ["theirs", "Challenged Me", cardCounts.theirs],
-                ] as const
-              ).map(([key, label, n]) => (
-                <button
-                  key={key}
-                  type="button"
-                  aria-pressed={direction === key}
-                  onClick={() => setDirection(key)}
-                  className={`flex items-center gap-1 rounded-[7px] px-1.5 py-1 text-[10.5px] font-medium transition-colors ${
-                    direction === key
-                      ? "bg-[var(--surface)] text-[var(--text)]"
-                      : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
-                  }`}
-                >
-                  {key !== "all" && (
-                    <span
-                      className="h-1.5 w-1.5 shrink-0 rounded-full"
-                      style={{ background: key === "mine" ? "var(--yes)" : "var(--no)" }}
-                      aria-hidden
-                    />
-                  )}
-                  {label}
-                  <span className="num tabular-nums opacity-60">{n}</span>
-                </button>
-              ))}
-            </div>
-          )}
+          {/* DIRECTION IS THE SHAPE OF THE COLUMN. Incoming carries an
+              obligation, Outgoing is what I am waiting on, History is what
+              already finished — three destinations, so three tabs, no icon and
+              no "All" pretending a mixed pile is a place. */}
+          <div
+            className="flex shrink-0 rounded-[9px] p-0.5"
+            style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+            role="tablist"
+            aria-label="Challenge view"
+          >
+            {(
+              [
+                ["theirs", "Incoming", cardCounts.theirs, "var(--no)"],
+                ["mine", "Outgoing", cardCounts.mine, "var(--yes)"],
+                ["history", "History", null, null],
+              ] as const
+            ).map(([key, label, n, dot]) => (
+              <button
+                key={key}
+                type="button"
+                role="tab"
+                aria-selected={view === key}
+                onClick={() => setView(key)}
+                className={`flex grow basis-0 items-center justify-center gap-1 rounded-[7px] px-1.5 py-1 text-[11px] font-medium transition-colors ${
+                  view === key
+                    ? "bg-[var(--bg)] text-[var(--text)]"
+                    : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+                }`}
+              >
+                {dot && (
+                  <span
+                    className="h-1.5 w-1.5 shrink-0 rounded-full"
+                    style={{ background: dot }}
+                    aria-hidden
+                  />
+                )}
+                {label}
+                {n != null && n > 0 && <span className="num tabular-nums opacity-60">{n}</span>}
+              </button>
+            ))}
+          </div>
 
           {failed ? (
             /* A FAILED READ IS NOT AN EMPTY GRAPH.
@@ -334,20 +330,11 @@ export function ChallengeRail({
             </p>
           )}
 
-          {/* A FILTER THAT EMPTIES THE COLUMN HAS TO SAY SO — otherwise the
-              reader reads their own filter as an empty loop. */}
-          {!failed && cardCounts.all > 0 && cardCounts[direction] === 0 && (
+          {!failed && view !== "history" && cardCounts.all > 0 && cardCounts[direction] === 0 && (
             <p className="text-[11.5px] leading-snug text-[var(--text-muted)]">
-              {direction === "mine"
+              {view === "mine"
                 ? "Nothing you started is still running."
-                : "Nobody is waiting on you right now."}{" "}
-              <button
-                type="button"
-                onClick={() => setDirection("all")}
-                className="underline text-[var(--text)]"
-              >
-                Show all
-              </button>
+                : "Nobody is waiting on you right now."}
             </p>
           )}
 
@@ -370,14 +357,22 @@ export function ChallengeRail({
               yours still gathering answers, a chain still moving. What finished
               is not deleted; it moves to Past Challenges below, so this stops
               being a place to monitor closed outcomes and stays a place to act. */}
-          <ChallengeCardList
-            wallet={wallet}
-            limit={shown + CHALLENGE.maxRecent}
-            onSelect={onSelect}
-            onPass={pass}
-            activeOnly
-            direction={direction}
-          />
+          {view === "history" ? (
+            <ChallengeHistoryPanel
+              wallet={wallet}
+              onSelect={onSelect}
+              onSelectPerson={onSelectPerson}
+            />
+          ) : (
+            <ChallengeCardList
+              wallet={wallet}
+              limit={shown + CHALLENGE.maxRecent}
+              onSelect={onSelect}
+              onPass={pass}
+              activeOnly
+              direction={direction}
+            />
+          )}
 
           {/* MORE, SAID OUT LOUD. A railful is what reads as a set of things
               waiting for you; past that it becomes a feed, and the feed already
@@ -394,19 +389,6 @@ export function ChallengeRail({
             </button>
           )}
 
-          {/* THE WAY OUT OF THE RAIL, AND THE ONLY ONE.
-              Everything above goes quiet after a week, which is right for a
-              column somebody has to look past to reach the tape — and wrong as
-              the end of the story. "See all" is where the whole thing lives:
-              every challenge, both directions, chronological, complete. It sits
-              last because it is the least urgent thing here and because a reader
-              only wants it once they have read what is above it. */}
-          <ChallengeHistory
-            wallet={wallet}
-            onSelect={onSelect}
-            onSelectPerson={onSelectPerson}
-            onOpen={onOpenHistory}
-          />
         </div>
       )}
     </div>
