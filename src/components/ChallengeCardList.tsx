@@ -70,6 +70,8 @@ export function ChallengeCardList({
    * other callers (Markets, the lab) keep the complete list they render today.
    */
   activeOnly?: boolean;
+  /** Show only what I started, only what came at me, or both. */
+  direction?: ChallengeDirection;
 }) {
   const qc = useQueryClient();
   const { ensureSession } = useWalletSession();
