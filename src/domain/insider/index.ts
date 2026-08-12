@@ -35,7 +35,7 @@ export {
   type MarketStateFacts,
 } from "./market-facts";
 
-export { insiderRead, fromHouseReadState, type InsiderReadContext } from "./read";
+export { insiderRead, fromHouseReadState, type InsiderReadEvidence } from "./read";
 export {
   insiderReadCopy,
   INSIDER_READ_LABEL,
