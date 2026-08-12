@@ -353,7 +353,7 @@ export function TrustContent() {
           <span className="num text-[var(--text)]">{CONVICTION_TAG_TEXT}</span>, so our share of
           activity can be counted from public chain data by anyone, without asking us.
         </P>
-        <P className="">
+        <P>
           Contract: <span className="num">{short(PROXY_ADDRESS)}</span> on Base (chain {CHAIN_ID}).
           Implementation: <span className="num">{short(IMPL_ADDRESS)}</span>.
         </P>
