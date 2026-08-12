@@ -89,19 +89,19 @@ export function houseReadState(source: HouseReadSource | null | undefined): Hous
   // House has forgotten the viewer.
   if (source.closed) return { status: "closed" };
 
+  // An open round the House is willing to call. This is checked BEFORE the
+  // cold-start counter: once a side is named, "a few more picks" is a lie.
+  const predictedSide = directional(source.preview);
+  if (predictedSide) return { status: "predicted", predictedSide };
+
   // Cold start — say exactly how many picks are left when we know.
   if (source.foundation) {
     const left = Math.max(0, source.foundation.required - source.foundation.answered);
     return left > 0 ? { status: "learning", remainingPicks: left } : { status: "learning" };
   }
 
-  // An open round the House is willing to call.
-  if (!source.closed) {
-    const predictedSide = directional(source.preview);
-    if (predictedSide) return { status: "predicted", predictedSide };
-  }
-
   return { status: "learning" };
+
 }
 
 /** The rendered sentence, split so the side can carry its semantic colour. */
