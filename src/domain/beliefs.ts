@@ -7,6 +7,7 @@
  * position on a market always overrides a free one on the same market.
  */
 import type { DnaFactor } from "@/domain/dna/score";
+import { PASS_MATCH_WEIGHT } from "@/domain/dna/config";
 
 /** Fixed conviction weight for a free expressed belief (vs on-chain 0..1). */
 export const EXPRESSED_WEIGHT = 0.15;
@@ -132,6 +133,20 @@ export const pastFactor = (r: {
   side: r.last_directional_side === "NO" ? "NO" : "YES",
   conviction: 1,
   past: true,
+});
+
+/**
+ * A PASS — a market the viewer declined (viewer_market_decisions.decision =
+ * 'PASS'). Non-directional: it carries no side to agree or disagree with, only
+ * the fact of the decline. It enters DNA as a matchable action at
+ * PASS_MATCH_WEIGHT, so two people who passed the same question read as a little
+ * more aligned — never as opposed, and never as a shared conviction (see
+ * `scoreRelationship`, which weights and gates it).
+ */
+export const passFactor = (r: { market_id: number | string }): DnaFactor => ({
+  marketId: Number(r.market_id),
+  side: "PASS",
+  conviction: PASS_MATCH_WEIGHT,
 });
 
 export interface Readiness {
