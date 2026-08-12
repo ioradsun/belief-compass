@@ -1,25 +1,20 @@
 /**
  * INSIDER READ — the rendered sentence of the personal projection.
  *
- * The Insider's running attempt to call your next move. The state machine is
- * unchanged (`domain/house-read` → `insiderRead`); this projection owns only how
- * that state SPEAKS, so desktop, phone and every future surface say the same
- * words. Nothing here predicts anything.
+ * PREDICT FIRST, PROVE IT AFTER.
  *
- * Two rules inherited from the engine and kept here:
- *   • It never frames the reader as difficult — the system is the thing still
- *     learning.
- *   • A confidence % appears ONLY when a calibrated score was supplied. Never
- *     invent one.
+ * Pre-choice it is a label and ONE sentence: the side we have you on, or the
+ * sit-out, or how many picks are left before we will call your move. No reasons,
+ * no market context, no uncalibrated percentage — the reader decides without
+ * seeing the evidence.
  *
- * The additive bit the Insider brings: when we have a call AND the market's own
- * aggregate direction is clear, the row can note whether the market agrees with
- * the side we think you'll back. It is CONTEXT, never the prediction, and it is
- * silent whenever `marketAligned` is unknown.
+ * Post-choice the verdict is flat ("Called it." / "You broke the pattern.") and
+ * carries exactly ONE locked reason, already chosen upstream. Nothing here
+ * calculates evidence and nothing here stacks two statistics into a paragraph.
  *
  * Pure, ZERO IO, deterministic.
  */
-import { houseReadCopy, type HouseReadState, type ReadSide } from "../../house-read";
+import type { ReadSide } from "../../house-read";
 import type { InsiderRead } from "../types";
 
 export const INSIDER_READ_LABEL = "Insider Read:";
@@ -31,50 +26,84 @@ export interface InsiderReadCopy {
   body: string;
   /** The called side, rendered in its YES/NO colour. Null when none. */
   side: ReadSide | null;
-  /** Text after the side, e.g. " · 78% confidence". Empty when none. */
-  suffix: string;
   /** Lets the row read as a win or a loss without shouting. */
   tone: "neutral" | "correct" | "incorrect";
-  /**
-   * Market context, when known: "the market agrees" / "the market disagrees".
-   * Rendered quietly and separately so it can never be mistaken for the call.
-   */
-  context: string | null;
+  /** The single locked reason, shown ONLY after the choice. Null pre-choice. */
+  reason: string | null;
 }
 
 const side = (v: InsiderRead["predictedSide"]): ReadSide | null =>
   v === "YES" || v === "NO" ? v : null;
 
-/** InsiderRead → the state machine's own shape, so ONE copy engine renders both. */
-function toState(read: InsiderRead): HouseReadState {
-  const predictedSide = side(read.predictedSide);
-  const actualSide = side(read.actualSide);
-  if ((read.status === "correct" || read.status === "incorrect") && predictedSide && actualSide) {
-    return { status: read.status, predictedSide, actualSide };
-  }
-  if (read.status === "predicted" && predictedSide) {
-    return {
-      status: "predicted",
-      predictedSide,
-      ...(read.confidence != null ? { confidence: read.confidence } : {}),
-    };
-  }
-  if (read.status === "closed") return { status: "closed" };
-  return {
-    status: "learning",
-    ...(read.remainingPicks != null ? { remainingPicks: read.remainingPicks } : {}),
-  };
+/**
+ * The broken-pattern comparison. Composed from fields the server already locked
+ * — a category, the predicted side, the chosen side — never from a fresh count.
+ */
+function brokePatternLine(read: InsiderRead): string | null {
+  const predicted = side(read.predictedSide);
+  const actual = side(read.actualSide);
+  if (!predicted || !actual) return null;
+  const cat = read.category?.trim();
+  return `Your ${cat ? `${cat} history` : "history"} leaned ${predicted}. You chose ${actual}.`;
 }
 
 export function insiderReadCopy(read: InsiderRead): InsiderReadCopy {
-  const base = houseReadCopy(toState(read));
-  // Only a live call can carry market context — a settled or learning row has
-  // nothing for the market to agree with.
-  const aligned = base.side != null && read.marketAligned != null ? read.marketAligned : null;
-  return {
-    ...base,
-    label: base.label == null ? null : INSIDER_READ_LABEL,
-    context:
-      aligned == null ? null : aligned ? "The market agrees." : "The market is going the other way.",
-  };
+  switch (read.status) {
+    case "predicted": {
+      const called = side(read.predictedSide);
+      if (called) {
+        return {
+          label: INSIDER_READ_LABEL,
+          body: "We have you on ",
+          side: called,
+          tone: "neutral",
+          reason: null,
+        };
+      }
+      break;
+    }
+    case "pass_predicted":
+      return {
+        label: INSIDER_READ_LABEL,
+        body: "We have you sitting this one out.",
+        side: null,
+        tone: "neutral",
+        reason: null,
+      };
+    case "correct":
+      if (side(read.predictedSide) && side(read.actualSide)) {
+        return {
+          label: null,
+          body: "Called it.",
+          side: null,
+          tone: "correct",
+          reason: read.reason?.trim() || null,
+        };
+      }
+      break;
+    case "incorrect":
+      if (side(read.predictedSide) && side(read.actualSide)) {
+        return {
+          label: null,
+          body: "You broke the pattern.",
+          side: null,
+          tone: "incorrect",
+          reason: brokePatternLine(read),
+        };
+      }
+      break;
+    case "closed":
+      return { label: null, body: "This read is closed.", side: null, tone: "neutral", reason: null };
+    default:
+      break;
+  }
+
+  // Learning — measurable progress, never a vague "learning you…", and never a
+  // suggestion that the reader is difficult.
+  const n = read.remainingPicks;
+  const body =
+    n != null && n > 0
+      ? `${n} more pick${n === 1 ? "" : "s"}. Then we call your next move.`
+      : "A few more picks. Then we call your next move.";
+  return { label: INSIDER_READ_LABEL, body, side: null, tone: "neutral", reason: null };
 }
