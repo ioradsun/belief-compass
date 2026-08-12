@@ -409,7 +409,45 @@ export async function loadHouseRead(
         finalized_via: null,
       };
     }
+  } else if (!row.predicted_action && !row.actual_action) {
+    /**
+     * A NO-READ IS NOT A LOCK.
+     *
+     * Locking exists so the House can't quietly rewrite a call it already made.
+     * A row where the House DECLINED to call (predicted_action null) made no
+     * call to protect — and the reason it declined (cold start, new category,
+     * thin sample) is exactly the thing that stops being true as the viewer
+     * builds history. Left as-is, that first empty read followed the market
+     * forever and the reader stayed "still learning" no matter how much they
+     * played. So while the round is still OPEN and unpicked, re-read it with
+     * everything we know today and persist the upgrade. Once a side is named,
+     * or the round closes, it is locked for good.
+     */
+    const read = predictHouse(await buildSignals(sb, wallet, marketId, category, foundationCount));
+    if (read.action) {
+      await sb
+        .from("house_predictions")
+        .update({
+          predicted_action: read.action,
+          confidence: read.confidence,
+          reasons: read.reasons,
+          no_read_kind: null,
+          engine_version: HOUSE_ENGINE_VERSION,
+        })
+        .eq("wallet", wallet)
+        .eq("onchain_id", marketId)
+        .is("actual_action", null)
+        .is("predicted_action", null);
+      row = {
+        ...row,
+        predicted_action: read.action,
+        confidence: read.confidence,
+        reasons: read.reasons,
+        no_read_kind: null,
+      };
+    }
   }
+
 
   /**
    * THE ROUND, FROM WHICHEVER LEDGER OWNS IT.
