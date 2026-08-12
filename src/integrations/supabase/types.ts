@@ -343,6 +343,275 @@ export type Database = {
         }
         Relationships: []
       }
+      forge_checks: {
+        Row: {
+          command: string | null
+          completed_at: string | null
+          duration_ms: number | null
+          failure_summary: string | null
+          id: string
+          job_id: string
+          name: string
+          output_summary: string | null
+          position: number
+          started_at: string | null
+          status: string
+        }
+        Insert: {
+          command?: string | null
+          completed_at?: string | null
+          duration_ms?: number | null
+          failure_summary?: string | null
+          id?: string
+          job_id: string
+          name: string
+          output_summary?: string | null
+          position?: number
+          started_at?: string | null
+          status?: string
+        }
+        Update: {
+          command?: string | null
+          completed_at?: string | null
+          duration_ms?: number | null
+          failure_summary?: string | null
+          id?: string
+          job_id?: string
+          name?: string
+          output_summary?: string | null
+          position?: number
+          started_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "forge_checks_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "forge_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      forge_events: {
+        Row: {
+          created_at: string
+          detail: Json | null
+          id: number
+          job_id: string
+          kind: string
+          level: string
+          message: string
+          role: string | null
+        }
+        Insert: {
+          created_at?: string
+          detail?: Json | null
+          id?: number
+          job_id: string
+          kind: string
+          level?: string
+          message: string
+          role?: string | null
+        }
+        Update: {
+          created_at?: string
+          detail?: Json | null
+          id?: number
+          job_id?: string
+          kind?: string
+          level?: string
+          message?: string
+          role?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "forge_events_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "forge_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      forge_jobs: {
+        Row: {
+          branch_name: string | null
+          builder_model: string
+          challenger_model: string
+          created_at: string
+          created_by: string | null
+          current_phase: string | null
+          diff_summary: Json | null
+          error: string | null
+          escalation_model: string
+          id: string
+          input_tokens: number
+          mode: string
+          output_tokens: number
+          plan: Json | null
+          plan_locked_at: string | null
+          pr_url: string | null
+          request: string
+          status: string
+          total_cost_usd: number
+          updated_at: string
+          verification_profile: string | null
+          worker_job_id: string | null
+        }
+        Insert: {
+          branch_name?: string | null
+          builder_model: string
+          challenger_model: string
+          created_at?: string
+          created_by?: string | null
+          current_phase?: string | null
+          diff_summary?: Json | null
+          error?: string | null
+          escalation_model: string
+          id?: string
+          input_tokens?: number
+          mode: string
+          output_tokens?: number
+          plan?: Json | null
+          plan_locked_at?: string | null
+          pr_url?: string | null
+          request: string
+          status?: string
+          total_cost_usd?: number
+          updated_at?: string
+          verification_profile?: string | null
+          worker_job_id?: string | null
+        }
+        Update: {
+          branch_name?: string | null
+          builder_model?: string
+          challenger_model?: string
+          created_at?: string
+          created_by?: string | null
+          current_phase?: string | null
+          diff_summary?: Json | null
+          error?: string | null
+          escalation_model?: string
+          id?: string
+          input_tokens?: number
+          mode?: string
+          output_tokens?: number
+          plan?: Json | null
+          plan_locked_at?: string | null
+          pr_url?: string | null
+          request?: string
+          status?: string
+          total_cost_usd?: number
+          updated_at?: string
+          verification_profile?: string | null
+          worker_job_id?: string | null
+        }
+        Relationships: []
+      }
+      forge_model_runs: {
+        Row: {
+          cost_usd: number
+          created_at: string
+          error: string | null
+          id: string
+          input_tokens: number
+          job_id: string
+          latency_ms: number | null
+          model_id: string
+          output_tokens: number
+          phase: string | null
+          provider: string
+          role: string
+          status: string
+        }
+        Insert: {
+          cost_usd?: number
+          created_at?: string
+          error?: string | null
+          id?: string
+          input_tokens?: number
+          job_id: string
+          latency_ms?: number | null
+          model_id: string
+          output_tokens?: number
+          phase?: string | null
+          provider?: string
+          role: string
+          status?: string
+        }
+        Update: {
+          cost_usd?: number
+          created_at?: string
+          error?: string | null
+          id?: string
+          input_tokens?: number
+          job_id?: string
+          latency_ms?: number | null
+          model_id?: string
+          output_tokens?: number
+          phase?: string | null
+          provider?: string
+          role?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "forge_model_runs_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "forge_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      forge_objections: {
+        Row: {
+          body: string | null
+          created_at: string
+          id: string
+          job_id: string
+          resolution: string | null
+          resolved_at: string | null
+          round: number
+          severity: string
+          status: string
+          title: string
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          job_id: string
+          resolution?: string | null
+          resolved_at?: string | null
+          round?: number
+          severity: string
+          status?: string
+          title: string
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          job_id?: string
+          resolution?: string | null
+          resolved_at?: string | null
+          round?: number
+          severity?: string
+          status?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "forge_objections_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "forge_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       house_foundation_answers: {
         Row: {
           action: string

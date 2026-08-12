@@ -21,6 +21,7 @@ import { Route as MMidRouteImport } from './routes/m.$mid'
 import { Route as DevVoiceRouteImport } from './routes/dev.voice'
 import { Route as DevTransitionsRouteImport } from './routes/dev.transitions'
 import { Route as DevRailRouteImport } from './routes/dev.rail'
+import { Route as AdminForgeRouteImport } from './routes/admin_.forge'
 import { Route as OgMarketMidRouteImport } from './routes/og/market.$mid'
 import { Route as ApiPublicHomeSnapshotRouteImport } from './routes/api/public/home-snapshot'
 import { Route as ApiPublicHealthRouteImport } from './routes/api/public/health'
@@ -94,6 +95,11 @@ const DevTransitionsRoute = DevTransitionsRouteImport.update({
 const DevRailRoute = DevRailRouteImport.update({
   id: '/dev/rail',
   path: '/dev/rail',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminForgeRoute = AdminForgeRouteImport.update({
+  id: '/admin_/forge',
+  path: '/admin/forge',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OgMarketMidRoute = OgMarketMidRouteImport.update({
@@ -184,6 +190,7 @@ export interface FileRoutesByFullPath {
   '/terms': typeof TermsRoute
   '/trust': typeof TrustRoute
   '/value': typeof ValueRoute
+  '/admin/forge': typeof AdminForgeRoute
   '/dev/rail': typeof DevRailRoute
   '/dev/transitions': typeof DevTransitionsRoute
   '/dev/voice': typeof DevVoiceRoute
@@ -212,6 +219,7 @@ export interface FileRoutesByTo {
   '/terms': typeof TermsRoute
   '/trust': typeof TrustRoute
   '/value': typeof ValueRoute
+  '/admin/forge': typeof AdminForgeRoute
   '/dev/rail': typeof DevRailRoute
   '/dev/transitions': typeof DevTransitionsRoute
   '/dev/voice': typeof DevVoiceRoute
@@ -241,6 +249,7 @@ export interface FileRoutesById {
   '/terms': typeof TermsRoute
   '/trust': typeof TrustRoute
   '/value': typeof ValueRoute
+  '/admin_/forge': typeof AdminForgeRoute
   '/dev/rail': typeof DevRailRoute
   '/dev/transitions': typeof DevTransitionsRoute
   '/dev/voice': typeof DevVoiceRoute
@@ -271,6 +280,7 @@ export interface FileRouteTypes {
     | '/terms'
     | '/trust'
     | '/value'
+    | '/admin/forge'
     | '/dev/rail'
     | '/dev/transitions'
     | '/dev/voice'
@@ -299,6 +309,7 @@ export interface FileRouteTypes {
     | '/terms'
     | '/trust'
     | '/value'
+    | '/admin/forge'
     | '/dev/rail'
     | '/dev/transitions'
     | '/dev/voice'
@@ -327,6 +338,7 @@ export interface FileRouteTypes {
     | '/terms'
     | '/trust'
     | '/value'
+    | '/admin_/forge'
     | '/dev/rail'
     | '/dev/transitions'
     | '/dev/voice'
@@ -356,6 +368,7 @@ export interface RootRouteChildren {
   TermsRoute: typeof TermsRoute
   TrustRoute: typeof TrustRoute
   ValueRoute: typeof ValueRoute
+  AdminForgeRoute: typeof AdminForgeRoute
   DevRailRoute: typeof DevRailRoute
   DevTransitionsRoute: typeof DevTransitionsRoute
   DevVoiceRoute: typeof DevVoiceRoute
@@ -460,6 +473,13 @@ declare module '@tanstack/react-router' {
       path: '/dev/rail'
       fullPath: '/dev/rail'
       preLoaderRoute: typeof DevRailRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin_/forge': {
+      id: '/admin_/forge'
+      path: '/admin/forge'
+      fullPath: '/admin/forge'
+      preLoaderRoute: typeof AdminForgeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/og/market/$mid': {
@@ -572,6 +592,7 @@ const rootRouteChildren: RootRouteChildren = {
   TermsRoute: TermsRoute,
   TrustRoute: TrustRoute,
   ValueRoute: ValueRoute,
+  AdminForgeRoute: AdminForgeRoute,
   DevRailRoute: DevRailRoute,
   DevTransitionsRoute: DevTransitionsRoute,
   DevVoiceRoute: DevVoiceRoute,
@@ -594,3 +615,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

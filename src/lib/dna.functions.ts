@@ -1061,6 +1061,9 @@ export const getPersonProfile = createServerFn({ method: "GET" })
     for (const v of viewerFactors) {
       const t = targetById.get(Number(v.marketId));
       if (!t) continue;
+      // Only directional sides describe a shared or opposed belief; a PASS is
+      // the absence of one.
+      if (v.side === "PASS" || t.side === "PASS") continue;
       if (t.side === v.side) both.push({ id: Number(v.marketId), side: v.side });
       else opp.push({ id: Number(v.marketId), vSide: v.side, pSide: t.side });
     }
