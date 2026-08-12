@@ -313,7 +313,10 @@ describe("the continuation state", () => {
     expect(guard).toMatch(/stableFeed !== undefined/);
     // And the panel renders it, never inferring one from `entries.length`.
     expect(feed).toMatch(/moreBelow\?: boolean/);
-    expect(feed).toMatch(/\{moreBelow && !lensExhausted && <MoreBelow/);
+    // The tail is guarded by the same verdict and renders a real load-more
+    // affordance — a sentinel plus a skeleton row, not an inferred end.
+    expect(feed).toMatch(/\{moreBelow && !lensExhausted && \(/);
+    expect(feed).toMatch(/<LoadMoreSentinel/);
   });
 
   it("keeps the market on screen when a chosen lens ends", () => {
