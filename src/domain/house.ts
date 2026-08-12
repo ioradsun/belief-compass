@@ -282,6 +282,12 @@ export function predictHouse(s: HouseSignals): HouseRead {
         : `${share}% of your closest matches back ${action} here.`,
     );
   }
+  if (globalWeight > 0 && overallDirectional > 0) {
+    const same = action === "YES" ? s.overall.yes : s.overall.no;
+    reasons.push(
+      `Across everything you have answered, you take ${action} ${Math.round((same / overallDirectional) * 100)}% of the time.`,
+    );
+  }
   if (c.pass > 0) {
     reasons.push(
       `You pass on ${cat ?? "these"} markets ${Math.round(passRate * 100)}% of the time — you engaged with this one.`,
@@ -289,6 +295,7 @@ export function predictHouse(s: HouseSignals): HouseRead {
   } else if (cat) {
     reasons.push(`You rarely pass on ${cat} markets.`);
   }
+
 
   return {
     action,
