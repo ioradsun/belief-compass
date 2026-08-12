@@ -160,12 +160,19 @@ export function eligibilityFor(input: EligibilityInput): Eligibility {
   };
 
   if (s.hiddenAt) return verdict("hidden");
-  // A position TAKEN in this pass is out of it. One held since before the pass
-  // began is fair to offer again — the reader is being asked what they think
-  // now, and their own market is a legitimate thing to be shown.
-  if (s.activePosition && (s.positionAt == null || inCycle(s.positionAt)))
-    return verdict("active_position");
+  /**
+   * A STANDING POSITION IS A STANDING ANSWER.
+   *
+   * Money on a side is not "contact during a pass" — it is the reader having
+   * answered this question and still meaning it. Rolling the pass recycles what
+   * they DIDN'T decide; it must not hand them back a market they are currently
+   * holding, which is what made the same questions come round again and again.
+   * A held market returns only through re-entry, when something material about
+   * it changed.
+   */
+  if (s.activePosition) return verdict("active_position");
   if (inCycle(s.passedAt)) return verdict((s.passCount ?? 0) > 1 ? "passed_repeat" : "passed");
+
   if (inCycle(s.soldAt)) return verdict("sold_out");
   if (inCycle(s.openedAt)) return verdict("recently_opened");
   if (inCycle(s.viewedAt)) return verdict("recently_viewed");
