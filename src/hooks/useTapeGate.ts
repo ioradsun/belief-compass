@@ -143,7 +143,14 @@ export function useTapeGate<T extends Arrival>(
     if (justReset) {
       keyRef.current = resetKey;
       heldRef.current = [];
+      /* CARRIED-OVER ROWS ARE NOT THIS TAPE'S ROWS. If the switch handed us the
+         exact same list object the previous scope was showing (a placeholder
+         while the real request is in flight), show nothing — the skeleton is
+         the honest answer until this scope's own rows land. */
+      if (incoming === lastIncoming.current) return;
     }
+    lastIncoming.current = incoming;
+
     const visible = justReset
       ? new Set<string>()
       : new Set(admittedRef.current.map((r) => r.id));
