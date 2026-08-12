@@ -1,0 +1,1 @@
+DELETE FROM public.forge_jobs WHERE request LIKE 'Smoke test:%';
