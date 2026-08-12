@@ -29,7 +29,14 @@ import { useChallengeSent } from "@/lib/challenge-signal";
 import { useTable } from "@/components/YourTable";
 import { useSimulationMode } from "@/lib/simulation-mode";
 import { hideCall, useOpenCalls, type OpenCalls } from "@/lib/open-calls";
-import { ChallengeCardList } from "@/components/ChallengeCardList";
+import {
+  ChallengeCardList,
+  useChallengeCards,
+  type ChallengeDirection,
+} from "@/components/ChallengeCardList";
+import { isOutwardCard } from "@/components/ChallengeCard";
+import { isLiveCard } from "@/domain/challenge-card";
+import { SlidersHorizontal } from "lucide-react";
 import { passOnCall } from "@/lib/table.functions";
 import { bestEffort, useWalletSession } from "@/hooks/useWalletSession";
 import { CHALLENGE, type Challenge, type CallerRelation } from "@/domain/challenge";
@@ -171,6 +178,21 @@ export function ChallengeRail({
    */
   const challengeCount = open.length + (table ?? []).filter((r) => r.closedAtMs == null).length;
 
+  /**
+   * HOW MANY ARE IN EACH DIRECTION — read from the same projection the list
+   * renders, through the same query key, so the filter labels can never count
+   * something the column does not show.
+   */
+  const { data: allCards } = useChallengeCards(wallet);
+  const liveCards = (allCards ?? []).filter((p) => isLiveCard(p.state));
+  const mineCount = liveCards.filter(isOutwardCard).length;
+  const cardCounts = {
+    all: liveCards.length,
+    mine: mineCount,
+    theirs: liveCards.length - mineCount,
+  };
+  const [direction, setDirection] = useState<ChallengeDirection>("all");
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div
@@ -237,6 +259,54 @@ export function ChallengeRail({
            and a free slot is an invitation. Tabs over that were a control asking
            the reader to sort a stack of three. */
         <div className="min-h-0 flex-1 space-y-2 overflow-y-auto">
+          {/* DIRECTION IS AN ATTRIBUTE, NOT A TAB. "I Challenged" and
+              "Challenged Me" are two ends of one conversation — a third tab
+              would cut a chain in half and give the reader two empty states to
+              read. A segmented control filters the same list in place, and the
+              counts are said out loud so nothing is hidden behind an icon. */}
+          {!failed && cardCounts.all > 0 && (
+            <div
+              className="flex items-center gap-1 rounded-[9px] p-0.5"
+              role="group"
+              aria-label="Filter challenges by direction"
+            >
+              <SlidersHorizontal
+                size={12}
+                className="mx-1 shrink-0 text-[var(--text-muted)]"
+                aria-hidden
+              />
+              {(
+                [
+                  ["all", "All", cardCounts.all],
+                  ["mine", "I Challenged", cardCounts.mine],
+                  ["theirs", "Challenged Me", cardCounts.theirs],
+                ] as const
+              ).map(([key, label, n]) => (
+                <button
+                  key={key}
+                  type="button"
+                  aria-pressed={direction === key}
+                  onClick={() => setDirection(key)}
+                  className={`flex items-center gap-1 rounded-[7px] px-1.5 py-1 text-[10.5px] font-medium transition-colors ${
+                    direction === key
+                      ? "bg-[var(--surface)] text-[var(--text)]"
+                      : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+                  }`}
+                >
+                  {key !== "all" && (
+                    <span
+                      className="h-1.5 w-1.5 shrink-0 rounded-full"
+                      style={{ background: key === "mine" ? "var(--yes)" : "var(--no)" }}
+                      aria-hidden
+                    />
+                  )}
+                  {label}
+                  <span className="num tabular-nums opacity-60">{n}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
           {failed ? (
             /* A FAILED READ IS NOT AN EMPTY GRAPH.
                `buildChallenges` opens with an unguarded `serviceClient()`, and
@@ -261,6 +331,23 @@ export function ChallengeRail({
           {!failed && challengeCount === 0 && (
             <p className="text-[11.5px] leading-snug text-[var(--text-muted)]">
               Nothing waiting on you right now.
+            </p>
+          )}
+
+          {/* A FILTER THAT EMPTIES THE COLUMN HAS TO SAY SO — otherwise the
+              reader reads their own filter as an empty loop. */}
+          {!failed && cardCounts.all > 0 && cardCounts[direction] === 0 && (
+            <p className="text-[11.5px] leading-snug text-[var(--text-muted)]">
+              {direction === "mine"
+                ? "Nothing you started is still running."
+                : "Nobody is waiting on you right now."}{" "}
+              <button
+                type="button"
+                onClick={() => setDirection("all")}
+                className="underline text-[var(--text)]"
+              >
+                Show all
+              </button>
             </p>
           )}
 
@@ -289,6 +376,7 @@ export function ChallengeRail({
             onSelect={onSelect}
             onPass={pass}
             activeOnly
+            direction={direction}
           />
 
           {/* MORE, SAID OUT LOUD. A railful is what reads as a set of things

@@ -104,6 +104,20 @@ function useFreshResponse(newestResponderWallet: string | undefined): boolean {
   return fresh;
 }
 
+/**
+ * WHICH DIRECTION A CARD POINTS — the single source both the card's own dot and
+ * the rail's direction filter read. Two copies of this rule would let the filter
+ * and the label on the card disagree about the same row.
+ */
+export function isOutwardCard(p: ChallengeCardProjection): boolean {
+  return (
+    p.state === "branch_live" ||
+    p.state === "people_showing_up" ||
+    p.state === "chain_moving" ||
+    (p.state === "finished" && p.outgoing != null)
+  );
+}
+
 export interface ChallengeCardProps {
   projection: ChallengeCardProjection;
   /** Open the market. The card never navigates on its own. */
@@ -194,11 +208,7 @@ export function ChallengeCard({
    * else. Blue means you are the one asking; amber means somebody is waiting on
    * you. Same colour grammar as the chain rail, said here in words too.
    */
-  const outward =
-    p.state === "branch_live" ||
-    p.state === "people_showing_up" ||
-    p.state === "chain_moving" ||
-    (p.state === "finished" && out != null);
+  const outward = isOutwardCard(p);
 
   const progress = out && progressLine(out);
   const lineage = lineageLine(p.lineage);
@@ -241,7 +251,7 @@ export function ChallengeCard({
           aria-hidden
         />
         <span className="text-[10.5px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-          {outward ? "You Challenged" : "Challenged You"}
+          {outward ? "I Challenged" : "Challenged Me"}
         </span>
       </div>
 

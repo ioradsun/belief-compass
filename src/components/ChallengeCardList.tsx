@@ -16,7 +16,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { getChallengeCards } from "@/lib/challenge.functions";
 import { putOnTable, takeOffTable } from "@/lib/table.functions";
-import { ChallengeCard } from "@/components/ChallengeCard";
+import { ChallengeCard, isOutwardCard } from "@/components/ChallengeCard";
 import { ChallengeChainSheet } from "@/components/ChallengeChainSheet";
 import { tableKey } from "@/components/YourTable";
 import { bestEffort, useWalletSession } from "@/hooks/useWalletSession";
@@ -33,6 +33,13 @@ export function useChallengeCards(wallet?: string) {
   });
 }
 
+/**
+ * WHICH HALF OF THE LOOP IS ON SCREEN. Direction is an attribute of one
+ * conversation, not a separate kind of thing — so it filters one list rather
+ * than splitting the column into two.
+ */
+export type ChallengeDirection = "all" | "mine" | "theirs";
+
 export function ChallengeCardList({
   wallet,
   limit,
@@ -40,6 +47,7 @@ export function ChallengeCardList({
   onPass,
   onSeeChain,
   activeOnly = false,
+  direction = "all",
 }: {
   wallet?: string;
   limit?: number;
@@ -62,6 +70,8 @@ export function ChallengeCardList({
    * other callers (Markets, the lab) keep the complete list they render today.
    */
   activeOnly?: boolean;
+  /** Show only what I started, only what came at me, or both. */
+  direction?: ChallengeDirection;
 }) {
   const qc = useQueryClient();
   const { ensureSession } = useWalletSession();
@@ -127,7 +137,10 @@ export function ChallengeCardList({
   if (!wallet || !cards || cards.length === 0) return null;
   // Current-only drops the terminal states BEFORE the limit, so "a railful" is a
   // railful of live cards rather than a railful that finished ones ate into.
-  const live = activeOnly ? cards.filter((p) => isLiveCard(p.state)) : cards;
+  const current = activeOnly ? cards.filter((p) => isLiveCard(p.state)) : cards;
+  // Direction filters BEFORE the limit too, for the same reason.
+  const live =
+    direction === "all" ? current : current.filter((p) => isOutwardCard(p) === (direction === "mine"));
   if (live.length === 0) return null;
   const shown = limit != null ? live.slice(0, limit) : live;
 
