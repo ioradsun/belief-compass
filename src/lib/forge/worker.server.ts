@@ -72,10 +72,29 @@ export interface ForgeWorker {
   cancelJob(workerJobId: string): Promise<void>;
 }
 
+/**
+ * Operators paste worker URLs by hand, so accept the shapes a human types:
+ * missing scheme, stray whitespace, quotes, a trailing slash. Anything that
+ * still isn't a URL becomes null — "not connected" beats "Invalid URL string".
+ */
+export function normalizeWorkerUrl(raw: string | undefined | null): string | null {
+  let value = (raw ?? "").trim().replace(/^["']|["']$/g, "");
+  if (!value) return null;
+  if (!/^https?:\/\//i.test(value)) value = `https://${value}`;
+  try {
+    const parsed = new URL(value);
+    if (!parsed.hostname) return null;
+    // Keep any base path, guarantee a trailing slash so path joins don't eat it.
+    return `${parsed.origin}${parsed.pathname.replace(/\/+$/, "")}/`;
+  } catch {
+    return null;
+  }
+}
+
 function config() {
   return {
-    url: process.env.FORGE_WORKER_URL ?? null,
-    secret: process.env.FORGE_WORKER_SECRET ?? null,
+    url: normalizeWorkerUrl(process.env.FORGE_WORKER_URL),
+    secret: process.env.FORGE_WORKER_SECRET?.trim() || null,
   };
 }
 
@@ -88,7 +107,7 @@ async function call<T>(path: string, body?: unknown, method = "POST"): Promise<T
   const { url, secret } = config();
   if (!url || !secret) throw new ForgeWorkerNotConnected();
 
-  const res = await fetch(new URL(path, url).toString(), {
+  const res = await fetch(new URL(path.replace(/^\//, ""), url).toString(), {
     method,
     headers: {
       authorization: `Bearer ${secret}`,
@@ -107,6 +126,14 @@ async function call<T>(path: string, body?: unknown, method = "POST"): Promise<T
 export const forgeWorker: ForgeWorker = {
   async status() {
     const { url } = config();
+    if (!url && (process.env.FORGE_WORKER_URL ?? "").trim()) {
+      return {
+        configured: true,
+        reachable: false,
+        url: null,
+        error: "FORGE_WORKER_URL is not a valid URL (expected e.g. https://forge.example.com)",
+      };
+    }
     if (!workerConfigured()) {
       return { configured: false, reachable: false, url: null };
     }
