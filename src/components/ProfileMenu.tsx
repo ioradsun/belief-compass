@@ -58,6 +58,7 @@ export function ProfileMenu({
   wallet,
   onViewProfile,
   onOpenTerms,
+  onOpenTrust,
   onOpenDashboard,
   ethUsd = 0,
 }: {
@@ -67,6 +68,8 @@ export function ProfileMenu({
   onViewProfile: (wallet: string) => void;
   /** Open Terms & risk in the center (the one privacy surface we have). */
   onOpenTerms?: () => void;
+  /** Open Transparency & Trust in the center — the money-safety page. */
+  onOpenTrust?: () => void;
   /** Open the Conviction Dashboard in the center panel. */
   onOpenDashboard?: () => void;
   /** Live ETH price, so claimable fees can be shown in dollars too. */
@@ -295,7 +298,11 @@ export function ProfileMenu({
             )}
           </Suspense>
           {panel === "settings" && (
-            <SettingsPanel onOpenTerms={onOpenTerms} onClose={() => setPanel(null)} />
+            <SettingsPanel
+              onOpenTerms={onOpenTerms}
+              onOpenTrust={onOpenTrust}
+              onClose={() => setPanel(null)}
+            />
           )}
         </Modal>
       )}
@@ -411,6 +418,18 @@ function SettingsPanel({
       >
         How Conviction Company works
       </a>
+      {onOpenTrust && (
+        <button
+          type="button"
+          onClick={() => {
+            onOpenTrust();
+            onClose();
+          }}
+          className="block w-full rounded-xl px-1 py-2 text-left text-[13px] text-[var(--text)] transition-colors hover:bg-[var(--surface)]"
+        >
+          Transparency &amp; Trust
+        </button>
+      )}
       {onOpenTerms && (
         <button
           type="button"
