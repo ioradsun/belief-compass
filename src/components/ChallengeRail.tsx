@@ -36,7 +36,7 @@ import {
 } from "@/components/ChallengeCardList";
 import { isOutwardCard } from "@/components/ChallengeCard";
 import { isLiveCard } from "@/domain/challenge-card";
-import { SlidersHorizontal } from "lucide-react";
+
 import { passOnCall } from "@/lib/table.functions";
 import { bestEffort, useWalletSession } from "@/hooks/useWalletSession";
 import { CHALLENGE, type Challenge, type CallerRelation } from "@/domain/challenge";
