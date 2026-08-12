@@ -618,8 +618,9 @@ function Feed() {
   // Brand introduction layer. Intentional product interactions (opening a
   // market, a person, DNA) collapse it; nothing else does. Auto-collapse is only
   // allowed when a wallet is already known — otherwise the panel stays open as
-  // the invitation to connect.
-  const landing = useLandingPanelState();
+  // the invitation to connect. A persisted collapsed state is also ignored when
+  // no wallet is cached, so returning without a session re-opens the panel.
+  const landing = useLandingPanelState(!!wallet);
   const enterProduct = landing.collapse;
   const autoCollapse = useCallback(() => {
     if (wallet) landing.collapse();
