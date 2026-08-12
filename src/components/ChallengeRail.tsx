@@ -193,7 +193,19 @@ export function ChallengeRail({
   };
   /** Incoming first: it is the only one with an obligation attached. */
   const [view, setView] = useState<"theirs" | "mine" | "history">("theirs");
+  /**
+   * Opening the Challenge panel over a market points this rail at Outgoing, the
+   * column the resulting row belongs to, so the send lands somewhere the reader
+   * is already looking.
+   */
+  const focus = useChallengeFocus();
+  useEffect(() => {
+    if (!focus) return;
+    setTab("challenge");
+    setView(focus.view);
+  }, [focus?.at]);
   const direction: ChallengeDirection = view === "mine" ? "mine" : "theirs";
+
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
