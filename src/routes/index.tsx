@@ -616,9 +616,14 @@ function Feed() {
     navigate({ search: (prev: Search) => ({ ...prev, case: prev.case ? undefined : true }) });
   };
   // Brand introduction layer. Intentional product interactions (opening a
-  // market, a person, DNA) collapse it; nothing else does.
+  // market, a person, DNA) collapse it; nothing else does. Auto-collapse is only
+  // allowed when a wallet is already known — otherwise the panel stays open as
+  // the invitation to connect.
   const landing = useLandingPanelState();
   const enterProduct = landing.collapse;
+  const autoCollapse = useCallback(() => {
+    if (wallet) landing.collapse();
+  }, [wallet, landing.collapse]);
   const qc = useQueryClient();
   // Discovery end-state: the viewer has decided on every eligible market. Set when
   // "Next" runs off the end of the sequence; cleared by selecting a market or
