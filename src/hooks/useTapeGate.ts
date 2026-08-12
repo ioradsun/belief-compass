@@ -123,6 +123,7 @@ export function useTapeGate<T extends Arrival>(
 
   // A different tape starts clean: no held rows to offer, no banner promising
   // the previous scope's activity, and the reader back at the top by definition.
+  const keyRef = useRef(resetKey);
   useEffect(() => {
     heldRef.current = [];
     setPending(0);
@@ -132,7 +133,20 @@ export function useTapeGate<T extends Arrival>(
   }, [resetKey]);
 
   useEffect(() => {
-    const visible = new Set(admittedRef.current.map((r) => r.id));
+    /* A SCOPE SWITCH IS NOT AN ARRIVAL. When `resetKey` changes, the rows that
+       come with it are a NEW LIST — but the reset effect above has not committed
+       yet, so `admittedRef` still holds the previous tape. Without this, the
+       gate saw a non-empty visible list, decided this was not a first paint and
+       (with holdAlways) parked the entire new scope behind the "↑ new" pill —
+       leaving the reader on "Nothing yet." that never resolved. */
+    const justReset = keyRef.current !== resetKey;
+    if (justReset) {
+      keyRef.current = resetKey;
+      heldRef.current = [];
+    }
+    const visible = justReset
+      ? new Set<string>()
+      : new Set(admittedRef.current.map((r) => r.id));
     const heldIds = new Set(heldRef.current.map((r) => r.id));
     /**
      * AN UPDATE IS AN UPDATE.
@@ -146,7 +160,7 @@ export function useTapeGate<T extends Arrival>(
     const fresh = unseen(incoming, visible).filter((r) => !heldIds.has(r.id));
     if (fresh.length === 0) return;
 
-    const firstPaint = admittedRef.current.length === 0;
+    const firstPaint = justReset || admittedRef.current.length === 0;
     const auto = firstPaint
       ? true
       : !holdAlways && canAutoAdmit({ atTop: atTop.current, pointerInside: pointerInside.current });
@@ -157,7 +171,8 @@ export function useTapeGate<T extends Arrival>(
       const merged = [...fresh, ...heldRef.current];
       heldRef.current = [];
       setPending(0);
-      setAdmitted((prev) => dedupe([...collapse(merged), ...prev]));
+      // A reset REPLACES: the previous tape's rows must not survive the switch.
+      setAdmitted((prev) => dedupe([...collapse(merged), ...(justReset ? [] : prev)]));
       return;
     }
 
@@ -165,7 +180,8 @@ export function useTapeGate<T extends Arrival>(
     // The counter moves once per window, not once per event. A number ticking
     // 1 → 2 → 3 is movement too, and the reader is still being interrupted.
     if (batchTimer.current == null) batchTimer.current = setTimeout(flushCount, TAPE.batchMs);
-  }, [incoming, flushCount, holdAlways, collapse]);
+  }, [incoming, resetKey, flushCount, holdAlways, collapse]);
+
 
   useEffect(
     () => () => {
