@@ -14,6 +14,7 @@ import { serviceClient } from "@/lib/supabase-clients";
 import { rowsOf } from "@/lib/supabase-read";
 import { readViewerDnaCache } from "@/lib/dna/viewer-dna-cache.server";
 import { recordViewerDecision } from "@/lib/viewer-decisions.server";
+import { EXPRESSED_WEIGHT } from "@/domain/beliefs";
 import {
   predictHouse,
   scoreHouse,
@@ -103,6 +104,7 @@ export interface HouseReadView {
 }
 
 type AnswerRow = {
+  marketId: number | null;
   category: string | null;
   actual_action: BeliefAction | null;
   predicted_action: BeliefAction | null;
@@ -144,16 +146,17 @@ async function answerHistory(
   const rows = rowsOf(
     await sb
       .from("house_predictions")
-      .select("category, actual_action, predicted_action")
+      .select("onchain_id, category, actual_action, predicted_action")
       .eq("wallet", wallet)
       .not("actual_action", "is", null)
       .not("onchain_id", "eq", excludeMarketId ?? -1)
       .order("revealed_at", { ascending: false })
       .limit(400),
     "this wallet's answer history",
-  ) as AnswerRow[];
+  ) as (AnswerRow & { onchain_id?: number | null })[];
   // Normalize legacy SKIP → PASS so every downstream consumer sees new tokens.
   return rows.map((r) => ({
+    marketId: r.onchain_id == null ? null : Number(r.onchain_id),
     category: r.category,
     actual_action: normAction(r.actual_action),
     predicted_action: normAction(r.predicted_action),
@@ -178,11 +181,24 @@ async function foundationKeys(sb: SupabaseClient, wallet: string): Promise<strin
  * category. This is what lets the House read someone after they calibrate:
  * calibration records beliefs, and those beliefs ARE the House's signal.
  */
+interface BeliefSignal {
+  marketId: number;
+  category: string | null;
+  side: "YES" | "NO";
+  /**
+   * How much this conviction is worth to the House: a money-backed on-chain
+   * position is full strength (1); a FREE expressed belief — a calibration
+   * answer, or any tap — is the low expressed weight, so it teaches the House
+   * without letting ten free answers read like ten real convictions.
+   */
+  weight: number;
+}
+
 async function beliefHistory(
   sb: SupabaseClient,
   wallet: string,
   currentMarketId: number,
-): Promise<{ category: string | null; side: "YES" | "NO" }[]> {
+): Promise<BeliefSignal[]> {
   const [onchain, expressed] = await Promise.all([
     sb
       .from("wallet_beliefs")
@@ -191,13 +207,18 @@ async function beliefHistory(
       .in("stance_side", ["YES", "NO"]),
     sb.from("expressed_beliefs").select("onchain_id, side").eq("wallet", wallet),
   ]);
-  const side = new Map<number, "YES" | "NO">();
+  const belief = new Map<number, { side: "YES" | "NO"; weight: number }>();
   for (const r of (expressed.data ?? []) as { onchain_id: number; side: string }[])
-    side.set(Number(r.onchain_id), r.side === "NO" ? "NO" : "YES");
+    belief.set(Number(r.onchain_id), {
+      side: r.side === "NO" ? "NO" : "YES",
+      weight: EXPRESSED_WEIGHT,
+    });
+  // On-chain overrides a free belief on the same market — money is the stronger
+  // claim, and its full weight replaces the expressed one rather than adding to it.
   for (const r of (onchain.data ?? []) as { onchain_id: number; stance_side: string }[])
-    side.set(Number(r.onchain_id), r.stance_side === "NO" ? "NO" : "YES"); // on-chain overrides
-  side.delete(currentMarketId);
-  const ids = [...side.keys()];
+    belief.set(Number(r.onchain_id), { side: r.stance_side === "NO" ? "NO" : "YES", weight: 1 });
+  belief.delete(currentMarketId);
+  const ids = [...belief.keys()];
   if (ids.length === 0) return [];
 
   const catOf = new Map<number, string | null>();
@@ -209,7 +230,12 @@ async function beliefHistory(
     for (const m of (data ?? []) as { onchain_id: number; category: string | null }[])
       catOf.set(Number(m.onchain_id), m.category);
   }
-  return ids.map((id) => ({ category: catOf.get(id) ?? null, side: side.get(id)! }));
+  return ids.map((id) => ({
+    marketId: id,
+    category: catOf.get(id) ?? null,
+    side: belief.get(id)!.side,
+    weight: belief.get(id)!.weight,
+  }));
 }
 
 /** How the viewer's closest matches (twin + tribe) sit on this exact market. */
@@ -267,29 +293,69 @@ async function buildSignals(
     relationshipLean(sb, wallet, marketId),
     beliefHistory(sb, wallet, marketId),
   ]);
+
+  /**
+   * THREE READINGS OF THE SAME EVIDENCE, EACH FOR ONE JOB.
+   *
+   *   overall / inCategory   integer COUNTS — the lean ("you chose YES 6 of 10")
+   *                          and the copy that quotes it. A decision is a
+   *                          decision; each is one tick here.
+   *   directionalWeight      how much that directional evidence is WORTH: a real
+   *                          or remembered position is 1, a free expressed belief
+   *                          (a calibration answer) is the low expressed weight.
+   *                          This — not the raw count — feeds confidence, so ten
+   *                          free taps read as a real lean but never a certain one.
+   *   answered               a COUNT of distinct markets decided; the unlock gate
+   *                          (totalAnswers). The ten legitimately teach the House
+   *                          enough to start reading without inflating how sure.
+   *
+   * ONE MARKET, COUNTED ONCE. A bought market lands in BOTH house_predictions
+   * (its locked decision) and wallet_beliefs (its position); it used to be added
+   * from each. The belief carries the money/free distinction, so it wins and the
+   * matching history row is skipped — history's unique contribution is passes and
+   * markets since sold out of.
+   */
   const overall = { yes: 0, no: 0, pass: 0 };
   const inCategory = { yes: 0, no: 0, pass: 0 };
+  let answered = 0;
+  let overallDirectionalWeight = 0;
+  let inCategoryDirectionalWeight = 0;
+  const beliefMarkets = new Set(beliefs.map((b) => b.marketId));
+
   for (const row of history) {
     const a = row.actual_action;
     if (!a) continue;
+    // Counted with the belief instead — do not double-count a market.
+    if (row.marketId != null && beliefMarkets.has(row.marketId)) continue;
     const key = a === "YES" ? "yes" : a === "NO" ? "no" : "pass";
-    overall[key]++;
-    if (category && row.category === category) inCategory[key]++;
+    overall[key] += 1;
+    if (category && row.category === category) inCategory[key] += 1;
+    answered += 1;
+    // A locked directional decision (a real buy, or a market since sold) is a
+    // full-strength conviction; a pass carries no directional weight.
+    if (a !== "PASS") {
+      overallDirectionalWeight += 1;
+      if (category && row.category === category) inCategoryDirectionalWeight += 1;
+    }
   }
-  // The viewer's beliefs (calibration + on-chain) are directional signal too.
   for (const b of beliefs) {
     const key = b.side === "NO" ? "no" : "yes";
-    overall[key]++;
-    if (category && b.category === category) inCategory[key]++;
+    overall[key] += 1;
+    if (category && b.category === category) inCategory[key] += 1;
+    answered += 1; // each distinct decided market counts once toward the unlock
+    overallDirectionalWeight += b.weight; // expressed weaker than real (see BeliefSignal)
+    if (category && b.category === category) inCategoryDirectionalWeight += b.weight;
   }
   return {
     connected: true,
     category,
-    // Beliefs + completed foundation answers count toward the unlock gate, so once
-    // the viewer has calibrated the engine reads markets instead of cold-starting.
-    totalAnswers: overall.yes + overall.no + overall.pass + foundationCount,
+    // The unlock gate is a COUNT, not the weighted lean — so calibration unlocks
+    // the House even though each free answer barely moves the confidence.
+    totalAnswers: answered + foundationCount,
     overall,
     inCategory,
+    overallDirectionalWeight,
+    inCategoryDirectionalWeight,
     relationship: rel,
   };
 }
