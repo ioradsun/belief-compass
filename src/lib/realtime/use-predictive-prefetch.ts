@@ -15,6 +15,25 @@ import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { marketChangeQO, evidenceQO } from "@/lib/market-queries";
 import { getConvictionMarket } from "@/lib/market-create.functions";
+import { getMarketRow } from "@/lib/markets.functions";
+import { getHouseRead, type HouseMode } from "@/lib/house.functions";
+import { houseKey } from "@/lib/house-round";
+
+/**
+ * Decode the next market's picture WHILE THE CURRENT ONE IS STILL BEING READ.
+ *
+ * A warm cache paints the words instantly and then the image arrives a beat
+ * later, which reads as a second, uglier load. The browser will hand back a
+ * decoded frame for free if it was asked early enough, so once the neighbour's
+ * metadata lands we ask for its media the same way the stage will.
+ */
+function warmImage(url: string | null | undefined): void {
+  if (!url || typeof Image === "undefined") return;
+  const img = new Image();
+  img.decoding = "async";
+  img.src = url;
+}
+
 
 /** Immediate neighbors to warm, in likelihood order: next, next+1, previous.
  *  Deduped, current excluded, invalid indices dropped. Pure/testable. */
