@@ -294,10 +294,10 @@ export type InsiderReadStatus =
 
 export interface InsiderRead {
   status: InsiderReadStatus;
-  /** The side the Insider is calling, when it has a call. */
-  predictedSide?: Side | null;
+  /** The side the Insider is calling, when it has a call. A settled round may be PASS. */
+  predictedSide?: Side | "PASS" | null;
   /** What the viewer actually did, once a round settles. */
-  actualSide?: Side | null;
+  actualSide?: Side | "PASS" | null;
   /** Cold start: how many more picks until the Insider will call your move. */
   remainingPicks?: number | null;
   /**

@@ -40,11 +40,14 @@ const side = (v: InsiderRead["predictedSide"]): ReadSide | null =>
  * — a category, the predicted side, the chosen side — never from a fresh count.
  */
 function brokePatternLine(read: InsiderRead): string | null {
-  const predicted = side(read.predictedSide);
-  const actual = side(read.actualSide);
+  const predicted = read.predictedSide;
+  const actual = read.actualSide;
   if (!predicted || !actual) return null;
   const cat = read.category?.trim();
-  return `Your ${cat ? `${cat} history` : "history"} leaned ${predicted}. You chose ${actual}.`;
+  const history = cat ? `${cat} history` : "history";
+  if (predicted === "PASS") return `We had you sitting this one out. You chose ${actual}.`;
+  if (actual === "PASS") return `Your ${history} leaned ${predicted}. You passed.`;
+  return `Your ${history} leaned ${predicted}. You chose ${actual}.`;
 }
 
 export function insiderReadCopy(read: InsiderRead): InsiderReadCopy {
@@ -71,7 +74,7 @@ export function insiderReadCopy(read: InsiderRead): InsiderReadCopy {
         reason: null,
       };
     case "correct":
-      if (side(read.predictedSide) && side(read.actualSide)) {
+      if (read.predictedSide && read.actualSide) {
         return {
           label: null,
           body: "Called it.",
@@ -82,7 +85,7 @@ export function insiderReadCopy(read: InsiderRead): InsiderReadCopy {
       }
       break;
     case "incorrect":
-      if (side(read.predictedSide) && side(read.actualSide)) {
+      if (read.predictedSide && read.actualSide) {
         return {
           label: null,
           body: "You broke the pattern.",
