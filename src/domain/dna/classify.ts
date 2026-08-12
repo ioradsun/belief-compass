@@ -62,9 +62,8 @@ function bandHolds(
   // ROUNDED, BECAUSE THE LABEL MUST AGREE WITH THE NUMBER ON SCREEN. `agreement`
   // is unrounded while `convictionMatch` — the only percentage a reader ever sees
   // — rounds. At three shared markets the outcomes are exactly the thirds, 66.67%
-  // and 33.33%, so an unrounded comparison against 67/33 would have put a card
-  // reading "67% Conviction Match" next to no label at all, on the single case
-  // that justifies making three the gate. Classify the number you display.
+  // and 33.33%, and with the active 45% Rival threshold the displayed 33% still maps
+  // cleanly to a label. Classify the number you display.
   const match = Math.round(s.agreement);
   return isHigh ? match >= threshold : match <= threshold;
 }
