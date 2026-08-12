@@ -400,7 +400,7 @@ describe("past challenges tell a story, one event at a time, and are not a feed"
     const c = history();
     expect(c).toMatch(/isError/);
     expect(c).toMatch(/Could not load your history/);
-    expect(c.indexOf("isError ?")).toBeLessThan(c.indexOf("nothing ?"));
+    expect(c.indexOf("if (isError)")).toBeLessThan(c.indexOf("if (nothing)"));
   });
 
   it("admits when it stopped at its read bound", () => {
@@ -411,7 +411,11 @@ describe("past challenges tell a story, one event at a time, and are not a feed"
   });
 
   it("costs the rail nothing until somebody asks for it", () => {
-    expect(history()).toMatch(/enabled: !!wallet && open/);
+    // The record is a destination now: the panel that runs the query only ever
+    // mounts once the reader asks for it, so the rail pays nothing for it.
+    const c = history();
+    expect(c).toMatch(/enabled: !!wallet/);
+    expect(c).toMatch(/onOpen \? onOpen\(\) : setOpen\(true\)/);
   });
 
   it("opens on an invitation, never an empty administrative page", () => {
