@@ -171,18 +171,14 @@ export function MyWorld({
    * THREE DESTINATIONS, THREE JOBS.
    *
    *   EXPLORE    discover markets
-   *   MARKETS    the questions I own and the ones I hold a side in
+   *   POSITIONS  the questions I own and the ones I hold a side in
    *   PEOPLE     who I connect with, through shared and opposing convictions
    *
    * "For You" named ONE of Explore's five lenses, which made the tab and the
    * lens row inside it contradict each other the moment a reader picked Moving.
-   * "Convictions" was the older word for the same thing "Positions" said, and
-   * "Positions" was itself too small: a position is what you HOLD, which left
-   * nowhere to put the question you WROTE and never backed, and no way to say
-   * that authoring outranks holding. MARKETS holds both roles — Market Maker
-   * first, Believer second — and the internal tab key stays `positions` so no
-   * bookmarked URL breaks over a word.
+   * The internal tab key stays `positions` so no bookmarked URL breaks.
    */
+
   const tabName = (t: Tab): string =>
     t === "feed" ? "Explore" : t === "positions" ? MARKETS_TAB : "People";
 
