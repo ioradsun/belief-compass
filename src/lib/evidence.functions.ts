@@ -217,6 +217,14 @@ export const getMarketEvidence = createServerFn({ method: "GET" })
         (marketRes.data as { agent_opinions?: unknown } | null)?.agent_opinions,
       );
 
-      return { believers, believersYes, believersNo, priceSeries, defense };
+      // Never below the people we can see: a count that is smaller than the
+      // believer rows on screen would be its own contradiction.
+      const participants = Math.max(
+        Number(participantsRes.count ?? 0) || 0,
+        believersYes + believersNo,
+      );
+
+      return { believers, believersYes, believersNo, participants, priceSeries, defense };
+
     });
   });
