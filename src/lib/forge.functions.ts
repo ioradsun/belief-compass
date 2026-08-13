@@ -330,3 +330,45 @@ export const forgeGetDiff = createServerFn({ method: "GET" })
     if (!workerConfigured()) return null;
     return await forgeWorker.getDiff(row.worker_job_id);
   });
+
+/**
+ * gstack, made visible and requestable.
+ *
+ * gstack runs inside the worker under OpenCode, which meant the operator had no
+ * way to tell whether a department (plan review, engineering review, qa, cso,
+ * ship…) had actually run. This asks the worker for one named pass and records
+ * the request, so the board on /admin/forge is answering from evidence.
+ */
+export const forgeRunReview = createServerFn({ method: "POST" })
+  .inputValidator((data: { id: string; operation: string }) => data)
+  .handler(async ({ data }) => {
+    const { requireAdmin } = await import("./admin-session.server");
+    await requireAdmin();
+    const { GSTACK_OPERATIONS } = await import("./forge/types");
+    const operation = GSTACK_OPERATIONS.find((o) => o === data.operation);
+    if (!operation) throw new Error(`Unknown gstack operation: ${data.operation}`);
+
+    const { serviceClient } = await import("./supabase-clients");
+    const db = serviceClient();
+    const { data: row } = await db
+      .from("forge_jobs")
+      .select("worker_job_id")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (!row?.worker_job_id) throw new Error("No worker job — nothing to review yet.");
+
+    const { forgeWorker, workerConfigured } = await import("./forge/worker.server");
+    if (!workerConfigured()) throw new Error("Forge Worker not connected.");
+
+    await db.from("forge_events").insert({
+      job_id: data.id,
+      kind: "gstack.requested",
+      level: "info",
+      role: "human",
+      message: `Requested gstack ${operation}.`,
+      detail: { operation },
+    });
+    if (operation === "qa") await forgeWorker.runQA(row.worker_job_id);
+    else await forgeWorker.runReview(row.worker_job_id, operation);
+    return { ok: true as const };
+  });
