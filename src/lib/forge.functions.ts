@@ -40,6 +40,95 @@ export const forgeListJobs = createServerFn({ method: "GET" }).handler(async () 
   return (data ?? []).map(toJob);
 });
 
+/* ── Model configuration ─────────────────────────────────────────────────────
+ * Which OpenRouter model plays each role is a setting, not a code constant. The
+ * catalog (with pricing) comes live from OpenRouter; the per-role choice is
+ * stored in forge_model_config and overrides the MODEL_REGISTRY defaults.
+ */
+
+export type OpenRouterModel = {
+  id: string;
+  name: string;
+  contextLength: number;
+  /** USD per 1M tokens. */
+  promptPer1M: number;
+  completionPer1M: number;
+};
+
+let modelsCache: { at: number; data: OpenRouterModel[] } | null = null;
+const MODELS_TTL_MS = 10 * 60 * 1000;
+
+/** The full OpenRouter catalog, normalised to per-1M pricing. Cached 10 min. */
+export const forgeOpenRouterModels = createServerFn({ method: "GET" }).handler(async () => {
+  const { requireAdmin } = await import("./admin-session.server");
+  await requireAdmin();
+  if (modelsCache && Date.now() - modelsCache.at < MODELS_TTL_MS) return modelsCache.data;
+
+  const res = await fetch("https://openrouter.ai/api/v1/models", {
+    headers: { accept: "application/json" },
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!res.ok) throw new Error(`OpenRouter models ${res.status}`);
+  const json = (await res.json()) as {
+    data?: {
+      id: string;
+      name?: string;
+      context_length?: number;
+      pricing?: { prompt?: string; completion?: string };
+    }[];
+  };
+  const data: OpenRouterModel[] = (json.data ?? [])
+    .map((m) => ({
+      id: m.id,
+      name: m.name ?? m.id,
+      contextLength: m.context_length ?? 0,
+      promptPer1M: Number(m.pricing?.prompt ?? 0) * 1e6,
+      completionPer1M: Number(m.pricing?.completion ?? 0) * 1e6,
+    }))
+    .sort((a, b) => a.id.localeCompare(b.id));
+  modelsCache = { at: Date.now(), data };
+  return data;
+});
+
+export type ForgeModelConfig = { builder: string; challenger: string; escalation: string };
+
+/** Per-role model ids, with MODEL_REGISTRY defaults where unset. */
+async function resolveModelConfig(): Promise<ForgeModelConfig> {
+  const { serviceClient } = await import("./supabase-clients");
+  const { data } = await serviceClient().from("forge_model_config").select("role, model_id");
+  const rows = (data ?? []) as { role: string; model_id: string }[];
+  const byRole = new Map<string, string>(rows.map((r) => [r.role, r.model_id]));
+  return {
+    builder: byRole.get("builder") ?? MODEL_REGISTRY.builder.modelId,
+    challenger: byRole.get("challenger") ?? MODEL_REGISTRY.challenger.modelId,
+    escalation: byRole.get("escalation") ?? MODEL_REGISTRY.escalation.modelId,
+  };
+}
+
+export const forgeGetModelConfig = createServerFn({ method: "GET" }).handler(async () => {
+  const { requireAdmin } = await import("./admin-session.server");
+  await requireAdmin();
+  return resolveModelConfig();
+});
+
+export const forgeSetModelConfig = createServerFn({ method: "POST" })
+  .inputValidator((data: { role: "builder" | "challenger" | "escalation"; modelId: string }) => data)
+  .handler(async ({ data }) => {
+    const { requireAdmin } = await import("./admin-session.server");
+    await requireAdmin();
+    if (!["builder", "challenger", "escalation"].includes(data.role)) {
+      throw new Error(`Invalid role: ${data.role}`);
+    }
+    const modelId = String(data.modelId ?? "").trim();
+    if (!modelId) throw new Error("A model id is required.");
+    const { serviceClient } = await import("./supabase-clients");
+    const { error } = await serviceClient()
+      .from("forge_model_config")
+      .upsert({ role: data.role, model_id: modelId }, { onConflict: "role" });
+    if (error) throw new Error(error.message);
+    return { ok: true as const };
+  });
+
 export const forgeGetJob = createServerFn({ method: "GET" })
   .inputValidator((data: { id: string }) => data)
   .handler(async ({ data }) => {
@@ -103,6 +192,7 @@ export const forgeCreateJob = createServerFn({ method: "POST" })
     const { serviceClient } = await import("./supabase-clients");
     const db = serviceClient();
     const profile = defaultProfileForMode(data.mode);
+    const models = await resolveModelConfig();
 
     const { data: row, error } = await db
       .from("forge_jobs")
@@ -110,9 +200,9 @@ export const forgeCreateJob = createServerFn({ method: "POST" })
         request,
         mode: data.mode,
         status: "DRAFT" satisfies ForgeStatus,
-        builder_model: MODEL_REGISTRY.builder.modelId,
-        challenger_model: MODEL_REGISTRY.challenger.modelId,
-        escalation_model: MODEL_REGISTRY.escalation.modelId,
+        builder_model: models.builder,
+        challenger_model: models.challenger,
+        escalation_model: models.escalation,
         verification_profile: profile,
         created_by: "admin",
       })

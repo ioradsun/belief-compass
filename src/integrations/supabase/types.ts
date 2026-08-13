@@ -565,6 +565,24 @@ export type Database = {
           },
         ]
       }
+      forge_model_config: {
+        Row: {
+          model_id: string
+          role: string
+          updated_at: string
+        }
+        Insert: {
+          model_id: string
+          role: string
+          updated_at?: string
+        }
+        Update: {
+          model_id?: string
+          role?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       forge_objections: {
         Row: {
           body: string | null
