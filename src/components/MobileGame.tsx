@@ -533,6 +533,7 @@ export function MobileGame({
           win={deckWin}
           change={marketChange}
           faces={participantFaces}
+          participants={evidence?.participants}
           state={marketStateFacts(row as unknown as Record<string, unknown>)}
           footer={
             <CurrentMarketActivity
