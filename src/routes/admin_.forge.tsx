@@ -23,6 +23,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { adminStatus } from "@/lib/admin.functions";
+import { ForgeModelConfig } from "@/components/forge/ForgeModelConfig";
 import {
   forgeApprovePlan,
   forgeCancelJob,
@@ -110,9 +111,12 @@ const STATION_COMPONENT: Record<StationKey, Station> = {
 export const Route = createFileRoute("/admin_/forge")({
   ssr: false,
   // The open job lives in the URL, so a refresh returns to the same job.
-  validateSearch: (search: Record<string, unknown>) => ({
-    job: typeof search.job === "string" ? search.job : (undefined as string | undefined),
-  }),
+  validateSearch: (search: Record<string, unknown>) => {
+    const out: { job?: string; view?: "models" } = {};
+    if (typeof search.job === "string") out.job = search.job;
+    if (search.view === "models") out.view = "models";
+    return out;
+  },
   head: () => ({
     meta: [
       { title: "Forge — Conviction" },
@@ -132,8 +136,10 @@ function ForgeRoute() {
     queryKey: ["admin-status"],
     queryFn: () => adminStatus(),
   });
+  const { view } = Route.useSearch();
 
   if (isPending) return <Locked>{null}</Locked>;
+  if (view === "models" && status?.unlocked === true) return <ForgeModelConfig />;
   if (status?.unlocked !== true) {
     return (
       <Locked>
@@ -788,8 +794,15 @@ function SystemReadout({ env }: { env: Env }) {
         </span>
       </div>
       <Link
-        to="/admin"
+        to="/admin/forge"
+        search={{ view: "models" }}
         className="mt-1.5 block text-[10px] uppercase tracking-[0.14em] text-[var(--text-muted)] hover:text-[var(--text)]"
+      >
+        Models
+      </Link>
+      <Link
+        to="/admin"
+        className="mt-1 block text-[10px] uppercase tracking-[0.14em] text-[var(--text-muted)] hover:text-[var(--text)]"
       >
         Moderation console
       </Link>
