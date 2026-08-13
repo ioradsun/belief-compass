@@ -509,6 +509,24 @@ export type Database = {
         }
         Relationships: []
       }
+      forge_model_config: {
+        Row: {
+          model_id: string
+          role: string
+          updated_at: string
+        }
+        Insert: {
+          model_id: string
+          role: string
+          updated_at?: string
+        }
+        Update: {
+          model_id?: string
+          role?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       forge_model_runs: {
         Row: {
           cost_usd: number
@@ -611,6 +629,71 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      forge_queue: {
+        Row: {
+          body: string | null
+          created_at: string
+          id: string
+          job_id: string | null
+          kind: string
+          priority: number
+          source: string
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          job_id?: string | null
+          kind?: string
+          priority?: number
+          source?: string
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          job_id?: string | null
+          kind?: string
+          priority?: number
+          source?: string
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "forge_queue_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "forge_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      forge_settings: {
+        Row: {
+          key: string
+          updated_at: string
+          value: Json
+        }
+        Insert: {
+          key: string
+          updated_at?: string
+          value: Json
+        }
+        Update: {
+          key?: string
+          updated_at?: string
+          value?: Json
+        }
+        Relationships: []
       }
       house_foundation_answers: {
         Row: {
