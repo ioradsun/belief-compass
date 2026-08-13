@@ -115,15 +115,18 @@ function ForgeRoute() {
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <main className="mx-auto min-h-[100dvh] max-w-[1240px] bg-[var(--bg)] px-6 py-8 text-[var(--text)]">
+    <main className="h-[100dvh] overflow-y-auto bg-[var(--bg)] text-[var(--text)]">
+      <div className="mx-auto max-w-[1240px] px-6 py-8 pb-[max(32px,env(safe-area-inset-bottom))]">
       <header className="flex items-baseline justify-between">
         <h1 className="text-[13px] font-semibold uppercase tracking-[0.2em]">Conviction Forge</h1>
         <Link to="/admin" className="text-[12px] text-[var(--text-muted)] underline">
           Moderation
         </Link>
       </header>
-      <div className="mt-6">{children}</div>
+        <div className="mt-6">{children}</div>
+      </div>
     </main>
+
   );
 }
 
