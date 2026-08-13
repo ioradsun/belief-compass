@@ -103,25 +103,51 @@ export function workerConfigured(): boolean {
   return Boolean(url && secret);
 }
 
-async function call<T>(path: string, body?: unknown, method = "POST"): Promise<T> {
+/**
+ * Model-driven steps (builder, challenger, implement, review, QA) routinely run
+ * for minutes. A 60s ceiling aborted them mid-thought and surfaced as the
+ * opaque "The operation was aborted." Only the cheap control-plane calls keep a
+ * short leash; anything that invokes a model gets a long one.
+ */
+const LONG_MS = 15 * 60_000;
+
+async function call<T>(
+  path: string,
+  body?: unknown,
+  method = "POST",
+  timeoutMs = 60_000,
+): Promise<T> {
   const { url, secret } = config();
   if (!url || !secret) throw new ForgeWorkerNotConnected();
 
-  const res = await fetch(new URL(path.replace(/^\//, ""), url).toString(), {
-    method,
-    headers: {
-      authorization: `Bearer ${secret}`,
-      "content-type": "application/json",
-    },
-    body: body === undefined ? undefined : JSON.stringify(body),
-    signal: AbortSignal.timeout(60_000),
-  });
+  let res: Response;
+  try {
+    res = await fetch(new URL(path.replace(/^\//, ""), url).toString(), {
+      method,
+      headers: {
+        authorization: `Bearer ${secret}`,
+        "content-type": "application/json",
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (e) {
+    const aborted =
+      e instanceof Error && (e.name === "TimeoutError" || /abort/i.test(e.message));
+    if (aborted) {
+      throw new Error(
+        `Forge Worker did not answer ${path} within ${Math.round(timeoutMs / 1000)}s — the step may still be running on the worker; reload to see its latest state.`,
+      );
+    }
+    throw e;
+  }
 
   if (!res.ok) {
     throw new Error(`Forge Worker ${res.status}: ${(await res.text()).slice(0, 400)}`);
   }
   return (await res.json()) as T;
 }
+
 
 export const forgeWorker: ForgeWorker = {
   async status() {
@@ -161,14 +187,15 @@ export const forgeWorker: ForgeWorker = {
   },
   createJob: (input) => call("/jobs", input),
   getJob: (id) => call(`/jobs/${id}`, undefined, "GET"),
-  startDebate: (id) => call(`/jobs/${id}/debate`),
-  runBuilder: (id, instruction) => call(`/jobs/${id}/builder`, { instruction }),
-  runChallenger: (id) => call(`/jobs/${id}/challenger`),
+  startDebate: (id) => call(`/jobs/${id}/debate`, undefined, "POST", LONG_MS),
+  runBuilder: (id, instruction) =>
+    call(`/jobs/${id}/builder`, { instruction }, "POST", LONG_MS),
+  runChallenger: (id) => call(`/jobs/${id}/challenger`, undefined, "POST", LONG_MS),
   lockPlan: (id) => call(`/jobs/${id}/lock`),
-  startImplementation: (id) => call(`/jobs/${id}/implement`),
-  runChecks: (id, profile) => call(`/jobs/${id}/checks`, { profile }),
-  runReview: (id, operation) => call(`/jobs/${id}/review`, { operation }),
-  runQA: (id) => call(`/jobs/${id}/qa`),
+  startImplementation: (id) => call(`/jobs/${id}/implement`, undefined, "POST", LONG_MS),
+  runChecks: (id, profile) => call(`/jobs/${id}/checks`, { profile }, "POST", LONG_MS),
+  runReview: (id, operation) => call(`/jobs/${id}/review`, { operation }, "POST", LONG_MS),
+  runQA: (id) => call(`/jobs/${id}/qa`, undefined, "POST", LONG_MS),
   getDiff: (id) => call(`/jobs/${id}/diff`, undefined, "GET"),
   getPreview: (id) => call(`/jobs/${id}/preview`, undefined, "GET"),
   createPullRequest: (id) => call(`/jobs/${id}/pr`),
