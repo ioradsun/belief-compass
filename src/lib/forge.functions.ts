@@ -314,6 +314,34 @@ export const forgeCreatePullRequest = createServerFn({ method: "POST" })
     return { url };
   });
 
+/**
+ * The deploy preview for a job's branch, when the worker publishes one.
+ *
+ * Read-only and forgiving: a worker that does not implement `/preview` is not
+ * an error the operator needs to see, it simply means there is no preview. The
+ * Ship station renders that absence honestly rather than offering a dead link.
+ */
+export const forgePreview = createServerFn({ method: "GET" })
+  .inputValidator((data: { id: string }) => data)
+  .handler(async ({ data }): Promise<{ url: string | null }> => {
+    const { requireAdmin } = await import("./admin-session.server");
+    await requireAdmin();
+    const { serviceClient } = await import("./supabase-clients");
+    const { data: row } = await serviceClient()
+      .from("forge_jobs")
+      .select("worker_job_id")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (!row?.worker_job_id) return { url: null };
+    const { forgeWorker, workerConfigured } = await import("./forge/worker.server");
+    if (!workerConfigured()) return { url: null };
+    try {
+      return await forgeWorker.getPreview(row.worker_job_id);
+    } catch {
+      return { url: null };
+    }
+  });
+
 export const forgeGetDiff = createServerFn({ method: "GET" })
   .inputValidator((data: { id: string }) => data)
   .handler(async ({ data }) => {
