@@ -29,6 +29,7 @@ import { useDisplayUnit } from "@/lib/display-unit";
 import { believerMove, capitalMove, type MetricMove } from "@/domain/metric-display";
 import type { MarketChange, MetricChange } from "@/domain/market-change";
 import { participantSocial, type ParticipantRelation } from "@/domain/participant-social";
+import { participantCount } from "@/domain/participants";
 import {
   insiderPulse,
   insight,
@@ -339,8 +340,16 @@ export function MarketMomentum({
   dense,
   faces,
   state,
+  participants,
 
 }: {
+  /**
+   * EVERYONE IN THIS MARKET — see @/domain/participants. The per-side believer
+   * counts exclude wallets holding both sides, so summing them under a label
+   * that says "Total participants" undercounts real people.
+   */
+  participants?: number | null;
+
   /** Still needed for the window phrase and the cold-start read. Never for a delta. */
   tape: TapeTrade[] | undefined;
   /**
@@ -387,6 +396,14 @@ export function MarketMomentum({
   // change rather than reporting a fabricated zero.
   const b = fromChange(change?.market.believers, book.believers.market, 1);
   const c = fromChange(change?.market.capital, book.capitalEth.market, ethUsd > 0 ? ethUsd : null);
+  // The headline count is everyone in the market, never less than the directional
+  // believers the same panel prints. The delta copy below still speaks about
+  // believers, which is what it measures.
+  const people = participantCount({
+    reachParticipants: participants ?? null,
+    believersYes: Math.round(b.current),
+  });
+
 
   /**
    * THE READ, from the Insider — the same facts these two rows print, handed to
@@ -410,12 +427,13 @@ export function MarketMomentum({
     >
       <MomentumMetric
         dense={dense}
-        total={b.current.toLocaleString("en-US")}
+        total={people.toLocaleString("en-US")}
         label="Total participants"
         copy={believerCopy(b, book.window)}
         faces={faces}
-        facesTotal={Math.max(faces?.length ?? 0, Math.round(b.current))}
+        facesTotal={Math.max(faces?.length ?? 0, people)}
       />
+
       <div className="border-t border-[var(--hairline)]" aria-hidden />
       <MomentumMetric
         dense={dense}

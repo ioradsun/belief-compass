@@ -536,6 +536,7 @@ export function MarketDeck({
         win={deckWin}
         change={marketChange}
         faces={participantFaces}
+        participants={evidence?.participants}
         state={marketStateFacts(rr)}
         footer={
           onToggleCase && !mobileCaseOpen ? (

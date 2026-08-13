@@ -53,9 +53,17 @@ export interface MarketEvidence {
   believers: Believer[];
   believersYes: number;
   believersNo: number;
+  /**
+   * EVERYONE HOLDING A POSITION, not just the directional ones. `believers` is
+   * filtered to stance YES/NO, so a wallet holding both sides (MIXED) is a real
+   * person in this market that no per-side count includes. POV counts them; we
+   * were printing "4 participants" on a market six wallets had traded.
+   */
+  participants: number;
   priceSeries: PricePoint[];
   defense: DefenseOpinion[];
 }
+
 
 /** Shape pov.co agent_opinions (jsonb) into Defense entries; tolerant of gaps. */
 function toDefense(raw: unknown): DefenseOpinion[] {
@@ -96,7 +104,7 @@ export const getMarketEvidence = createServerFn({ method: "GET" })
       const sb = serviceClient();
       const id = data.marketId;
 
-      const [ethUsd, beliefsRes, seriesRes, marketRes] = await Promise.all([
+      const [ethUsd, beliefsRes, seriesRes, marketRes, participantsRes] = await Promise.all([
         readEthUsd(sb),
         sb
           .from("wallet_beliefs")
@@ -109,7 +117,14 @@ export const getMarketEvidence = createServerFn({ method: "GET" })
           .limit(BELIEVERS_LIMIT),
         sb.rpc("price_series_daily", { p_ids: [id], p_days: 60 }),
         sb.from("markets").select("agent_opinions").eq("onchain_id", id).maybeSingle(),
+        // Everyone with a live position, MIXED included — see MarketEvidence.
+        sb
+          .from("wallet_beliefs")
+          .select("wallet", { count: "exact", head: true })
+          .eq("onchain_id", id)
+          .or("yes_shares.gt.0,no_shares.gt.0"),
       ]);
+
 
       const rows = (beliefsRes.data ?? []) as Array<{
         wallet: string;
@@ -202,6 +217,14 @@ export const getMarketEvidence = createServerFn({ method: "GET" })
         (marketRes.data as { agent_opinions?: unknown } | null)?.agent_opinions,
       );
 
-      return { believers, believersYes, believersNo, priceSeries, defense };
+      // Never below the people we can see: a count that is smaller than the
+      // believer rows on screen would be its own contradiction.
+      const participants = Math.max(
+        Number(participantsRes.count ?? 0) || 0,
+        believersYes + believersNo,
+      );
+
+      return { believers, believersYes, believersNo, participants, priceSeries, defense };
+
     });
   });
