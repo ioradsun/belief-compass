@@ -18,7 +18,7 @@
  * The centre panel is where a market gets its space, and this column must never
  * compete with it.
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, memo, useCallback, useMemo } from "react";
 import { Lightbulb } from "lucide-react";
 import { composeDiscoveryRow } from "@/domain/market-discovery";
 import type { FeedFilters, FeedNetwork } from "@/domain/feed/filters";
@@ -101,7 +101,7 @@ function factsOf(row: MarketRow | undefined, nowMs: number) {
   };
 }
 
-export function FeedListPanel({
+function FeedListPanelInner({
   entries,
   rows,
   activeId,
@@ -197,8 +197,9 @@ export function FeedListPanel({
    * whole order minus the active one stand in.
    */
   const activeIdx = activeId == null ? -1 : entries.findIndex((e) => e.onchainId === activeId);
-  const upcoming =
-    activeIdx >= 0 ? entries.slice(activeIdx + 1) : entries.filter((e) => e.onchainId !== activeId);
+  const upcoming = useMemo(() => {
+    return activeIdx >= 0 ? entries.slice(activeIdx + 1) : entries.filter((e) => e.onchainId !== activeId);
+  }, [activeIdx, entries]);
 
   /**
    * THE ROW THAT LEFT.
@@ -228,113 +229,119 @@ export function FeedListPanel({
    * of the queue rather than an advert wedged into it — its own eyebrow is the
    * only thing that marks it out.
    */
-  const renderIdeaRow = (
-    e: FeedListEntry,
-    idea: { question: string },
-    opts: { first: boolean; leaving?: boolean },
-  ) => (
-    <li
-      key={opts.leaving ? "leaving-idea" : "idea"}
-      aria-hidden={opts.leaving || undefined}
-      className={`relative ${opts.leaving ? "queue-depart" : ""} ${
-        opts.first && !opts.leaving ? "queue-promote queue-rail pl-1" : ""
-      }`}
-    >
-      <button
-        type="button"
-        onClick={() => onSelect(e.onchainId)}
-        className="w-full rounded-[10px] px-3 py-2 text-left transition-colors hover:bg-[var(--surface)]"
-      >
-        <span className="mb-0.5 flex items-center gap-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-[var(--rel,#9b87f5)]">
-          <Lightbulb size={10} aria-hidden /> Market Idea
-        </span>
-        <span className="block text-[13px] font-medium leading-snug text-[var(--text)]">
-          {idea.question}
-        </span>
-        <span className="mt-0.5 block text-[11px] text-[var(--text-muted)]">
-          Yours to create, or pass.
-        </span>
-      </button>
-    </li>
-  );
-
-  const renderRow = (e: FeedListEntry, opts: { first: boolean; leaving?: boolean }) => {
-    if (e.idea) return renderIdeaRow(e, e.idea, opts);
-    const f = factsOf(rows[e.onchainId], nowMs);
-    /**
-     * THREE LINES, IN ONE HIERARCHY: the question, why it is here, and
-     * the scale of the market.
-     *
-     * WHY IT IS HERE depends on the lens, and on one rule. Most Capital,
-     * Most Believers and Fresh rank on a WHOLE-MARKET total, so their
-     * hero is that total and it never names a side — turning "Most
-     * Capital" into "YES has $505" would describe a side while ranking
-     * on the sum. For You and Moving rank on something that genuinely is
-     * about a side, so their hero is the sentence the canonical engines
-     * already wrote ("Your Tribe is backing YES", "YES moved up 8.4%
-     * today") and it may say so.
-     */
-    const hero = f ? lensHero(lens, f.scale, f.ageHours) : null;
-    // Only the reason-led lenses fall back to the market's own story: a
-    // ranked lens with no hero has nothing to claim, and the discovery
-    // sentence would be answering a question the reader did not ask.
-    const line = hero ? null : (e.reason ?? f?.discovery.story ?? null);
-    // The quiet grounding, minus whatever the hero just said out loud.
-    const scale = f ? scaleLine(lens, f.scale) : null;
-    return (
+  const renderIdeaRow = useCallback(
+    (
+      e: FeedListEntry,
+      idea: { question: string },
+      opts: { first: boolean; leaving?: boolean },
+    ) => (
       <li
-        key={opts.leaving ? `leaving-${e.onchainId}` : e.onchainId}
+        key={opts.leaving ? "leaving-idea" : "idea"}
         aria-hidden={opts.leaving || undefined}
-        // The front of the queue is a place, and it reads like one: an accent
-        // rail and full-strength text, one step above everything behind it.
         className={`relative ${opts.leaving ? "queue-depart" : ""} ${
           opts.first && !opts.leaving ? "queue-promote queue-rail pl-1" : ""
         }`}
-        ref={
-          opts.leaving
-            ? undefined
-            : (el) => {
-                if (el) rowRefs.current.set(e.onchainId, el);
-                else rowRefs.current.delete(e.onchainId);
-              }
-        }
       >
         <button
           type="button"
           onClick={() => onSelect(e.onchainId)}
           className="w-full rounded-[10px] px-3 py-2 text-left transition-colors hover:bg-[var(--surface)]"
         >
-          {opts.first && !opts.leaving && (
-            <span className="mb-0.5 block text-[9px] font-semibold uppercase tracking-[0.12em] text-[var(--rel,#9b87f5)]">
-              Up next
-            </span>
-          )}
-          <span
-            className={`block text-[13px] font-medium leading-snug ${
-              opts.first && !opts.leaving ? "text-[var(--text)]" : "text-[var(--text-secondary)]"
-            }`}
-          >
-            {f?.question ?? marketTitleFallback(e.onchainId)}
+          <span className="mb-0.5 flex items-center gap-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-[var(--rel,#9b87f5)]">
+            <Lightbulb size={10} aria-hidden /> Market Idea
           </span>
-          {/* The hero of a ranked lens is a FACT ABOUT THE MARKET, so it
-            is not painted in the discovery purple — that accent means
-            "this one is about you" everywhere else in the product, and
-            "$505 committed" is not. It takes the text weight instead. */}
-          {hero && (
-            <span className="num mt-0.5 block text-[12px] font-semibold text-[var(--text)]">
-              {hero}
-            </span>
-          )}
-          <WhyThis reason={line} className="mt-0.5 whitespace-normal" />
-          {/* Believers and capital ground every market under every lens.
-            The quietest line on the row, and never a repeat of the hero. */}
-          {scale && (
-            <span className="num mt-0.5 block text-[11px] text-[var(--text-muted)]">{scale}</span>
-          )}
+          <span className="block text-[13px] font-medium leading-snug text-[var(--text)]">
+            {idea.question}
+          </span>
+          <span className="mt-0.5 block text-[11px] text-[var(--text-muted)]">
+            Yours to create, or pass.
+          </span>
         </button>
       </li>
-    );
-  };
+    ),
+    [onSelect],
+  );
+
+  const renderRow = useCallback(
+    (e: FeedListEntry, opts: { first: boolean; leaving?: boolean }) => {
+      if (e.idea) return renderIdeaRow(e, e.idea, opts);
+      const f = factsOf(rows[e.onchainId], nowMs);
+      /**
+       * THREE LINES, IN ONE HIERARCHY: the question, why it is here, and
+       * the scale of the market.
+       *
+       * WHY IT IS HERE depends on the lens, and on one rule. Most Capital,
+       * Most Believers and Fresh rank on a WHOLE-MARKET total, so their
+       * hero is that total and it never names a side — turning "Most
+       * Capital" into "YES has $505" would describe a side while ranking
+       * on the sum. For You and Moving rank on something that genuinely is
+       * about a side, so their hero is the sentence the canonical engines
+       * already wrote ("Your Tribe is backing YES", "YES moved up 8.4%
+       * today") and it may say so.
+       */
+      const hero = f ? lensHero(lens, f.scale, f.ageHours) : null;
+      // Only the reason-led lenses fall back to the market's own story: a
+      // ranked lens with no hero has nothing to claim, and the discovery
+      // sentence would be answering a question the reader did not ask.
+      const line = hero ? null : (e.reason ?? f?.discovery.story ?? null);
+      // The quiet grounding, minus whatever the hero just said out loud.
+      const scale = f ? scaleLine(lens, f.scale) : null;
+      return (
+        <li
+          key={opts.leaving ? `leaving-${e.onchainId}` : e.onchainId}
+          aria-hidden={opts.leaving || undefined}
+          // The front of the queue is a place, and it reads like one: an accent
+          // rail and full-strength text, one step above everything behind it.
+          className={`relative ${opts.leaving ? "queue-depart" : ""} ${
+            opts.first && !opts.leaving ? "queue-promote queue-rail pl-1" : ""
+          }`}
+          ref={
+            opts.leaving
+              ? undefined
+              : (el) => {
+                  if (el) rowRefs.current.set(e.onchainId, el);
+                  else rowRefs.current.delete(e.onchainId);
+                }
+          }
+        >
+          <button
+            type="button"
+            onClick={() => onSelect(e.onchainId)}
+            className="w-full rounded-[10px] px-3 py-2 text-left transition-colors hover:bg-[var(--surface)]"
+          >
+            {opts.first && !opts.leaving && (
+              <span className="mb-0.5 block text-[9px] font-semibold uppercase tracking-[0.12em] text-[var(--rel,#9b87f5)]">
+                Up next
+              </span>
+            )}
+            <span
+              className={`block text-[13px] font-medium leading-snug ${
+                opts.first && !opts.leaving ? "text-[var(--text)]" : "text-[var(--text-secondary)]"
+              }`}
+            >
+              {f?.question ?? marketTitleFallback(e.onchainId)}
+            </span>
+            {/* The hero of a ranked lens is a FACT ABOUT THE MARKET, so it
+              is not painted in the discovery purple — that accent means
+              "this one is about you" everywhere else in the product, and
+              "$505 committed" is not. It takes the text weight instead. */}
+            {hero && (
+              <span className="num mt-0.5 block text-[12px] font-semibold text-[var(--text)]">
+                {hero}
+              </span>
+            )}
+            <WhyThis reason={line} className="mt-0.5 whitespace-normal" />
+            {/* Believers and capital ground every market under every lens.
+              The quietest line on the row, and never a repeat of the hero. */}
+            {scale && (
+              <span className="num mt-0.5 block text-[11px] text-[var(--text-muted)]">{scale}</span>
+            )}
+          </button>
+        </li>
+      );
+    },
+    [lens, onSelect, rows, nowMs, renderIdeaRow],
+  );
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -519,3 +526,5 @@ function LoadMoreSentinel({ onLoadMore }: { onLoadMore?: () => void }) {
   }, [onLoadMore]);
   return <span ref={ref} aria-hidden className="block h-0" />;
 }
+
+export const FeedListPanel = memo(FeedListPanelInner);
