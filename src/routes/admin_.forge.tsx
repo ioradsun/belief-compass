@@ -123,8 +123,10 @@ function Shell({ children }: { children: React.ReactNode }) {
           Moderation
         </Link>
       </header>
-      <div className="mt-6">{children}</div>
+        <div className="mt-6">{children}</div>
+      </div>
     </main>
+
   );
 }
 
