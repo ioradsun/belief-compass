@@ -25,6 +25,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { adminStatus } from "@/lib/admin.functions";
 import { ForgeModelConfig } from "@/components/forge/ForgeModelConfig";
 import { ForgeLoop } from "@/components/forge/ForgeLoop";
+import { ForgeDiscovery } from "@/components/forge/ForgeDiscovery";
 import {
   forgeApprovePlan,
   forgeCancelJob,
@@ -172,7 +173,6 @@ function Lockup() {
 type Compose = { open: boolean; request: string; mode: ForgeMode };
 
 const RAIL_LIST = "grid-cols-[212px_minmax(0,1fr)] xl:grid-cols-[264px_minmax(0,1fr)]";
-const RAIL_COMPOSE = "grid-cols-[380px_minmax(0,1fr)]";
 
 function ControlRoom() {
   const { job: openJob } = Route.useSearch();
@@ -211,11 +211,7 @@ function ControlRoom() {
   return (
     <main className="forge-room grid h-[100dvh] w-full grid-rows-[58px_minmax(0,1fr)] overflow-hidden bg-[var(--bg)] text-[var(--text)]">
       <CommandBar room={room} composing={compose.open} />
-      <div
-        className={`grid min-h-0 transition-[grid-template-columns] duration-200 ease-out ${
-          compose.open ? RAIL_COMPOSE : RAIL_LIST
-        }`}
-      >
+      <div className={`grid min-h-0 ${RAIL_LIST}`}>
         <JobRail
           jobs={jobs ?? []}
           openJob={openJob}
@@ -224,14 +220,20 @@ function ControlRoom() {
           compose={compose}
           setCompose={setCompose}
         />
-        {room.kind === "ready" ? (
+        {compose.open ? (
+          // A new job starts in the centre: a Discovery session with the CTO,
+          // who reads the code and interrogates the brief before anything runs.
+          <ForgeDiscovery
+            onProceed={(jobId) => {
+              setCompose((c) => ({ ...c, open: false }));
+              setOpenJob(jobId);
+            }}
+            onClose={() => setCompose((c) => ({ ...c, open: false }))}
+          />
+        ) : room.kind === "ready" ? (
           // Keyed by job: a different job is a different board, so per-panel
           // selections (open objection, open check, open gstack op) reset.
           <JobCanvas key={room.job.id} room={room} />
-        ) : compose.open ? (
-          // Nothing to watch, so the canvas shows what the chosen mode will
-          // cost: the pipeline it walks and the models it will pay for.
-          <ModeCanvas mode={compose.mode} />
         ) : room.kind === "none" ? (
           <IdleCanvas onNew={() => setCompose((c) => ({ ...c, open: true }))} />
         ) : (
@@ -450,7 +452,9 @@ function CommandBar({ room, composing }: { room: Room; composing: boolean }) {
       >
         <Lockup />
       </div>
-      {room.kind === "ready" ? (
+      {composing ? (
+        <IdleBar room={room} composing={composing} />
+      ) : room.kind === "ready" ? (
         <JobVitals room={room} />
       ) : (
         <IdleBar room={room} composing={composing} />
@@ -607,7 +611,6 @@ function JobRail({
           replacing it, so a job can be written without losing sight of the
           jobs already running. */}
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-        {compose.open && <Composer compose={compose} setCompose={setCompose} onCreated={onOpen} />}
         <div className="py-2">
           {rows.length === 0 ? (
             <p className="px-3 py-2 text-[12px] text-[var(--text-muted)]">
@@ -651,96 +654,6 @@ function JobRail({
 
       <SystemReadout env={env} />
     </aside>
-  );
-}
-
-/**
- * The composer. The only surface in Forge that asks the operator for prose,
- * so the request gets real room and the mode gets one honest line each. The
- * fuller consequence of a mode — its pipeline and what it will pay models —
- * renders on the canvas beside it whenever there is no job to watch.
- */
-function Composer({
-  compose,
-  setCompose,
-  onCreated,
-}: {
-  compose: Compose;
-  setCompose: React.Dispatch<React.SetStateAction<Compose>>;
-  onCreated: (id: string) => void;
-}) {
-  const qc = useQueryClient();
-  const [error, setError] = useState<string | null>(null);
-
-  const build = useMutation({
-    mutationFn: async () =>
-      await forgeCreateJob({ data: { request: compose.request, mode: compose.mode } }),
-    onSuccess: (r) => {
-      setError(null);
-      qc.invalidateQueries({ queryKey: ["forge-jobs"] });
-      setCompose({ open: false, request: "", mode: compose.mode });
-      onCreated(r.id);
-    },
-    onError: (e) => setError(e instanceof Error ? e.message : "Could not create the job."),
-  });
-
-  const ready = compose.request.trim().length >= 8;
-
-  return (
-    <div className="scene-enter border-b border-[var(--hairline)] bg-[var(--surface)] px-3 py-3">
-      <textarea
-        value={compose.request}
-        onChange={(e) => setCompose((c) => ({ ...c, request: e.target.value }))}
-        rows={6}
-        autoFocus
-        placeholder="What should Conviction become next?"
-        className="w-full resize-none border border-[var(--hairline)] bg-[var(--bg)] px-2.5 py-2 text-[13px] leading-[1.6] outline-none focus:border-[var(--border-strong)]"
-      />
-
-      <div className="mt-3 flex flex-col gap-px bg-[var(--hairline)]">
-        {FORGE_MODES.map((m) => (
-          <button
-            key={m}
-            type="button"
-            onClick={() => setCompose((c) => ({ ...c, mode: m }))}
-            className="px-2.5 py-1.5 text-left"
-            style={{
-              backgroundColor: compose.mode === m ? "var(--surface-2)" : "var(--panel)",
-              boxShadow: compose.mode === m ? `inset 2px 0 0 ${TONE_COLOR.active}` : undefined,
-            }}
-          >
-            <span
-              className={`block text-[11px] font-semibold uppercase tracking-[0.16em] ${
-                compose.mode === m ? "text-[var(--text)]" : "text-[var(--text-muted)]"
-              }`}
-            >
-              {m}
-            </span>
-            <span className="mt-0.5 block text-[11px] leading-[1.45] text-[var(--text-muted)]">
-              {MODE_BLURB[m]}
-            </span>
-          </button>
-        ))}
-      </div>
-
-      {error && <p className="mt-2 text-[12px] text-[var(--loss)]">{error}</p>}
-
-      <div className="mt-3 flex items-center gap-2">
-        <button
-          type="button"
-          disabled={!ready || build.isPending}
-          onClick={() => build.mutate()}
-          className="rounded-[3px] bg-[var(--text)] px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--bg)] disabled:opacity-35"
-        >
-          {build.isPending ? "Creating" : "Build"}
-        </button>
-        <span className="min-w-0 flex-1 text-[10px] leading-[1.4] text-[var(--text-muted)]">
-          {ready
-            ? "Filed, then handed to the worker."
-            : "Describe the change in a sentence or more."}
-        </span>
-      </div>
-    </div>
   );
 }
 
@@ -944,95 +857,5 @@ function ActivityStrip({ ctx }: { ctx: RoomContext }) {
         )}
       </div>
     </section>
-  );
-}
-
-/* ── Mode consequence ─────────────────────────────────────────────────────
- * Shown on the canvas while the operator composes, and only when there is no
- * job to watch. Choosing a mode is choosing what Forge will spend and how
- * hard it will argue, so the pipeline it walks and the models it pays are
- * stated before the request is filed — not after.
- */
-
-function ModeCanvas({ mode }: { mode: ForgeMode }) {
-  return (
-    <div className="min-h-0 overflow-y-auto px-8 py-7">
-      <div className="max-w-[760px]">
-        <h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-secondary)]">
-          {mode}
-        </h2>
-        <p className="mt-1 max-w-[62ch] text-[14px] leading-[1.55] text-[var(--text)]">
-          {MODE_BLURB[mode]}
-        </p>
-        <p className="mt-1 max-w-[62ch] text-[12px] leading-[1.6] text-[var(--text-muted)]">
-          {whyMode(mode)}
-        </p>
-
-        <div className="mt-7 grid grid-cols-[minmax(0,1fr)_300px] gap-10">
-          <section>
-            <h3 className="flex items-baseline justify-between text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">
-              Pipeline
-              <span className="num">{STAGE_KEYS.length} stages</span>
-            </h3>
-            <ol className="mt-2 divide-y divide-[var(--hairline)]">
-              {STAGE_KEYS.map((key, i) => {
-                const s = STAGE_META[key];
-                return (
-                  <li key={key} className="flex items-baseline gap-3 py-[6px]">
-                    <span className="num w-[18px] shrink-0 text-[10px] text-[var(--text-muted)]">
-                      {String(i + 1).padStart(2, "0")}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="text-[12px] text-[var(--text)]">{s.title}</span>
-                      <span className="ml-2 font-mono text-[10px] text-[var(--text-muted)]">
-                        {s.gstack}
-                      </span>
-                    </span>
-                    <span className="shrink-0 text-[10px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
-                      {s.owner}
-                    </span>
-                  </li>
-                );
-              })}
-            </ol>
-            <p className="mt-3 text-[11px] leading-[1.6] text-[var(--text-muted)]">
-              {mode === "FAST"
-                ? "FAST runs the plan without an adversarial debate — the engineering review of the diff is the safeguard."
-                : mode === "CRITICAL"
-                  ? "CRITICAL adds a security gate inside Review and a premium escalation before Ship. It never auto-merges."
-                  : "DEBATE attacks the plan in the Plan stage before a line is written, then reviews the diff in Review."}
-            </p>
-          </section>
-
-          <section>
-            <h3 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">
-              Models
-            </h3>
-            <ul className="mt-2 divide-y divide-[var(--hairline)]">
-              {(["builder", "challenger", "escalation"] as const).map((role) => {
-                const m = MODEL_REGISTRY[role];
-                return (
-                  <li key={role} className="py-2">
-                    <p className="text-[11px] uppercase tracking-[0.12em] text-[var(--text-secondary)]">
-                      {role}
-                    </p>
-                    <p className="truncate font-mono text-[11px] text-[var(--text-muted)]">
-                      {m.modelId}
-                    </p>
-                    <p className="num text-[10px] text-[var(--text-muted)]">
-                      ${m.inputCost} / ${m.outputCost} per 1M · {m.metadata.invocation}
-                    </p>
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
-        </div>
-
-        <p className="mt-7 max-w-[62ch] border-t border-[var(--hairline)] pt-3 text-[12px] leading-[1.6] text-[var(--text-muted)]">
-          {currentAction({ status: "DRAFT" }).why}
-        </p>
-      </div>
-    </div>
   );
 }

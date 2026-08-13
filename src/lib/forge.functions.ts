@@ -93,7 +93,7 @@ export const forgeOpenRouterModels = createServerFn({ method: "GET" }).handler(a
 export type ForgeModelConfig = { builder: string; challenger: string; escalation: string };
 
 /** Per-role model ids, with MODEL_REGISTRY defaults where unset. */
-async function resolveModelConfig(): Promise<ForgeModelConfig> {
+export async function resolveModelConfig(): Promise<ForgeModelConfig> {
   const { serviceClient } = await import("./supabase-clients");
   const { data } = await serviceClient().from("forge_model_config").select("role, model_id");
   const rows = (data ?? []) as { role: string; model_id: string }[];
@@ -112,7 +112,9 @@ export const forgeGetModelConfig = createServerFn({ method: "GET" }).handler(asy
 });
 
 export const forgeSetModelConfig = createServerFn({ method: "POST" })
-  .inputValidator((data: { role: "builder" | "challenger" | "escalation"; modelId: string }) => data)
+  .inputValidator(
+    (data: { role: "builder" | "challenger" | "escalation"; modelId: string }) => data,
+  )
   .handler(async ({ data }) => {
     const { requireAdmin } = await import("./admin-session.server");
     await requireAdmin();
