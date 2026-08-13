@@ -84,43 +84,43 @@ const ACTION: Record<ForgeStatus, CurrentAction> = {
     next: "Repository analysis",
   },
   ANALYZING: {
-    headline: "Builder is reading the repository",
-    why: "Before proposing anything it looks for the mechanism that already does this, so the change extends one source of truth instead of creating a second.",
-    next: "Builder writes a plan",
+    headline: "Reading the repository",
+    why: "Before proposing anything the engineer looks for the mechanism that already does this, so the change extends one source of truth instead of creating a second.",
+    next: "The engineer writes a plan",
   },
   BUILDER_PLAN: {
-    headline: "Builder is writing the plan",
+    headline: "Writing the plan",
     why: "The smallest complete implementation, named as steps and acceptance criteria, before a line is written.",
-    next: "Challenger reviews the plan",
+    next: "The reviewer critiques the plan",
   },
   CHALLENGER_REVIEW: {
-    headline: "Challenger is reviewing the plan",
-    why: "Looking for duplicated state, regressions in the feed and identity systems, and simpler ways to reach the same behaviour.",
-    next: "Builder revises the plan",
+    headline: "Reviewing the plan",
+    why: "gstack's plan review looks for duplicated state, regressions in the feed and identity systems, and simpler ways to reach the same behaviour.",
+    next: "The engineer revises the plan",
   },
   BUILDER_REVISION: {
-    headline: "Builder is revising the plan",
+    headline: "Revising the plan",
     why: "Every CRITICAL and HIGH objection has to be answered before implementation may begin.",
-    next: "Challenger re-reviews",
+    next: "The reviewer re-reads the plan",
   },
   PLAN_LOCKED: {
-    headline: "Plan is locked",
+    headline: "Plan locked",
     why: "The debate is settled. What gets built is now fixed.",
     next: "Implementation",
   },
   IMPLEMENTING: {
-    headline: "Builder is writing code",
-    why: "Working on its own branch in an isolated checkout. Nothing touches main.",
+    headline: "Writing the code",
+    why: "The engineer works on its own branch in an isolated checkout. Nothing touches main.",
     next: "Deterministic checks",
   },
   VERIFYING: {
-    headline: "Running the verification suite",
+    headline: "Running deterministic checks",
     why: "The repository's existing checks judge the change — Forge does not invent a second testing system.",
-    next: "Challenger reviews the diff",
+    next: "The engineering review of the diff",
   },
   REVIEWING: {
-    headline: "Challenger is reviewing the diff",
-    why: "Reading the actual change rather than the promise of it.",
+    headline: "Engineering review of the diff",
+    why: "The reviewer reads the actual change rather than the promise of it — for correctness and structure, against the locked plan.",
     next: "Browser QA",
   },
   QA: {
@@ -139,7 +139,11 @@ const ACTION: Record<ForgeStatus, CurrentAction> = {
     next: "Merge",
   },
   COMPLETED: { headline: "Job complete", why: "The change is on a pull request.", next: null },
-  FAILED: { headline: "Job failed", why: "Forge stopped rather than ship something it could not prove.", next: null },
+  FAILED: {
+    headline: "Job failed",
+    why: "Forge stopped rather than ship something it could not prove.",
+    next: null,
+  },
   CANCELLED: { headline: "Job cancelled", why: "Stopped by a human.", next: null },
 };
 
@@ -153,9 +157,7 @@ export function pipelineProgress(job: Pick<ForgeJob, "mode" | "status" | "curren
   total: number;
 } {
   const phases = MODE_PIPELINE[job.mode];
-  const i = phases.findIndex(
-    (p) => p.key === job.currentPhase || p.statuses.includes(job.status),
-  );
+  const i = phases.findIndex((p) => p.key === job.currentPhase || p.statuses.includes(job.status));
   return { index: i < 0 ? 0 : i + 1, total: phases.length };
 }
 

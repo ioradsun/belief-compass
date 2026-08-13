@@ -184,7 +184,7 @@ export const MODE_PIPELINE: Record<ForgeMode, readonly ForgePhase[]> = {
 };
 
 export const MODE_BLURB: Record<ForgeMode, string> = {
-  FAST: "Copy, CSS, small isolated UI and bug fixes. Builder implements, Challenger reviews the diff.",
+  FAST: "Copy, CSS, small isolated UI and bug fixes. The engineer implements, the reviewer reads the diff.",
   DEBATE:
     "Product behaviour: feed, ranking, calibration, DNA, onboarding. Plan is attacked before a line is written.",
   CRITICAL:

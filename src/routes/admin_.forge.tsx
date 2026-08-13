@@ -41,7 +41,6 @@ import {
 import {
   FORGE_MODES,
   MODE_BLURB,
-  MODE_PIPELINE,
   blocksImplementation,
   isTerminal,
   type ForgeJob,
@@ -58,56 +57,36 @@ import {
 } from "@/lib/forge/narrative";
 import {
   PHASE_LABEL,
-  STATION_KEYS,
-  STATION_META,
-  activeStation,
   fault,
   orchestration,
   planAwaitsHuman,
   semanticEvents,
-  stationStates,
   type Fault,
   type Orchestration,
-  type StationKey,
 } from "@/lib/forge/stations";
+import {
+  STAGE_KEYS,
+  STAGE_META,
+  liveStage,
+  stageStates,
+  type StageKey,
+} from "@/lib/forge/pipeline";
 import { MODEL_REGISTRY } from "@/lib/forge/models";
 import {
   Action,
   ActivityRow,
   Dot,
   Empty,
-  FocusRailRow,
   LinkAction,
   RailRow,
-  Why,
 } from "@/components/forge/ForgePanels";
 import { STATE_TONE, TONE_COLOR } from "@/components/forge/tone";
 import {
-  BuilderStation,
-  ChallengerStation,
-  GstackStation,
-  ImplementationStation,
-  LogsStation,
-  ShipStation,
-  VerifyStation,
-  type FocusKey,
+  PipelineRail,
+  StageDetail,
   type RoomContext,
-  type Station,
-} from "@/components/forge/ForgeStations";
-
-/**
- * Position is meaning in this room, so the six stations are declared once, in
- * order, and both the grid and the focus rail read the same map. Builder is
- * always top-left; Ship is always bottom-right.
- */
-const STATION_COMPONENT: Record<StationKey, Station> = {
-  builder: BuilderStation,
-  challenger: ChallengerStation,
-  gstack: GstackStation,
-  implementation: ImplementationStation,
-  verify: VerifyStation,
-  ship: ShipStation,
-};
+  type SelectedView,
+} from "@/components/forge/ForgePipeline";
 
 export const Route = createFileRoute("/admin_/forge")({
   ssr: false,
@@ -319,27 +298,26 @@ type Room =
 
 function useJobRoom(id: string | undefined, { escapeCaptured }: { escapeCaptured: boolean }): Room {
   const qc = useQueryClient();
-  const [focus, setFocus] = useState<FocusKey | null>(null);
-  const [diffFile, setDiffFile] = useState<string | null>(null);
+  const [selected, setSelected] = useState<SelectedView | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // A new job is a new board: never inherit the last one's focus.
+  // A new job is a new board: never inherit the last one's stage selection, so
+  // the screen opens on whatever the new job is doing now.
   useEffect(() => {
-    setFocus(null);
-    setDiffFile(null);
+    setSelected(null);
     setError(null);
   }, [id]);
 
-  // Escape returns to the whole board — unless something nearer the operator
-  // has claimed the key, in which case the canvas keeps its focus.
+  // Escape returns to the live stage — unless something nearer the operator
+  // (the composer) has claimed the key.
   useEffect(() => {
-    if (!focus || escapeCaptured) return;
+    if (selected === null || escapeCaptured) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setFocus(null);
+      if (e.key === "Escape") setSelected(null);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [focus, escapeCaptured]);
+  }, [selected, escapeCaptured]);
 
   const { data, isPending } = useQuery({
     queryKey: ["forge-job", id],
@@ -349,8 +327,10 @@ function useJobRoom(id: string | undefined, { escapeCaptured }: { escapeCaptured
   });
 
   // The diff is a live call into the worker, so it is only fetched when the
-  // operator has actually asked to look at code.
-  const wantsDiff = focus === "implementation" || diffFile !== null;
+  // operator is actually looking at code — the Build or Review stage.
+  const live = data ? liveStage(data.job.status) : null;
+  const resolved: SelectedView = selected ?? live ?? "brief";
+  const wantsDiff = resolved === "build" || resolved === "review";
   const diffQuery = useQuery({
     queryKey: ["forge-diff", id],
     queryFn: () => forgeGetDiff({ data: { id: id as string } }),
@@ -412,12 +392,10 @@ function useJobRoom(id: string | undefined, { escapeCaptured }: { escapeCaptured
     objections,
     checks,
     modelRuns,
-    states: stationStates({ job, objections, checks, events }),
-    live: activeStation(job.status),
-    focus,
-    setFocus,
-    diffFile,
-    setDiffFile,
+    stages: stageStates({ job, objections, checks, events }),
+    live,
+    selected: resolved,
+    setSelected,
     approvePlan:
       planAwaitsHuman(job) && !blocksImplementation(job.mode, objections) && !busy
         ? () => approve.mutate()
@@ -824,13 +802,14 @@ function SystemReadout({ env }: { env: Env }) {
 function JobCanvas({ room }: { room: Extract<Room, { kind: "ready" }> }) {
   const { ctx, now, stop } = room;
   return (
-    <div className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)_auto]">
+    <div className="grid min-h-0 grid-rows-[auto_auto_minmax(0,1fr)_auto]">
       <NowBand
         now={now}
         stop={stop}
-        onOpenFault={() => ctx.setFocus(stop?.subject ? "verify" : "builder")}
+        onOpenFault={() => ctx.setSelected(stop?.subject ? "verify" : (ctx.live ?? "brief"))}
       />
-      {ctx.focus ? <FocusView ctx={ctx} /> : <StationGrid ctx={ctx} />}
+      <PipelineRail ctx={ctx} />
+      <StageDetail ctx={ctx} />
       <ActivityStrip ctx={ctx} />
     </div>
   );
@@ -927,78 +906,6 @@ function Readout({ label, children }: { label: string; children: React.ReactNode
   );
 }
 
-/* ── The grid ─────────────────────────────────────────────────────────────
- * Three columns, two rows, hairline seams. Builder is always top-left and
- * Ship is always bottom-right; the operator navigates by memory, not labels.
- */
-
-// Below xl the board folds to two columns and three rows. Reading order is
-// preserved, so a station is still found where the eye expects it.
-function StationGrid({ ctx }: { ctx: RoomContext }) {
-  return (
-    <div className="grid min-h-0 grid-cols-2 grid-rows-3 gap-px bg-[var(--hairline)] xl:grid-cols-3 xl:grid-rows-2">
-      {STATION_KEYS.map((key) => {
-        const Station = STATION_COMPONENT[key];
-        return <Station key={key} ctx={ctx} />;
-      })}
-    </div>
-  );
-}
-
-/* ── Focus mode ───────────────────────────────────────────────────────────
- * One station takes the canvas; the other five collapse into a slim rail
- * that keeps its order and its live status. The job never changes — this is
- * a change of magnification, not of place.
- */
-
-function FocusView({ ctx }: { ctx: RoomContext }) {
-  const key = ctx.focus;
-  if (!key) return null;
-  const Station = key === "logs" ? null : STATION_COMPONENT[key];
-  return (
-    <div className="grid min-h-0 grid-cols-[minmax(0,1fr)_200px] gap-px bg-[var(--hairline)]">
-      <div className="scene-enter grid min-h-0">
-        {Station ? <Station ctx={ctx} expanded /> : <LogsStation ctx={ctx} />}
-      </div>
-      <div className="flex min-h-0 flex-col bg-[var(--panel)]">
-        <div className="shrink-0 border-b border-[var(--hairline)] px-3 py-2">
-          <Action onClick={() => ctx.setFocus(null)}>Exit focus · Esc</Action>
-        </div>
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          {STATION_KEYS.map((k) => (
-            <FocusRailRow
-              key={k}
-              label={STATION_META[k].title}
-              status={ctx.states[k].status}
-              tone={ctx.states[k].tone}
-              active={ctx.live === k}
-              selected={key === k}
-              onSelect={() => ctx.setFocus(k)}
-            />
-          ))}
-          <div className="mt-2 border-t border-[var(--hairline)] pt-2">
-            <FocusRailRow
-              label="Technical logs"
-              status={`${ctx.events.length} events`}
-              tone="idle"
-              active={false}
-              selected={key === "logs"}
-              onSelect={() => ctx.setFocus("logs")}
-            />
-          </div>
-        </div>
-        <div className="shrink-0 border-t border-[var(--hairline)] px-3 py-2">
-          <p className="text-[10px] leading-[1.5] text-[var(--text-muted)]">
-            {key === "logs"
-              ? "Evidence, not the interface."
-              : `${STATION_META[key].title} ${STATION_META[key].verb}.`}
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /* ── Live activity ────────────────────────────────────────────────────────
  * The story of the job in semantic events, newest first so the latest line
  * is always the one in view. Transport chatter is not welcome here; it lives
@@ -1022,7 +929,7 @@ function ActivityStrip({ ctx }: { ctx: RoomContext }) {
         </h2>
         <span className="num text-[10px] text-[var(--text-muted)]">{rows.length}</span>
         <span className="ml-auto">
-          <Action onClick={() => ctx.setFocus("logs")}>Technical logs</Action>
+          <Action onClick={() => ctx.setSelected("logs")}>Technical logs</Action>
         </span>
       </header>
       <div className="min-h-0 overflow-y-auto overscroll-contain px-5 pb-2">
@@ -1048,7 +955,6 @@ function ActivityStrip({ ctx }: { ctx: RoomContext }) {
  */
 
 function ModeCanvas({ mode }: { mode: ForgeMode }) {
-  const phases = MODE_PIPELINE[mode];
   return (
     <div className="min-h-0 overflow-y-auto px-8 py-7">
       <div className="max-w-[760px]">
@@ -1066,23 +972,36 @@ function ModeCanvas({ mode }: { mode: ForgeMode }) {
           <section>
             <h3 className="flex items-baseline justify-between text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">
               Pipeline
-              <span className="num">{phases.length} phases</span>
+              <span className="num">{STAGE_KEYS.length} stages</span>
             </h3>
             <ol className="mt-2 divide-y divide-[var(--hairline)]">
-              {phases.map((p, i) => (
-                <li key={p.key} className="flex items-baseline gap-3 py-[5px]">
-                  <span className="num w-[18px] shrink-0 text-[10px] text-[var(--text-muted)]">
-                    {String(i + 1).padStart(2, "0")}
-                  </span>
-                  <span className="min-w-0 flex-1 text-[12px] text-[var(--text-secondary)]">
-                    {p.label}
-                  </span>
-                  <span className="shrink-0 text-[10px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
-                    {p.role}
-                  </span>
-                </li>
-              ))}
+              {STAGE_KEYS.map((key, i) => {
+                const s = STAGE_META[key];
+                return (
+                  <li key={key} className="flex items-baseline gap-3 py-[6px]">
+                    <span className="num w-[18px] shrink-0 text-[10px] text-[var(--text-muted)]">
+                      {String(i + 1).padStart(2, "0")}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="text-[12px] text-[var(--text)]">{s.title}</span>
+                      <span className="ml-2 font-mono text-[10px] text-[var(--text-muted)]">
+                        {s.gstack}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-[10px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
+                      {s.owner}
+                    </span>
+                  </li>
+                );
+              })}
             </ol>
+            <p className="mt-3 text-[11px] leading-[1.6] text-[var(--text-muted)]">
+              {mode === "FAST"
+                ? "FAST runs the plan without an adversarial debate — the engineering review of the diff is the safeguard."
+                : mode === "CRITICAL"
+                  ? "CRITICAL adds a security gate inside Review and a premium escalation before Ship. It never auto-merges."
+                  : "DEBATE attacks the plan in the Plan stage before a line is written, then reviews the diff in Review."}
+            </p>
           </section>
 
           <section>
