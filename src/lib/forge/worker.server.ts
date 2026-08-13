@@ -10,7 +10,15 @@
  * results. A fabricated diff or a fabricated passing check is worse than a
  * missing one, because it is believed.
  */
-import type { DiffSummary, ForgeMode, GstackOperation, VerificationProfileKey } from "./types";
+import type {
+  DiffSummary,
+  DiscoveryMessage,
+  DiscoveryTurnResult,
+  ForgeMode,
+  GstackOperation,
+  RepoDigest,
+  VerificationProfileKey,
+} from "./types";
 
 export type WorkerStatus = {
   configured: boolean;
@@ -132,8 +140,7 @@ async function call<T>(
       signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (e) {
-    const aborted =
-      e instanceof Error && (e.name === "TimeoutError" || /abort/i.test(e.message));
+    const aborted = e instanceof Error && (e.name === "TimeoutError" || /abort/i.test(e.message));
     if (aborted) {
       throw new Error(
         `Forge Worker did not answer ${path} within ${Math.round(timeoutMs / 1000)}s — the step may still be running on the worker; reload to see its latest state.`,
@@ -147,7 +154,6 @@ async function call<T>(
   }
   return (await res.json()) as T;
 }
-
 
 export const forgeWorker: ForgeWorker = {
   async status() {
@@ -188,8 +194,7 @@ export const forgeWorker: ForgeWorker = {
   createJob: (input) => call("/jobs", input),
   getJob: (id) => call(`/jobs/${id}`, undefined, "GET"),
   startDebate: (id) => call(`/jobs/${id}/debate`, undefined, "POST", LONG_MS),
-  runBuilder: (id, instruction) =>
-    call(`/jobs/${id}/builder`, { instruction }, "POST", LONG_MS),
+  runBuilder: (id, instruction) => call(`/jobs/${id}/builder`, { instruction }, "POST", LONG_MS),
   runChallenger: (id) => call(`/jobs/${id}/challenger`, undefined, "POST", LONG_MS),
   lockPlan: (id) => call(`/jobs/${id}/lock`),
   startImplementation: (id) => call(`/jobs/${id}/implement`, undefined, "POST", LONG_MS),
@@ -201,3 +206,21 @@ export const forgeWorker: ForgeWorker = {
   createPullRequest: (id) => call(`/jobs/${id}/pr`),
   cancelJob: (id) => call(`/jobs/${id}/cancel`),
 };
+
+/* ── Discovery — the pre-job planning session ───────────────────────────────
+ * These do not touch a job. `context` reads the repo once (a clone, so it gets
+ * the long leash); `turn` is a single grounded model call. State lives in the
+ * app; the worker is handed the digest and the whole history each turn.
+ */
+export function workerDiscoveryContext(request: string): Promise<{ digest: RepoDigest }> {
+  return call<{ digest: RepoDigest }>("/discovery/context", { request }, "POST", LONG_MS);
+}
+
+export function workerDiscoveryTurn(input: {
+  request: string;
+  model: string;
+  digest: RepoDigest;
+  messages: DiscoveryMessage[];
+}): Promise<DiscoveryTurnResult> {
+  return call<DiscoveryTurnResult>("/discovery/turn", input, "POST", LONG_MS);
+}

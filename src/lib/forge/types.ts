@@ -464,3 +464,64 @@ export function branchNameFor(request: string, id: string): string {
       .replace(/-+$/g, "") || "change";
   return `forge/${slug}-${id.slice(0, 8)}`;
 }
+
+/* ── Discovery — the pre-job planning session ───────────────────────────────
+ * The office-hours conversation that turns a one-line request into a structured
+ * brief before any job exists. Mirrors the worker's contract; the app holds the
+ * state, the worker reads the code once and produces each turn.
+ */
+
+/** A one-time read of the repo, seeding the conversation with real code. */
+export type RepoDigest = {
+  tree: string;
+  files: { path: string; excerpt: string }[];
+  relevantPaths: string[];
+};
+
+/** The living brief the conversation builds — structured so agents can act on it. */
+export type DiscoveryPlan = {
+  title: string;
+  problem: string;
+  behavior: string;
+  edgeCases: string[];
+  constraints: string[];
+  acceptanceCriteria: string[];
+  relevantFiles: string[];
+  openQuestions: string[];
+};
+
+export type DiscoveryMessage = {
+  role: "ai" | "you";
+  content: string;
+  suggestedAnswers?: string[];
+};
+
+export type DiscoveryTurnResult = {
+  message: string;
+  suggestedAnswers: string[];
+  plan: DiscoveryPlan;
+  ready: boolean;
+};
+
+export const EMPTY_DISCOVERY_PLAN: DiscoveryPlan = {
+  title: "",
+  problem: "",
+  behavior: "",
+  edgeCases: [],
+  constraints: [],
+  acceptanceCriteria: [],
+  relevantFiles: [],
+  openQuestions: [],
+};
+
+/** The client-facing shape of a persisted discovery session. */
+export type DiscoverySession = {
+  id: string;
+  request: string;
+  mode: ForgeMode;
+  messages: DiscoveryMessage[];
+  plan: DiscoveryPlan;
+  ready: boolean;
+  status: "active" | "proceeded" | "abandoned";
+  jobId: string | null;
+};
