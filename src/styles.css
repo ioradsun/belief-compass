@@ -27,7 +27,6 @@
   size-adjust: 118%;
 }
 
-
 /*
  * Design system definition.
  *
@@ -123,8 +122,6 @@
   --case-believer-row: 36px;
   --case-row-believers: calc(3 * var(--case-believer-row) + 2 * 2px);
 
-
-
   --background: var(--bg);
   --foreground: var(--text);
   --card: var(--panel);
@@ -197,9 +194,6 @@
   color: var(--text);
 }
 
-
-
-
 @theme inline {
   --color-panel: var(--panel);
   --color-surface: var(--surface);
@@ -217,7 +211,8 @@
   --font-sans:
     Inter, "Inter Fallback", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-mono:
-    "JetBrains Mono", "JetBrains Mono Fallback", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    "JetBrains Mono", "JetBrains Mono Fallback", ui-monospace, SFMono-Regular, Menlo, Consolas,
+    monospace;
 }
 
 @layer base {
@@ -299,8 +294,6 @@
   gap: var(--deck-gap);
 }
 
-
-
 /*
  * Reduced motion: the layout-stability work stands on its own, so the honest
  * answer here is an immediate swap rather than a slower version of the motion.
@@ -320,8 +313,6 @@
     scroll-behavior: auto !important;
   }
 }
-
-
 
 /* A live tape should feel written, not refreshed: a row that was not there a
    moment ago arrives rather than appearing. Short and small on purpose — this
@@ -383,6 +374,72 @@
   .tape-enter,
   .tape-enter-major,
   .tape-flash {
+    animation: none;
+  }
+}
+
+/*
+ * CONVICTION FORGE — the control room.
+ *
+ * Forge is an internal engineering console, not a market surface, so it does
+ * not borrow YES/NO — those two colours mean "a side of a belief" everywhere
+ * else in the app and must not start meaning "running" here. It gets four
+ * instrumentation tones of its own, scoped to the room, and nothing else:
+ *
+ *   run        a station is working now
+ *   attention  a human decision, or a medium risk
+ *   fail       a check failed, a CRITICAL/HIGH objection, a stopped job
+ *   pass       resolved, passed, delivered
+ *
+ * They resolve to the existing outcome tokens where the meaning already
+ * exists, so a theme change retunes Forge with the rest of the app. The room
+ * is designed to still read in greyscale — colour only confirms a hierarchy
+ * that weight and position already carry.
+ */
+.forge-room {
+  --station-run: #6f8fd6;
+  --station-attention: var(--no);
+  --station-fail: var(--loss);
+  --station-pass: var(--gain);
+}
+
+.light .forge-room {
+  --station-run: #33569c;
+}
+
+/* The one moving thing on a calm screen: the station currently working. Slow
+   enough to read as "alive", never fast enough to read as "urgent". */
+@keyframes forge-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.28;
+  }
+}
+.forge-pulse {
+  animation: forge-pulse 2.4s ease-in-out infinite;
+}
+
+/* A new event should arrive, not blink into place. */
+@keyframes forge-event-in {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.forge-event-in {
+  animation: forge-event-in 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .forge-pulse,
+  .forge-event-in {
     animation: none;
   }
 }
@@ -622,7 +679,7 @@
 @media (max-height: 720px) {
   .momentum {
     --mom-pad-y: 8px;
-      --mom-total: 20px;
+    --mom-total: 20px;
     --mom-pct: 15px;
   }
   .momentum-names {

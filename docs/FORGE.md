@@ -106,12 +106,81 @@ never type slash commands.
 
 Transitions are enforced by `canTransition` / `nextStatus`. No boolean flags.
 
+## The control room
+
+`/admin/forge` is a control surface, not a page. It fills the viewport, the
+document never scrolls, and the regions never move — only a panel's own body
+scrolls when its content outgrows it.
+
+    ┌──────────────────────────────────────────────────────────────┐
+    │ COMMAND BAR   job · state · cost · elapsed · files · actions  │
+    ├──────────┬───────────────────────────────────────────────────┤
+    │ JOB RAIL │ NOW / WHY / NEXT / NEEDS YOU                       │
+    │  search  ├───────────┬───────────┬───────────────────────────┤
+    │ needs you│ BUILDER   │ CHALLENGER│ GSTACK                     │
+    │ running  ├───────────┼───────────┼───────────────────────────┤
+    │ recent   │ IMPLEMENT │ VERIFY    │ SHIP                       │
+    │          ├───────────┴───────────┴───────────────────────────┤
+    │ worker ● │ LIVE ACTIVITY                                      │
+    └──────────┴───────────────────────────────────────────────────┘
+
+### The rail owns the queue
+
+Jobs are created, searched, switched and tracked in one place. **New** opens
+the composer _inside the rail_ — the rail widens to 380px, the request and
+the three modes appear above the inbox, and the list stays visible under
+them. The canvas is never taken away: if a job is open you keep watching it
+while you write the next one, Focus Mode included. `Esc` or **Close** snaps
+the rail back.
+
+The mode's fuller consequence — the pipeline it walks, the models it will pay
+and their per-1M costs — renders on the canvas while composing, but only when
+there is no job to watch. Choosing a mode is choosing what Forge will spend
+and how hard it will argue, so that is stated before the request is filed.
+
+Actions on the job you are _operating_ stay in the command bar (Cancel,
+Approve plan, Create pull request). The rail manages the queue; the command
+bar drives the open job.
+
+### Six stations, in fixed positions, forever
+
+| Station        | Owns                                         |
+| -------------- | -------------------------------------------- |
+| Builder        | creates                                      |
+| Challenger     | questions                                    |
+| gstack         | enforces engineering process                 |
+| Implementation | carries the change                           |
+| Verify         | provides objective evidence                  |
+| Ship           | delivery — the human has the final authority |
+
+gstack is the process layer, not a third competing agent. Ship never offers
+merge, in any mode.
+
+Pressing a station header expands it into **Focus Mode**: that station takes
+the canvas, the other five collapse into a slim rail that keeps its order and
+live status, and `Esc` returns to the board. The job never changes — Focus
+Mode is a change of magnification, not of place.
+
+`src/lib/forge/stations.ts` is the single translation from persisted state
+(status, objections, checks, events, diff) into what each station is doing.
+It invents nothing: where the worker has reported nothing, the station says
+so. The live activity strip carries semantic events only; transport chatter,
+raw stdout and tool invocations stay behind **Technical logs**.
+
+Colour is semantic and scoped to `.forge-room` — `--station-run` (working),
+`--station-attention` (a human decision), `--station-fail`, `--station-pass`.
+Forge does not borrow YES/NO; those mean "a side of a belief" everywhere else
+in the app. The room is designed to read in greyscale.
+
 ## Architecture
 
-    src/routes/admin_.forge.tsx      UI (flat route, /admin/forge, admin session)
-    src/components/forge/            display primitives
+    src/routes/admin_.forge.tsx      the room (flat route, /admin/forge, admin session)
+    src/components/forge/ForgePanels.tsx    control-surface primitives
+    src/components/forge/ForgeStations.tsx  the six stations
     src/lib/forge.functions.ts       server functions, admin-gated
     src/lib/forge/types.ts           modes, state machine, phases, profiles
+    src/lib/forge/stations.ts        persisted state → station state (pure)
+    src/lib/forge/narrative.ts       machine state → human sentences (pure)
     src/lib/forge/models.ts          model registry
     src/lib/forge/mappers.ts         row → record
     src/lib/forge/openrouter.server.ts   the only OpenRouter caller
