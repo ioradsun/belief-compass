@@ -418,12 +418,13 @@ export function MarketMomentum({
     >
       <MomentumMetric
         dense={dense}
-        total={b.current.toLocaleString("en-US")}
+        total={people.toLocaleString("en-US")}
         label="Total participants"
         copy={believerCopy(b, book.window)}
         faces={faces}
-        facesTotal={Math.max(faces?.length ?? 0, Math.round(b.current))}
+        facesTotal={Math.max(faces?.length ?? 0, people)}
       />
+
       <div className="border-t border-[var(--hairline)]" aria-hidden />
       <MomentumMetric
         dense={dense}
