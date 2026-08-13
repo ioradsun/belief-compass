@@ -45,6 +45,17 @@ export const forgeGetJob = createServerFn({ method: "GET" })
   .handler(async ({ data }) => {
     const { requireAdmin } = await import("./admin-session.server");
     await requireAdmin();
+
+    // Mirror the worker's live progress into our tables before we read them, so
+    // the 5-second UI poll reflects the autonomous pipeline. Non-fatal: if the
+    // worker is unreachable we fall back to whatever is already persisted.
+    try {
+      const { syncForgeJobFromWorker } = await import("./forge/forge-sync.server");
+      await syncForgeJobFromWorker(data.id);
+    } catch {
+      /* keep the last known state */
+    }
+
     const { serviceClient } = await import("./supabase-clients");
     const db = serviceClient();
     const [job, events, objections, checks, runs] = await Promise.all([
