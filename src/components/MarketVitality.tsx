@@ -395,6 +395,14 @@ export function MarketMomentum({
   // change rather than reporting a fabricated zero.
   const b = fromChange(change?.market.believers, book.believers.market, 1);
   const c = fromChange(change?.market.capital, book.capitalEth.market, ethUsd > 0 ? ethUsd : null);
+  // The headline count is everyone in the market, never less than the directional
+  // believers the same panel prints. The delta copy below still speaks about
+  // believers, which is what it measures.
+  const people = participantCount({
+    reachParticipants: participants ?? null,
+    believersYes: Math.round(b.current),
+  });
+
 
   /**
    * THE READ, from the Insider — the same facts these two rows print, handed to
