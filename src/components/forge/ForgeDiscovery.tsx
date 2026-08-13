@@ -171,7 +171,7 @@ export function ForgeDiscovery({
   const chips = s?.status === "active" && !send.isPending ? (lastAi?.suggestedAnswers ?? []) : [];
 
   return (
-    <Shell onClose={onClose} request={s?.request}>
+    <Shell onClose={onClose} request={s?.request} model={s?.model}>
       <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
         {/* conversation */}
         <section className="grid min-h-0 grid-rows-[minmax(0,1fr)_auto] border-r border-[var(--hairline)]">
@@ -295,10 +295,12 @@ function Shell({
   children,
   onClose,
   request,
+  model,
 }: {
   children: React.ReactNode;
   onClose: () => void;
   request?: string;
+  model?: string;
 }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-[var(--bg)]">
@@ -306,6 +308,14 @@ function Shell({
         <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--rel,#9b87f5)]">
           Discovery · CTO
         </span>
+        {model && (
+          <span
+            className="shrink-0 truncate font-mono text-[10px] text-[var(--text-muted)]"
+            title="The model running this session, from your Model config. A model's own claim about which model it is isn't reliable — this id is the truth."
+          >
+            {model}
+          </span>
+        )}
         {request && (
           <span className="min-w-0 truncate text-[13px] text-[var(--text-secondary)]">
             {request}

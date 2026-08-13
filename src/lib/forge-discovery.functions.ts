@@ -33,7 +33,7 @@ type Row = {
   job_id: string | null;
 };
 
-function toSession(row: Row): DiscoverySession {
+function toSession(row: Row, model = ""): DiscoverySession {
   return {
     id: row.id,
     request: row.request,
@@ -50,14 +50,19 @@ function toSession(row: Row): DiscoverySession {
       ? (row.status as DiscoverySession["status"])
       : "active",
     jobId: row.job_id,
+    model,
   };
 }
 
 const SELECT = "id, request, mode, digest, messages, plan, ready, status, job_id";
 
-/** The CTO is the reviewer persona — the critical thinker, not the builder. */
+/**
+ * The CTO runs Discovery and produces the brief the Builder then works from, so
+ * it runs on the BUILDER model — the primary model you configure. (Asking the
+ * model its own identity is unreliable; the id returned to the UI is the truth.)
+ */
 async function ctoModel(): Promise<string> {
-  return (await resolveModelConfig()).challenger;
+  return (await resolveModelConfig()).builder;
 }
 
 /** Turn the finished plan into the rich brief the pipeline's Brief stage reads. */
@@ -92,13 +97,9 @@ export const forgeDiscoveryStart = createServerFn({ method: "POST" })
       : "DEBATE";
 
     // One code read, then the CTO's opening question.
+    const model = await ctoModel();
     const { digest } = await workerDiscoveryContext(request);
-    const turn = await workerDiscoveryTurn({
-      request,
-      model: await ctoModel(),
-      digest,
-      messages: [],
-    });
+    const turn = await workerDiscoveryTurn({ request, model, digest, messages: [] });
     const messages: DiscoveryMessage[] = [
       { role: "ai", content: turn.message, suggestedAnswers: turn.suggestedAnswers },
     ];
@@ -119,7 +120,7 @@ export const forgeDiscoveryStart = createServerFn({ method: "POST" })
       .select(SELECT)
       .single();
     if (error) throw new Error(error.message);
-    return toSession(row as Row);
+    return toSession(row as Row, model);
   });
 
 /* ── send ─────────────────────────────────────────────────────────────────*/
@@ -144,9 +145,10 @@ export const forgeDiscoverySend = createServerFn({ method: "POST" })
     if (session.status !== "active") throw new Error("This session is already closed.");
 
     const history: DiscoveryMessage[] = [...session.messages, { role: "you", content: message }];
+    const model = await ctoModel();
     const turn = await workerDiscoveryTurn({
       request: session.request,
-      model: await ctoModel(),
+      model,
       digest: (row as { digest: unknown }).digest as never,
       messages: history,
     });
@@ -162,7 +164,7 @@ export const forgeDiscoverySend = createServerFn({ method: "POST" })
       .select(SELECT)
       .single();
     if (upErr) throw new Error(upErr.message);
-    return toSession(updated as Row);
+    return toSession(updated as Row, model);
   });
 
 /* ── list (the rail's "Planning" section) ──────────────────────────────────*/
@@ -223,7 +225,7 @@ export const forgeDiscoveryGet = createServerFn({ method: "GET" })
       .select(SELECT)
       .eq("id", data.id)
       .maybeSingle();
-    return row ? toSession(row as Row) : null;
+    return row ? toSession(row as Row, await ctoModel()) : null;
   });
 
 /* ── proceed → create the job ──────────────────────────────────────────────*/
