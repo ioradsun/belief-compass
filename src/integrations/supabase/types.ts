@@ -509,6 +509,24 @@ export type Database = {
         }
         Relationships: []
       }
+      forge_model_config: {
+        Row: {
+          model_id: string
+          role: string
+          updated_at: string
+        }
+        Insert: {
+          model_id: string
+          role: string
+          updated_at?: string
+        }
+        Update: {
+          model_id?: string
+          role?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       forge_model_runs: {
         Row: {
           cost_usd: number
@@ -565,23 +583,52 @@ export type Database = {
           },
         ]
       }
-      forge_model_config: {
+      forge_objections: {
         Row: {
-          model_id: string
-          role: string
-          updated_at: string
+          body: string | null
+          created_at: string
+          id: string
+          job_id: string
+          resolution: string | null
+          resolved_at: string | null
+          round: number
+          severity: string
+          status: string
+          title: string
         }
         Insert: {
-          model_id: string
-          role: string
-          updated_at?: string
+          body?: string | null
+          created_at?: string
+          id?: string
+          job_id: string
+          resolution?: string | null
+          resolved_at?: string | null
+          round?: number
+          severity: string
+          status?: string
+          title: string
         }
         Update: {
-          model_id?: string
-          role?: string
-          updated_at?: string
+          body?: string | null
+          created_at?: string
+          id?: string
+          job_id?: string
+          resolution?: string | null
+          resolved_at?: string | null
+          round?: number
+          severity?: string
+          status?: string
+          title?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "forge_objections_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "forge_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       forge_queue: {
         Row: {
@@ -647,53 +694,6 @@ export type Database = {
           value?: Json
         }
         Relationships: []
-      }
-      forge_objections: {
-        Row: {
-          body: string | null
-          created_at: string
-          id: string
-          job_id: string
-          resolution: string | null
-          resolved_at: string | null
-          round: number
-          severity: string
-          status: string
-          title: string
-        }
-        Insert: {
-          body?: string | null
-          created_at?: string
-          id?: string
-          job_id: string
-          resolution?: string | null
-          resolved_at?: string | null
-          round?: number
-          severity: string
-          status?: string
-          title: string
-        }
-        Update: {
-          body?: string | null
-          created_at?: string
-          id?: string
-          job_id?: string
-          resolution?: string | null
-          resolved_at?: string | null
-          round?: number
-          severity?: string
-          status?: string
-          title?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "forge_objections_job_id_fkey"
-            columns: ["job_id"]
-            isOneToOne: false
-            referencedRelation: "forge_jobs"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       house_foundation_answers: {
         Row: {
