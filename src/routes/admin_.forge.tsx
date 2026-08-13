@@ -24,6 +24,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { adminStatus } from "@/lib/admin.functions";
 import { ForgeModelConfig } from "@/components/forge/ForgeModelConfig";
+import { ForgeLoop } from "@/components/forge/ForgeLoop";
 import {
   forgeApprovePlan,
   forgeCancelJob,
@@ -112,9 +113,9 @@ export const Route = createFileRoute("/admin_/forge")({
   ssr: false,
   // The open job lives in the URL, so a refresh returns to the same job.
   validateSearch: (search: Record<string, unknown>) => {
-    const out: { job?: string; view?: "models" } = {};
+    const out: { job?: string; view?: "models" | "loop" } = {};
     if (typeof search.job === "string") out.job = search.job;
-    if (search.view === "models") out.view = "models";
+    if (search.view === "models" || search.view === "loop") out.view = search.view;
     return out;
   },
   head: () => ({
@@ -140,6 +141,7 @@ function ForgeRoute() {
 
   if (isPending) return <Locked>{null}</Locked>;
   if (view === "models" && status?.unlocked === true) return <ForgeModelConfig />;
+  if (view === "loop" && status?.unlocked === true) return <ForgeLoop />;
   if (status?.unlocked !== true) {
     return (
       <Locked>
@@ -799,6 +801,13 @@ function SystemReadout({ env }: { env: Env }) {
         className="mt-1.5 block text-[10px] uppercase tracking-[0.14em] text-[var(--text-muted)] hover:text-[var(--text)]"
       >
         Models
+      </Link>
+      <Link
+        to="/admin/forge"
+        search={{ view: "loop" }}
+        className="mt-1 block text-[10px] uppercase tracking-[0.14em] text-[var(--text-muted)] hover:text-[var(--text)]"
+      >
+        Loop
       </Link>
       <Link
         to="/admin"
