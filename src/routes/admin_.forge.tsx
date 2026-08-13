@@ -25,9 +25,11 @@ import {
   forgeGetJob,
   forgeListJobs,
   forgeRequestRevision,
+  forgeRunReview,
 } from "@/lib/forge.functions";
 import {
   FORGE_MODES,
+  GSTACK_OPERATIONS,
   MODE_BLURB,
   MODE_PIPELINE,
   blocksImplementation,
@@ -58,6 +60,7 @@ import {
   CostLedger,
   CurrentPhaseCard,
   Empty,
+  GstackBoard,
   JobRow,
   Objections,
   Pipeline,
@@ -355,7 +358,7 @@ function NewJob({ onOpen }: { onOpen: (id: string) => void }) {
 
 /* ── Job view ─────────────────────────────────────────────────────────── */
 
-const TABS = ["Overview", "Debate", "Changes", "Checks", "Logs"] as const;
+const TABS = ["Overview", "Debate", "Changes", "Checks", "gstack", "Logs"] as const;
 type Tab = (typeof TABS)[number];
 
 function JobView({ id }: { id: string }) {
@@ -707,6 +710,18 @@ function JobView({ id }: { id: string }) {
           <Section label="Cost">
             <CostLedger runs={modelRuns} job={job} />
           </Section>
+        </div>
+      )}
+
+      {tab === "gstack" && (
+        <div className="mt-6">
+          <GstackBoard
+            operations={GSTACK_OPERATIONS}
+            events={events}
+            busy={review.isPending ? review.variables?.operation ?? null : null}
+            disabled={!job.workerJobId || done || review.isPending}
+            onRun={(operation) => review.mutate({ operation })}
+          />
         </div>
       )}
 
