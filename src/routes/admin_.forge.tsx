@@ -402,6 +402,14 @@ function JobView({ id }: { id: string }) {
     onSuccess: refresh,
     onError: fail,
   });
+  const review = useMutation({
+    mutationFn: async (v: { operation: string }) =>
+      await forgeRunReview({ data: { id, operation: v.operation } }),
+    onSuccess: refresh,
+    onError: fail,
+  });
+
+
 
   if (isPending) return <p className="text-[13px] text-[var(--text-muted)]">Loading job…</p>;
   if (!data) return <Empty>That job no longer exists.</Empty>;
