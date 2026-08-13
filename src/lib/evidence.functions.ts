@@ -104,7 +104,7 @@ export const getMarketEvidence = createServerFn({ method: "GET" })
       const sb = serviceClient();
       const id = data.marketId;
 
-      const [ethUsd, beliefsRes, seriesRes, marketRes] = await Promise.all([
+      const [ethUsd, beliefsRes, seriesRes, marketRes, participantsRes] = await Promise.all([
         readEthUsd(sb),
         sb
           .from("wallet_beliefs")
@@ -117,7 +117,14 @@ export const getMarketEvidence = createServerFn({ method: "GET" })
           .limit(BELIEVERS_LIMIT),
         sb.rpc("price_series_daily", { p_ids: [id], p_days: 60 }),
         sb.from("markets").select("agent_opinions").eq("onchain_id", id).maybeSingle(),
+        // Everyone with a live position, MIXED included — see MarketEvidence.
+        sb
+          .from("wallet_beliefs")
+          .select("wallet", { count: "exact", head: true })
+          .eq("onchain_id", id)
+          .or("yes_shares.gt.0,no_shares.gt.0"),
       ]);
+
 
       const rows = (beliefsRes.data ?? []) as Array<{
         wallet: string;
