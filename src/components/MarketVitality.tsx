@@ -339,8 +339,16 @@ export function MarketMomentum({
   dense,
   faces,
   state,
+  participants,
 
 }: {
+  /**
+   * EVERYONE IN THIS MARKET — see @/domain/participants. The per-side believer
+   * counts exclude wallets holding both sides, so summing them under a label
+   * that says "Total participants" undercounts real people.
+   */
+  participants?: number | null;
+
   /** Still needed for the window phrase and the cold-start read. Never for a delta. */
   tape: TapeTrade[] | undefined;
   /**
