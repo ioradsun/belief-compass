@@ -630,59 +630,6 @@ export type Database = {
           },
         ]
       }
-      forge_discovery: {
-        Row: {
-          created_at: string
-          created_by: string
-          digest: Json
-          id: string
-          job_id: string | null
-          messages: Json
-          mode: string
-          plan: Json
-          ready: boolean
-          request: string
-          status: string
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          created_by?: string
-          digest?: Json
-          id?: string
-          job_id?: string | null
-          messages?: Json
-          mode?: string
-          plan?: Json
-          ready?: boolean
-          request: string
-          status?: string
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          created_by?: string
-          digest?: Json
-          id?: string
-          job_id?: string | null
-          messages?: Json
-          mode?: string
-          plan?: Json
-          ready?: boolean
-          request?: string
-          status?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "forge_discovery_job_id_fkey"
-            columns: ["job_id"]
-            isOneToOne: false
-            referencedRelation: "forge_jobs"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       forge_queue: {
         Row: {
           body: string | null
