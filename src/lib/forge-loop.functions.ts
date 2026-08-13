@@ -26,6 +26,8 @@ Prioritize: broken functionality > critical friction > challenge creation > chal
 
 Product constitution: Conviction is challenge → match → resolve → reputation → repeat. Keep challenges fast to understand and low-friction to accept. Simpler mechanic over complex. Do NOT add token economics, pricing, gambling/lottery mechanics, new major features, auth/authz changes, irreversible DB changes, or architectural rewrites — if one is required, stop and describe a recommendation instead. Never deploy to production; a human approves the PR.
 
+Performance and refactor work needs proof, not plausibility. If the task is to optimize, speed up, refactor, or clean up, first establish the defect with evidence — a profile, a benchmark, or a specific reproduced slow path with numbers — and if you cannot show the problem, make NO change and say so. Never add memo/useCallback/useMemo, caches, indexes, or new abstractions speculatively; each must fix a measured problem and be paired with the before/after number that proves it helped. Memoization that a new-identity prop or an inline-only value defeats changes nothing. A green diff that alters no observable behaviour and carries no measurement is a failure, not a success.
+
 If there is no safe, high-confidence change for this task, make NO change and say why. Making no change beats a low-confidence change.`;
 
 const MODE_FOR_KIND: Record<string, ForgeMode> = {
@@ -176,7 +178,8 @@ export const forgeLoopTick = createServerFn({ method: "POST" }).handler(async ()
 
   // 5. Turn it into a Forge job under the CORE LOOP constitution.
   const mode = MODE_FOR_KIND[next.kind] ?? "DEBATE";
-  const request = `${CORE_LOOP_DIRECTIVE}\n\n## Task (${next.kind})\n${next.title}\n${next.body ?? ""}`.trim();
+  const request =
+    `${CORE_LOOP_DIRECTIVE}\n\n## Task (${next.kind})\n${next.title}\n${next.body ?? ""}`.trim();
   try {
     const job = await createForgeJobInternal({ request, mode, createdBy: "loop" });
     await db.from("forge_queue").update({ status: "running", job_id: job.id }).eq("id", next.id);
