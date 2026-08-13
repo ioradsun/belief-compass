@@ -53,9 +53,17 @@ export interface MarketEvidence {
   believers: Believer[];
   believersYes: number;
   believersNo: number;
+  /**
+   * EVERYONE HOLDING A POSITION, not just the directional ones. `believers` is
+   * filtered to stance YES/NO, so a wallet holding both sides (MIXED) is a real
+   * person in this market that no per-side count includes. POV counts them; we
+   * were printing "4 participants" on a market six wallets had traded.
+   */
+  participants: number;
   priceSeries: PricePoint[];
   defense: DefenseOpinion[];
 }
+
 
 /** Shape pov.co agent_opinions (jsonb) into Defense entries; tolerant of gaps. */
 function toDefense(raw: unknown): DefenseOpinion[] {
