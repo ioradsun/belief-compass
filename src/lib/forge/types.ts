@@ -524,4 +524,7 @@ export type DiscoverySession = {
   ready: boolean;
   status: "active" | "proceeded" | "abandoned";
   jobId: string | null;
+  /** The OpenRouter model actually running this session — the source of truth,
+   *  since a model's own self-report of its identity is unreliable. */
+  model: string;
 };
