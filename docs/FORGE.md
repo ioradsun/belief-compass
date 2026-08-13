@@ -116,7 +116,7 @@ scrolls when its content outgrows it.
     │ COMMAND BAR   job · state · cost · elapsed · files · actions  │
     ├──────────┬───────────────────────────────────────────────────┤
     │ JOB RAIL │ NOW / WHY / NEXT / NEEDS YOU                       │
-    │          ├───────────┬───────────┬───────────────────────────┤
+    │  search  ├───────────┬───────────┬───────────────────────────┤
     │ needs you│ BUILDER   │ CHALLENGER│ GSTACK                     │
     │ running  ├───────────┼───────────┼───────────────────────────┤
     │ recent   │ IMPLEMENT │ VERIFY    │ SHIP                       │
@@ -124,7 +124,25 @@ scrolls when its content outgrows it.
     │ worker ● │ LIVE ACTIVITY                                      │
     └──────────┴───────────────────────────────────────────────────┘
 
-Six stations, in fixed positions, forever:
+### The rail owns the queue
+
+Jobs are created, searched, switched and tracked in one place. **New** opens
+the composer _inside the rail_ — the rail widens to 380px, the request and
+the three modes appear above the inbox, and the list stays visible under
+them. The canvas is never taken away: if a job is open you keep watching it
+while you write the next one, Focus Mode included. `Esc` or **Close** snaps
+the rail back.
+
+The mode's fuller consequence — the pipeline it walks, the models it will pay
+and their per-1M costs — renders on the canvas while composing, but only when
+there is no job to watch. Choosing a mode is choosing what Forge will spend
+and how hard it will argue, so that is stated before the request is filed.
+
+Actions on the job you are _operating_ stay in the command bar (Cancel,
+Approve plan, Create pull request). The rail manages the queue; the command
+bar drives the open job.
+
+### Six stations, in fixed positions, forever
 
 | Station        | Owns                                         |
 | -------------- | -------------------------------------------- |

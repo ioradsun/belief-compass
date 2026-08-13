@@ -176,11 +176,27 @@ function Lockup() {
  * none of them move when the job changes.
  */
 
+/**
+ * Composing lives in the rail, so it is state of the inbox rather than state
+ * of the canvas: starting a job never costs you the instrument you are
+ * watching. The rail widens to give the request room to be written, and
+ * snaps back when the job is filed.
+ */
+type Compose = { open: boolean; request: string; mode: ForgeMode };
+
+const RAIL_LIST = "grid-cols-[212px_minmax(0,1fr)] xl:grid-cols-[264px_minmax(0,1fr)]";
+const RAIL_COMPOSE = "grid-cols-[380px_minmax(0,1fr)]";
+
 function ControlRoom() {
   const { job: openJob } = Route.useSearch();
   const navigate = useNavigate({ from: "/admin/forge" });
   const setOpenJob = (id: string | undefined) =>
     navigate({ to: "/admin/forge", search: { job: id } });
+  const [compose, setCompose] = useState<Compose>({
+    open: false,
+    request: "",
+    mode: "DEBATE",
+  });
 
   const { data: env } = useQuery({
     queryKey: ["forge-env"],
@@ -193,25 +209,50 @@ function ControlRoom() {
     refetchInterval: 10_000,
   });
 
-  const room = useJobRoom(openJob);
+  // Escape has one meaning at a time: close the composer if it is open,
+  // otherwise leave Focus Mode. The canvas keeps its focus while you type.
+  const room = useJobRoom(openJob, { escapeCaptured: compose.open });
+  useEffect(() => {
+    if (!compose.open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setCompose((c) => ({ ...c, open: false }));
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [compose.open]);
 
   return (
     <main className="forge-room grid h-[100dvh] w-full grid-rows-[58px_minmax(0,1fr)] overflow-hidden bg-[var(--bg)] text-[var(--text)]">
-      <CommandBar room={room} />
-      <div className="grid min-h-0 grid-cols-[212px_minmax(0,1fr)] xl:grid-cols-[264px_minmax(0,1fr)]">
-        <JobRail jobs={jobs ?? []} openJob={openJob} onOpen={setOpenJob} env={env} />
+      <CommandBar room={room} composing={compose.open} />
+      <div
+        className={`grid min-h-0 transition-[grid-template-columns] duration-200 ease-out ${
+          compose.open ? RAIL_COMPOSE : RAIL_LIST
+        }`}
+      >
+        <JobRail
+          jobs={jobs ?? []}
+          openJob={openJob}
+          onOpen={setOpenJob}
+          env={env}
+          compose={compose}
+          setCompose={setCompose}
+        />
         {room.kind === "ready" ? (
           // Keyed by job: a different job is a different board, so per-panel
           // selections (open objection, open check, open gstack op) reset.
           <JobCanvas key={room.job.id} room={room} />
+        ) : compose.open ? (
+          // Nothing to watch, so the canvas shows what the chosen mode will
+          // cost: the pipeline it walks and the models it will pay for.
+          <ModeCanvas mode={compose.mode} />
         ) : room.kind === "none" ? (
-          <NewJobCanvas onOpen={setOpenJob} />
+          <IdleCanvas onNew={() => setCompose((c) => ({ ...c, open: true }))} />
         ) : (
           <Placeholder
             text={room.kind === "loading" ? "Loading job" : "That job no longer exists"}
             action={
               room.kind === "missing" ? (
-                <Action onClick={() => setOpenJob(undefined)}>New job</Action>
+                <Action onClick={() => setOpenJob(undefined)}>Back to jobs</Action>
               ) : null
             }
           />
@@ -226,6 +267,23 @@ function Placeholder({ text, action }: { text: string; action: React.ReactNode }
     <div className="flex flex-col items-center justify-center gap-3">
       <p className="text-[11px] uppercase tracking-[0.16em] text-[var(--text-muted)]">{text}</p>
       {action}
+    </div>
+  );
+}
+
+/** No job selected. Say so, and say what to do about it. Nothing else. */
+function IdleCanvas({ onNew }: { onNew: () => void }) {
+  return (
+    <div className="flex flex-col items-center justify-center gap-3">
+      <p className="text-[11px] uppercase tracking-[0.16em] text-[var(--text-muted)]">
+        No job selected
+      </p>
+      <p className="max-w-[44ch] text-center text-[13px] leading-[1.6] text-[var(--text-secondary)]">
+        Choose a job from the rail to open its board, or start a new one.
+      </p>
+      <Action weight="primary" onClick={onNew}>
+        New job
+      </Action>
     </div>
   );
 }
@@ -251,7 +309,7 @@ type Room =
       error: string | null;
     };
 
-function useJobRoom(id: string | undefined): Room {
+function useJobRoom(id: string | undefined, { escapeCaptured }: { escapeCaptured: boolean }): Room {
   const qc = useQueryClient();
   const [focus, setFocus] = useState<FocusKey | null>(null);
   const [diffFile, setDiffFile] = useState<string | null>(null);
@@ -264,15 +322,16 @@ function useJobRoom(id: string | undefined): Room {
     setError(null);
   }, [id]);
 
-  // Escape always returns to the whole board. One key, one meaning.
+  // Escape returns to the whole board — unless something nearer the operator
+  // has claimed the key, in which case the canvas keeps its focus.
   useEffect(() => {
-    if (!focus) return;
+    if (!focus || escapeCaptured) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setFocus(null);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [focus]);
+  }, [focus, escapeCaptured]);
 
   const { data, isPending } = useQuery({
     queryKey: ["forge-job", id],
@@ -393,26 +452,42 @@ function useJobRoom(id: string | undefined): Room {
  * actually available. One primary action at most.
  */
 
-function CommandBar({ room }: { room: Room }) {
+function CommandBar({ room, composing }: { room: Room; composing: boolean }) {
   return (
     <header className="flex h-[58px] shrink-0 items-center border-b border-[var(--hairline)] bg-[var(--panel)]">
-      <div className="flex w-[212px] shrink-0 items-center border-r border-[var(--hairline)] px-5 xl:w-[264px]">
+      {/* The lockup block tracks the rail's width, so the seam runs straight
+          down the screen whether the rail is listing or composing. */}
+      <div
+        className={`flex shrink-0 items-center border-r border-[var(--hairline)] px-5 transition-[width] duration-200 ease-out ${
+          composing ? "w-[380px]" : "w-[212px] xl:w-[264px]"
+        }`}
+      >
         <Lockup />
       </div>
-      {room.kind === "ready" ? <JobVitals room={room} /> : <IdleBar room={room} />}
+      {room.kind === "ready" ? (
+        <JobVitals room={room} />
+      ) : (
+        <IdleBar room={room} composing={composing} />
+      )}
     </header>
   );
 }
 
-function IdleBar({ room }: { room: Room }) {
+function IdleBar({ room, composing }: { room: Room; composing: boolean }) {
+  const title =
+    room.kind === "loading"
+      ? "Loading"
+      : room.kind === "missing"
+        ? "Not found"
+        : composing
+          ? "New job"
+          : "Forge";
   return (
     <div className="flex min-w-0 flex-1 items-baseline gap-3 px-5">
-      <h1 className="text-[22px] font-medium leading-[1.2] tracking-[-0.015em]">
-        {room.kind === "none" ? "New job" : room.kind === "loading" ? "Loading" : "Not found"}
-      </h1>
+      <h1 className="text-[22px] font-medium leading-[1.2] tracking-[-0.015em]">{title}</h1>
       {room.kind === "none" && (
         <span className="text-[11px] text-[var(--text-muted)]">
-          Name the behaviour, not the file.
+          {composing ? "Name the behaviour, not the file." : "No job open."}
         </span>
       )}
     </div>
@@ -483,8 +558,13 @@ function Clock({ from, to }: { from: string; to: string | null }) {
 }
 
 /* ── Job rail ─────────────────────────────────────────────────────────────
- * The operator's inbox. Three sections in the order a person cares about
- * them, and human phase names only — no CHALLENGER_REVIEW leaks out of here.
+ * The operator's inbox, and the only place a job is created, found or
+ * switched. Three sections in the order a person cares about them, and human
+ * phase names only — no CHALLENGER_REVIEW leaks out of here.
+ *
+ * Composing is a state of the rail, not of the canvas. The rail's own shape
+ * — header, body, system readout — is the same either way; only the body
+ * changes, so the region never moves under the operator.
  */
 
 type Env = Awaited<ReturnType<typeof forgeEnvironment>> | undefined;
@@ -500,11 +580,15 @@ function JobRail({
   openJob,
   onOpen,
   env,
+  compose,
+  setCompose,
 }: {
   jobs: ForgeJob[];
   openJob: string | undefined;
   onOpen: (id: string | undefined) => void;
   env: Env;
+  compose: Compose;
+  setCompose: React.Dispatch<React.SetStateAction<Compose>>;
 }) {
   const [query, setQuery] = useState("");
 
@@ -517,60 +601,160 @@ function JobRail({
 
   return (
     <aside className="flex min-h-0 flex-col border-r border-[var(--hairline)] bg-[var(--panel)]">
-      <header className="flex shrink-0 items-center gap-2 border-b border-[var(--hairline)] px-3 py-2">
+      <header className="flex h-[37px] shrink-0 items-center gap-2 border-b border-[var(--hairline)] px-3">
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search jobs"
           className="min-w-0 flex-1 bg-transparent text-[12px] outline-none placeholder:text-[var(--text-muted)]"
         />
-        <Action weight="primary" onClick={() => onOpen(undefined)}>
-          New
-        </Action>
+        {compose.open ? (
+          <Action onClick={() => setCompose((c) => ({ ...c, open: false }))}>Close · Esc</Action>
+        ) : (
+          <Action weight="primary" onClick={() => setCompose((c) => ({ ...c, open: true }))}>
+            New
+          </Action>
+        )}
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-2">
-        {rows.length === 0 ? (
-          <p className="px-3 py-2 text-[12px] text-[var(--text-muted)]">
-            {query ? "No job matches that." : "No jobs yet."}
-          </p>
-        ) : (
-          RAIL_SECTIONS.map(({ label, states }) => {
-            const mine = rows.filter((r) => states.includes(r.state));
-            if (mine.length === 0) return null;
-            return (
-              <section key={label} className="mb-3">
-                <h2 className="flex items-baseline justify-between px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
-                  {label}
-                  <span className="num">{mine.length}</span>
-                </h2>
-                <ul>
-                  {mine.map(({ job, state }) => (
-                    <RailRow
-                      key={job.id}
-                      title={jobTitle(job.request)}
-                      phase={PHASE_LABEL[job.status]}
-                      meta={
-                        isTerminal(job.status)
-                          ? job.prUrl
-                            ? "PR"
-                            : HUMAN_STATE_LABEL[state]
-                          : elapsed(job.createdAt)
-                      }
-                      state={state}
-                      active={job.id === openJob}
-                      onOpen={() => onOpen(job.id)}
-                    />
-                  ))}
-                </ul>
-              </section>
-            );
-          })
-        )}
+      {/* One scroll region: the composer sits above the inbox rather than
+          replacing it, so a job can be written without losing sight of the
+          jobs already running. */}
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+        {compose.open && <Composer compose={compose} setCompose={setCompose} onCreated={onOpen} />}
+        <div className="py-2">
+          {rows.length === 0 ? (
+            <p className="px-3 py-2 text-[12px] text-[var(--text-muted)]">
+              {query ? "No job matches that." : "No jobs yet."}
+            </p>
+          ) : (
+            RAIL_SECTIONS.map(({ label, states }) => {
+              const mine = rows.filter((r) => states.includes(r.state));
+              if (mine.length === 0) return null;
+              return (
+                <section key={label} className="mb-3">
+                  <h2 className="flex items-baseline justify-between px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
+                    {label}
+                    <span className="num">{mine.length}</span>
+                  </h2>
+                  <ul>
+                    {mine.map(({ job, state }) => (
+                      <RailRow
+                        key={job.id}
+                        title={jobTitle(job.request)}
+                        phase={PHASE_LABEL[job.status]}
+                        meta={
+                          isTerminal(job.status)
+                            ? job.prUrl
+                              ? "PR"
+                              : HUMAN_STATE_LABEL[state]
+                            : elapsed(job.createdAt)
+                        }
+                        state={state}
+                        active={job.id === openJob}
+                        onOpen={() => onOpen(job.id)}
+                      />
+                    ))}
+                  </ul>
+                </section>
+              );
+            })
+          )}
+        </div>
       </div>
 
       <SystemReadout env={env} />
     </aside>
+  );
+}
+
+/**
+ * The composer. The only surface in Forge that asks the operator for prose,
+ * so the request gets real room and the mode gets one honest line each. The
+ * fuller consequence of a mode — its pipeline and what it will pay models —
+ * renders on the canvas beside it whenever there is no job to watch.
+ */
+function Composer({
+  compose,
+  setCompose,
+  onCreated,
+}: {
+  compose: Compose;
+  setCompose: React.Dispatch<React.SetStateAction<Compose>>;
+  onCreated: (id: string) => void;
+}) {
+  const qc = useQueryClient();
+  const [error, setError] = useState<string | null>(null);
+
+  const build = useMutation({
+    mutationFn: async () =>
+      await forgeCreateJob({ data: { request: compose.request, mode: compose.mode } }),
+    onSuccess: (r) => {
+      setError(null);
+      qc.invalidateQueries({ queryKey: ["forge-jobs"] });
+      setCompose({ open: false, request: "", mode: compose.mode });
+      onCreated(r.id);
+    },
+    onError: (e) => setError(e instanceof Error ? e.message : "Could not create the job."),
+  });
+
+  const ready = compose.request.trim().length >= 8;
+
+  return (
+    <div className="scene-enter border-b border-[var(--hairline)] bg-[var(--surface)] px-3 py-3">
+      <textarea
+        value={compose.request}
+        onChange={(e) => setCompose((c) => ({ ...c, request: e.target.value }))}
+        rows={6}
+        autoFocus
+        placeholder="What should Conviction become next?"
+        className="w-full resize-none border border-[var(--hairline)] bg-[var(--bg)] px-2.5 py-2 text-[13px] leading-[1.6] outline-none focus:border-[var(--border-strong)]"
+      />
+
+      <div className="mt-3 flex flex-col gap-px bg-[var(--hairline)]">
+        {FORGE_MODES.map((m) => (
+          <button
+            key={m}
+            type="button"
+            onClick={() => setCompose((c) => ({ ...c, mode: m }))}
+            className="px-2.5 py-1.5 text-left"
+            style={{
+              backgroundColor: compose.mode === m ? "var(--surface-2)" : "var(--panel)",
+              boxShadow: compose.mode === m ? `inset 2px 0 0 ${TONE_COLOR.active}` : undefined,
+            }}
+          >
+            <span
+              className={`block text-[11px] font-semibold uppercase tracking-[0.16em] ${
+                compose.mode === m ? "text-[var(--text)]" : "text-[var(--text-muted)]"
+              }`}
+            >
+              {m}
+            </span>
+            <span className="mt-0.5 block text-[11px] leading-[1.45] text-[var(--text-muted)]">
+              {MODE_BLURB[m]}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {error && <p className="mt-2 text-[12px] text-[var(--loss)]">{error}</p>}
+
+      <div className="mt-3 flex items-center gap-2">
+        <button
+          type="button"
+          disabled={!ready || build.isPending}
+          onClick={() => build.mutate()}
+          className="rounded-[3px] bg-[var(--text)] px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--bg)] disabled:opacity-35"
+        >
+          {build.isPending ? "Creating" : "Build"}
+        </button>
+        <span className="min-w-0 flex-1 text-[10px] leading-[1.4] text-[var(--text-muted)]">
+          {ready
+            ? "Filed, then handed to the worker."
+            : "Describe the change in a sentence or more."}
+        </span>
+      </div>
+    </div>
   );
 }
 
@@ -834,99 +1018,66 @@ function ActivityStrip({ ctx }: { ctx: RoomContext }) {
   );
 }
 
-/* ── New job ──────────────────────────────────────────────────────────────
- * The only surface in Forge that asks the operator for prose. It states the
- * cost of the mode they are choosing before they choose it.
+/* ── Mode consequence ─────────────────────────────────────────────────────
+ * Shown on the canvas while the operator composes, and only when there is no
+ * job to watch. Choosing a mode is choosing what Forge will spend and how
+ * hard it will argue, so the pipeline it walks and the models it pays are
+ * stated before the request is filed — not after.
  */
 
-function NewJobCanvas({ onOpen }: { onOpen: (id: string) => void }) {
-  const qc = useQueryClient();
-  const [request, setRequest] = useState("");
-  const [mode, setMode] = useState<ForgeMode>("DEBATE");
-  const [error, setError] = useState<string | null>(null);
-
-  const build = useMutation({
-    mutationFn: async () => await forgeCreateJob({ data: { request, mode } }),
-    onSuccess: (r) => {
-      setError(null);
-      qc.invalidateQueries({ queryKey: ["forge-jobs"] });
-      onOpen(r.id);
-    },
-    onError: (e) => setError(e instanceof Error ? e.message : "Could not create the job."),
-  });
-
+function ModeCanvas({ mode }: { mode: ForgeMode }) {
+  const phases = MODE_PIPELINE[mode];
   return (
-    <div className="min-h-0 overflow-y-auto px-6 py-6">
-      <div className="max-w-[880px]">
-        <textarea
-          value={request}
-          onChange={(e) => setRequest(e.target.value)}
-          rows={5}
-          placeholder="What should Conviction become next?"
-          className="w-full resize-none border border-[var(--hairline)] bg-[var(--panel)] px-3 py-2 text-[14px] leading-[1.6] outline-none focus:border-[var(--border-strong)]"
-        />
-
-        <div className="mt-4 grid grid-cols-3 gap-px bg-[var(--hairline)]">
-          {FORGE_MODES.map((m) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => setMode(m)}
-              className="px-3 py-2 text-left"
-              style={{
-                backgroundColor: mode === m ? "var(--surface)" : "var(--panel)",
-                boxShadow: mode === m ? `inset 0 1px 0 ${TONE_COLOR.active}` : undefined,
-              }}
-            >
-              <span
-                className={`block text-[11px] font-semibold uppercase tracking-[0.16em] ${
-                  mode === m ? "text-[var(--text)]" : "text-[var(--text-muted)]"
-                }`}
-              >
-                {m}
-              </span>
-              <span className="mt-1 block text-[11px] leading-[1.5] text-[var(--text-muted)]">
-                {MODE_BLURB[m]}
-              </span>
-            </button>
-          ))}
-        </div>
-        <p className="mt-2">
-          <Why label={`Why ${mode}?`}>{whyMode(mode)}</Why>
+    <div className="min-h-0 overflow-y-auto px-8 py-7">
+      <div className="max-w-[760px]">
+        <h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-secondary)]">
+          {mode}
+        </h2>
+        <p className="mt-1 max-w-[62ch] text-[14px] leading-[1.55] text-[var(--text)]">
+          {MODE_BLURB[mode]}
+        </p>
+        <p className="mt-1 max-w-[62ch] text-[12px] leading-[1.6] text-[var(--text-muted)]">
+          {whyMode(mode)}
         </p>
 
-        <div className="mt-6 grid grid-cols-[minmax(0,1fr)_320px] gap-10">
+        <div className="mt-7 grid grid-cols-[minmax(0,1fr)_300px] gap-10">
           <section>
-            <h2 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">
+            <h3 className="flex items-baseline justify-between text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">
               Pipeline
-            </h2>
-            <ol className="mt-2 space-y-px">
-              {MODE_PIPELINE[mode].map((p, i) => (
-                <li key={p.key} className="flex items-baseline gap-2">
+              <span className="num">{phases.length} phases</span>
+            </h3>
+            <ol className="mt-2 divide-y divide-[var(--hairline)]">
+              {phases.map((p, i) => (
+                <li key={p.key} className="flex items-baseline gap-3 py-[5px]">
                   <span className="num w-[18px] shrink-0 text-[10px] text-[var(--text-muted)]">
                     {String(i + 1).padStart(2, "0")}
                   </span>
-                  <span className="text-[12px] text-[var(--text-secondary)]">{p.label}</span>
-                  <span className="ml-auto text-[10px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
+                  <span className="min-w-0 flex-1 text-[12px] text-[var(--text-secondary)]">
+                    {p.label}
+                  </span>
+                  <span className="shrink-0 text-[10px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
                     {p.role}
                   </span>
                 </li>
               ))}
             </ol>
           </section>
+
           <section>
-            <h2 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">
+            <h3 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">
               Models
-            </h2>
-            <ul className="mt-2 space-y-2">
+            </h3>
+            <ul className="mt-2 divide-y divide-[var(--hairline)]">
               {(["builder", "challenger", "escalation"] as const).map((role) => {
                 const m = MODEL_REGISTRY[role];
                 return (
-                  <li key={role}>
+                  <li key={role} className="py-2">
                     <p className="text-[11px] uppercase tracking-[0.12em] text-[var(--text-secondary)]">
                       {role}
                     </p>
-                    <p className="font-mono text-[11px] text-[var(--text-muted)]">{m.modelId}</p>
+                    <p className="truncate font-mono text-[11px] text-[var(--text-muted)]">
+                      {m.modelId}
+                    </p>
                     <p className="num text-[10px] text-[var(--text-muted)]">
                       ${m.inputCost} / ${m.outputCost} per 1M · {m.metadata.invocation}
                     </p>
@@ -937,20 +1088,9 @@ function NewJobCanvas({ onOpen }: { onOpen: (id: string) => void }) {
           </section>
         </div>
 
-        {error && <p className="mt-4 text-[12px] text-[var(--loss)]">{error}</p>}
-
-        <div className="mt-6 flex items-center gap-3">
-          <Action
-            weight="primary"
-            disabled={build.isPending || request.trim().length < 8}
-            onClick={() => build.mutate()}
-          >
-            {build.isPending ? "Creating" : "Build"}
-          </Action>
-          <span className="text-[11px] text-[var(--text-muted)]">
-            {currentAction({ status: "DRAFT" }).why}
-          </span>
-        </div>
+        <p className="mt-7 max-w-[62ch] border-t border-[var(--hairline)] pt-3 text-[12px] leading-[1.6] text-[var(--text-muted)]">
+          {currentAction({ status: "DRAFT" }).why}
+        </p>
       </div>
     </div>
   );
