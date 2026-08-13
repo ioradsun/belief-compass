@@ -165,6 +165,51 @@ export const forgeDiscoverySend = createServerFn({ method: "POST" })
     return toSession(updated as Row);
   });
 
+/* ── list (the rail's "Planning" section) ──────────────────────────────────*/
+
+export type DiscoverySummary = {
+  id: string;
+  title: string;
+  ready: boolean;
+  status: string;
+  jobId: string | null;
+  updatedAt: string;
+};
+
+export const forgeDiscoveryList = createServerFn({ method: "GET" }).handler(
+  async (): Promise<DiscoverySummary[]> => {
+    const { requireAdmin } = await import("./admin-session.server");
+    await requireAdmin();
+    const { serviceClient } = await import("./supabase-clients");
+    const { data } = await serviceClient()
+      .from("forge_discovery")
+      .select("id, request, plan, ready, status, job_id, updated_at")
+      .order("updated_at", { ascending: false })
+      .limit(30);
+    const rows = (data ?? []) as Array<{
+      id: string;
+      request: string | null;
+      plan: unknown;
+      ready: boolean | null;
+      status: string | null;
+      job_id: string | null;
+      updated_at: string | null;
+    }>;
+    return rows.map((r) => {
+      const plan = (r.plan && typeof r.plan === "object" ? r.plan : {}) as { title?: string };
+      const title = plan.title?.trim() || String(r.request ?? "Untitled");
+      return {
+        id: r.id as string,
+        title,
+        ready: r.ready === true,
+        status: String(r.status ?? "active"),
+        jobId: (r.job_id as string | null) ?? null,
+        updatedAt: String(r.updated_at ?? ""),
+      };
+    });
+  },
+);
+
 /* ── get (resume after a refresh) ──────────────────────────────────────────*/
 
 export const forgeDiscoveryGet = createServerFn({ method: "GET" })

@@ -9,7 +9,7 @@
  * Nothing is written during discovery. The escape hatch files a job directly
  * for a change too small to be worth the conversation.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   forgeDiscoveryGet,
@@ -35,19 +35,30 @@ const PLAN_LISTS: { key: keyof DiscoveryPlan; label: string }[] = [
 ];
 
 export function ForgeDiscovery({
+  sessionId: initialSessionId,
   onProceed,
   onClose,
+  onStarted,
 }: {
+  sessionId: string | null;
   onProceed: (jobId: string) => void;
   onClose: () => void;
+  onStarted: (id: string) => void;
 }) {
   const qc = useQueryClient();
-  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(initialSessionId);
   const [request, setRequest] = useState("");
   const [mode, setMode] = useState<ForgeMode>("DEBATE");
   const [input, setInput] = useState("");
   const [error, setError] = useState<string | null>(null);
   const fail = (e: unknown) => setError(e instanceof Error ? e.message : "Something went wrong.");
+
+  // The URL is the source of truth for which session is open, so resuming from
+  // the rail (or a refresh) just points this at a different id.
+  useEffect(() => {
+    setSessionId(initialSessionId);
+    setError(null);
+  }, [initialSessionId]);
 
   const session = useQuery({
     queryKey: ["forge-discovery", sessionId],
@@ -61,6 +72,7 @@ export function ForgeDiscovery({
       setError(null);
       setSessionId(s.id);
       qc.setQueryData(["forge-discovery", s.id], s);
+      onStarted(s.id);
     },
     onError: fail,
   });

@@ -26,6 +26,7 @@ import { adminStatus } from "@/lib/admin.functions";
 import { ForgeModelConfig } from "@/components/forge/ForgeModelConfig";
 import { ForgeLoop } from "@/components/forge/ForgeLoop";
 import { ForgeDiscovery } from "@/components/forge/ForgeDiscovery";
+import { forgeDiscoveryList, type DiscoverySummary } from "@/lib/forge-discovery.functions";
 import {
   forgeApprovePlan,
   forgeCancelJob,
@@ -93,9 +94,10 @@ export const Route = createFileRoute("/admin_/forge")({
   ssr: false,
   // The open job lives in the URL, so a refresh returns to the same job.
   validateSearch: (search: Record<string, unknown>) => {
-    const out: { job?: string; view?: "models" | "loop" } = {};
+    const out: { job?: string; view?: "models" | "loop"; discovery?: string } = {};
     if (typeof search.job === "string") out.job = search.job;
     if (search.view === "models" || search.view === "loop") out.view = search.view;
+    if (typeof search.discovery === "string") out.discovery = search.discovery;
     return out;
   },
   head: () => ({
@@ -175,15 +177,24 @@ type Compose = { open: boolean; request: string; mode: ForgeMode };
 const RAIL_LIST = "grid-cols-[212px_minmax(0,1fr)] xl:grid-cols-[264px_minmax(0,1fr)]";
 
 function ControlRoom() {
-  const { job: openJob } = Route.useSearch();
+  const { job: openJob, discovery: discoveryId } = Route.useSearch();
   const navigate = useNavigate({ from: "/admin/forge" });
   const setOpenJob = (id: string | undefined) =>
     navigate({ to: "/admin/forge", search: { job: id } });
+  const setDiscovery = (id: string | undefined) =>
+    navigate({ to: "/admin/forge", search: id ? { discovery: id } : {} });
   const [compose, setCompose] = useState<Compose>({
     open: false,
     request: "",
     mode: "DEBATE",
   });
+  // A brand-new session (compose) or a resumed one (?discovery=id) both fill
+  // the centre; a resumed session lives in the URL so it survives navigation.
+  const discoveryOpen = compose.open || Boolean(discoveryId);
+  const closeDiscovery = () => {
+    setCompose((c) => ({ ...c, open: false }));
+    if (discoveryId) setDiscovery(undefined);
+  };
 
   const { data: env } = useQuery({
     queryKey: ["forge-env"],
@@ -194,6 +205,11 @@ function ControlRoom() {
     queryKey: ["forge-jobs"],
     queryFn: () => forgeListJobs(),
     refetchInterval: 10_000,
+  });
+  const { data: discoveries } = useQuery({
+    queryKey: ["forge-discoveries"],
+    queryFn: () => forgeDiscoveryList(),
+    refetchInterval: 15_000,
   });
 
   // Escape has one meaning at a time: close the composer if it is open,
@@ -210,7 +226,7 @@ function ControlRoom() {
 
   return (
     <main className="forge-room grid h-[100dvh] w-full grid-rows-[58px_minmax(0,1fr)] overflow-hidden bg-[var(--bg)] text-[var(--text)]">
-      <CommandBar room={room} composing={compose.open} />
+      <CommandBar room={room} composing={discoveryOpen} />
       <div className={`grid min-h-0 ${RAIL_LIST}`}>
         <JobRail
           jobs={jobs ?? []}
@@ -219,16 +235,24 @@ function ControlRoom() {
           env={env}
           compose={compose}
           setCompose={setCompose}
+          discoveries={discoveries ?? []}
+          openDiscovery={setDiscovery}
+          activeDiscovery={discoveryId}
         />
-        {compose.open ? (
+        {discoveryOpen ? (
           // A new job starts in the centre: a Discovery session with the CTO,
           // who reads the code and interrogates the brief before anything runs.
           <ForgeDiscovery
-            onProceed={(jobId) => {
+            sessionId={discoveryId ?? null}
+            onStarted={(id) => {
               setCompose((c) => ({ ...c, open: false }));
+              setDiscovery(id);
+            }}
+            onProceed={(jobId) => {
+              closeDiscovery();
               setOpenJob(jobId);
             }}
-            onClose={() => setCompose((c) => ({ ...c, open: false }))}
+            onClose={closeDiscovery}
           />
         ) : room.kind === "ready" ? (
           // Keyed by job: a different job is a different board, so per-panel
@@ -572,6 +596,9 @@ function JobRail({
   env,
   compose,
   setCompose,
+  discoveries,
+  openDiscovery,
+  activeDiscovery,
 }: {
   jobs: ForgeJob[];
   openJob: string | undefined;
@@ -579,8 +606,12 @@ function JobRail({
   env: Env;
   compose: Compose;
   setCompose: React.Dispatch<React.SetStateAction<Compose>>;
+  discoveries: DiscoverySummary[];
+  openDiscovery: (id: string | undefined) => void;
+  activeDiscovery: string | undefined;
 }) {
   const [query, setQuery] = useState("");
+  const planning = discoveries.filter((d) => d.status === "active");
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -607,10 +638,62 @@ function JobRail({
         )}
       </header>
 
-      {/* One scroll region: the composer sits above the inbox rather than
-          replacing it, so a job can be written without losing sight of the
-          jobs already running. */}
+      {/* One scroll region. In-progress Discovery sessions sit at the top as
+          resumable "projects", above the running jobs. */}
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+        {planning.length > 0 && (
+          <section className="mb-2 border-b border-[var(--hairline)] pb-1">
+            <h2 className="flex items-baseline justify-between px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
+              Planning
+              <span className="num">{planning.length}</span>
+            </h2>
+            <ul>
+              {planning.map((d) => {
+                const active = d.id === activeDiscovery;
+                return (
+                  <li key={d.id}>
+                    <button
+                      type="button"
+                      onClick={() => openDiscovery(d.id)}
+                      className={`flex w-full items-baseline gap-2 py-[5px] pl-3 pr-2 text-left ${
+                        active ? "bg-[var(--surface)]" : "hover:bg-[var(--surface)]"
+                      }`}
+                      style={{
+                        boxShadow: `inset 2px 0 0 ${active ? "var(--rel,#9b87f5)" : "transparent"}`,
+                      }}
+                    >
+                      <span
+                        className="w-[10px] shrink-0 text-[11px] leading-[1.4]"
+                        style={{ color: "var(--rel,#9b87f5)" }}
+                        aria-hidden
+                      >
+                        ◇
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span
+                          className={`block truncate text-[12px] leading-[1.4] ${
+                            active ? "text-[var(--text)]" : "text-[var(--text-secondary)]"
+                          }`}
+                        >
+                          {jobTitle(d.title)}
+                        </span>
+                        <span className="mt-px flex items-baseline gap-1.5 text-[10px] text-[var(--text-muted)]">
+                          <span className="min-w-0 truncate">Discovery</span>
+                          <span
+                            className="num ml-auto shrink-0"
+                            style={{ color: d.ready ? "var(--gain)" : undefined }}
+                          >
+                            {d.ready ? "ready" : "drafting"}
+                          </span>
+                        </span>
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
         <div className="py-2">
           {rows.length === 0 ? (
             <p className="px-3 py-2 text-[12px] text-[var(--text-muted)]">
