@@ -40,7 +40,30 @@ for (const name of REQUIRED) {
 
 export const PROXY_ADDRESS = meta.proxy_address.toLowerCase() as `0x${string}`;
 export const CHAIN_ID = meta.chain_id;
-export const ABI = abi as unknown as readonly AbiEvent[];
+
+/**
+ * THE SELL EVENT HAS TWO SHAPES ON THIS PROXY, AND ONLY ONE IS IN THE PINNED ABI.
+ *
+ * The implementation behind the proxy was upgraded and `TokensSold` gained the
+ * same fee breakdown `TokensBought` already carried (fee, agentFee, creatorFee,
+ * treasuryFee) — a DIFFERENT topic0. The pinned ABI still describes the old
+ * seven-field event, so every sell emitted by the new implementation decoded to
+ * null and was silently dropped by the indexer.
+ *
+ * The cost of that silence: a wallet that bought and then sold kept its stored
+ * position forever. Positions showed shares the chain says are burned, while the
+ * market page — which reads the chain — correctly showed nothing to sell. Both
+ * shapes are decoded here so a sell can never go unseen again, whichever
+ * implementation is live.
+ */
+const SOLD_V2 = parseAbiItem(
+  "event TokensSold(uint256 indexed marketId, address indexed seller, string questionId, bool yes, uint256 amount, uint256 proceeds, uint256 fee, uint256 agentFee, uint256 creatorFee, uint256 treasuryFee, uint256 newPrice)",
+);
+
+export const ABI = [
+  ...(abi as unknown as AbiEvent[]),
+  SOLD_V2 as unknown as AbiEvent,
+] as readonly AbiEvent[];
 export const TRADE_EVENTS = [
   parseAbiItem(
     "event TokensBought(uint256 indexed marketId, address indexed buyer, string questionId, bool yes, uint256 amount, uint256 ethSpent, uint256 fee, uint256 agentFee, uint256 creatorFee, uint256 treasuryFee, uint256 newPrice)",
@@ -48,7 +71,9 @@ export const TRADE_EVENTS = [
   parseAbiItem(
     "event TokensSold(uint256 indexed marketId, address indexed seller, string questionId, bool yes, uint256 amount, uint256 proceeds, uint256 newPrice)",
   ),
+  SOLD_V2,
 ] as const;
+
 
 export interface CanonicalTrade {
   tx_hash: string;
