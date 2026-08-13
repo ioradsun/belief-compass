@@ -181,93 +181,106 @@ export const forgeGetJob = createServerFn({ method: "GET" })
  * When no worker is configured the job is still persisted — in DRAFT, honestly
  * stalled — rather than pretending work began.
  */
+/**
+ * The guts of job creation — persist the job, cut a branch, hand it to the
+ * worker. Reused by the manual creator (below) and the autonomous loop driver
+ * (`forge-loop.functions.ts`). NOT admin-gated itself; callers gate.
+ */
+export async function createForgeJobInternal(input: {
+  request: string;
+  mode: ForgeMode;
+  createdBy?: string;
+}): Promise<{ id: string; started: boolean }> {
+  const request = String(input.request ?? "").trim();
+  if (request.length < 8) throw new Error("Describe the change in a sentence or more.");
+
+  const { serviceClient } = await import("./supabase-clients");
+  const db = serviceClient();
+  const profile = defaultProfileForMode(input.mode);
+  const models = await resolveModelConfig();
+
+  const { data: row, error } = await db
+    .from("forge_jobs")
+    .insert({
+      request,
+      mode: input.mode,
+      status: "DRAFT" satisfies ForgeStatus,
+      builder_model: models.builder,
+      challenger_model: models.challenger,
+      escalation_model: models.escalation,
+      verification_profile: profile,
+      created_by: input.createdBy ?? "admin",
+    })
+    .select("*")
+    .single();
+  if (error) throw new Error(error.message);
+
+  const job = toJob(row);
+  const branch = branchNameFor(request, job.id);
+  await db.from("forge_jobs").update({ branch_name: branch }).eq("id", job.id);
+  await db.from("forge_events").insert({
+    job_id: job.id,
+    kind: "job.created",
+    level: "info",
+    role: "human",
+    message: `Request received — ${input.mode} mode, ${profile} verification profile.`,
+  });
+
+  const { forgeWorker, workerConfigured } = await import("./forge/worker.server");
+  if (!workerConfigured()) {
+    await db.from("forge_events").insert({
+      job_id: job.id,
+      kind: "worker.missing",
+      level: "warn",
+      role: "system",
+      message: "Forge Worker not connected — job persisted, execution not started.",
+    });
+    return { id: job.id, started: false };
+  }
+
+  try {
+    const ref = await forgeWorker.createJob({
+      jobId: job.id,
+      request,
+      mode: input.mode,
+      branchName: branch,
+      verificationProfile: profile,
+      builderModel: job.builderModel,
+      challengerModel: job.challengerModel,
+      escalationModel: job.escalationModel,
+    });
+    await db
+      .from("forge_jobs")
+      .update({ worker_job_id: ref.workerJobId, status: "ANALYZING", current_phase: "analyze" })
+      .eq("id", job.id);
+    await db.from("forge_events").insert({
+      job_id: job.id,
+      kind: "worker.accepted",
+      level: "success",
+      role: "system",
+      message: "Forge Worker accepted the job.",
+    });
+    return { id: job.id, started: true };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Worker call failed.";
+    await db.from("forge_jobs").update({ status: "FAILED", error: message }).eq("id", job.id);
+    await db.from("forge_events").insert({
+      job_id: job.id,
+      kind: "worker.failed",
+      level: "error",
+      role: "system",
+      message,
+    });
+    return { id: job.id, started: false };
+  }
+}
+
 export const forgeCreateJob = createServerFn({ method: "POST" })
   .inputValidator((data: { request: string; mode: ForgeMode }) => data)
   .handler(async ({ data }) => {
     const { requireAdmin } = await import("./admin-session.server");
     await requireAdmin();
-    const request = String(data.request ?? "").trim();
-    if (request.length < 8) throw new Error("Describe the change in a sentence or more.");
-
-    const { serviceClient } = await import("./supabase-clients");
-    const db = serviceClient();
-    const profile = defaultProfileForMode(data.mode);
-    const models = await resolveModelConfig();
-
-    const { data: row, error } = await db
-      .from("forge_jobs")
-      .insert({
-        request,
-        mode: data.mode,
-        status: "DRAFT" satisfies ForgeStatus,
-        builder_model: models.builder,
-        challenger_model: models.challenger,
-        escalation_model: models.escalation,
-        verification_profile: profile,
-        created_by: "admin",
-      })
-      .select("*")
-      .single();
-    if (error) throw new Error(error.message);
-
-    const job = toJob(row);
-    const branch = branchNameFor(request, job.id);
-    await db.from("forge_jobs").update({ branch_name: branch }).eq("id", job.id);
-    await db.from("forge_events").insert({
-      job_id: job.id,
-      kind: "job.created",
-      level: "info",
-      role: "human",
-      message: `Request received — ${data.mode} mode, ${profile} verification profile.`,
-    });
-
-    const { forgeWorker, workerConfigured } = await import("./forge/worker.server");
-    if (!workerConfigured()) {
-      await db.from("forge_events").insert({
-        job_id: job.id,
-        kind: "worker.missing",
-        level: "warn",
-        role: "system",
-        message: "Forge Worker not connected — job persisted, execution not started.",
-      });
-      return { id: job.id, started: false as const };
-    }
-
-    try {
-      const ref = await forgeWorker.createJob({
-        jobId: job.id,
-        request,
-        mode: data.mode,
-        branchName: branch,
-        verificationProfile: profile,
-        builderModel: job.builderModel,
-        challengerModel: job.challengerModel,
-        escalationModel: job.escalationModel,
-      });
-      await db
-        .from("forge_jobs")
-        .update({ worker_job_id: ref.workerJobId, status: "ANALYZING", current_phase: "analyze" })
-        .eq("id", job.id);
-      await db.from("forge_events").insert({
-        job_id: job.id,
-        kind: "worker.accepted",
-        level: "success",
-        role: "system",
-        message: "Forge Worker accepted the job.",
-      });
-      return { id: job.id, started: true as const };
-    } catch (e) {
-      const message = e instanceof Error ? e.message : "Worker call failed.";
-      await db.from("forge_jobs").update({ status: "FAILED", error: message }).eq("id", job.id);
-      await db.from("forge_events").insert({
-        job_id: job.id,
-        kind: "worker.failed",
-        level: "error",
-        role: "system",
-        message,
-      });
-      return { id: job.id, started: false as const };
-    }
+    return createForgeJobInternal(data);
   });
 
 export const forgeCancelJob = createServerFn({ method: "POST" })
