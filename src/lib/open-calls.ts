@@ -169,7 +169,7 @@ export function useOpenCalls(wallet?: string): OpenCalls {
    */
   const { active: simulating } = useSimulationMode();
   const mode: RecordMode = simulating ? "SIMULATION" : "REAL";
-  // The same cached observer DnaFirstReveal uses — the lock costs no round trip.
+  // The same cached network observer the DNA views share — the lock costs no round trip.
   const { data: net, isError: netError } = useQuery({ ...networkQO(wallet), enabled: !!wallet });
   const lock = challengeLock(net?.summary.expressedBeliefs ?? 0, (net?.summary.twinCount ?? 0) > 0);
   // `placeholderData` keeps the last good payload on screen through a refetch, so

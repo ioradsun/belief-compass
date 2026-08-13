@@ -80,7 +80,6 @@ describe("the viewer's network cannot silently go stale", () => {
       "src/components/CaseFile.tsx",
       "src/components/SharedConviction.tsx",
       "src/components/MobileGame.tsx",
-      "src/components/DnaFirstReveal.tsx",
       "src/components/MyWorld.tsx",
       "src/components/MarketDeck.tsx",
       "src/components/NetworkPanel.tsx",
