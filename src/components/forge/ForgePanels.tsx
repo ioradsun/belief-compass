@@ -660,3 +660,116 @@ export function StatePill({ state }: { state: HumanState }) {
     </span>
   );
 }
+
+/* ── gstack board ──────────────────────────────────────────────────────────
+ * "Is gstack even being used?" was unanswerable from this screen, because the
+ * methodology runs inside the worker and only leaked into the raw log. The
+ * board names every department once and reads the job's own events for proof:
+ * requested, running, passed, failed, or never run. No department is inferred
+ * from optimism — absence is shown as absence.
+ */
+const GSTACK_BLURB: Record<string, string> = {
+  "office-hours": "Open questions put to the stack before a plan exists.",
+  "plan review": "The plan itself is critiqued before any code is written.",
+  "engineering review": "Implementation read for correctness and structure.",
+  review: "General pass over the change as a whole.",
+  investigate: "Root-cause dig when something failed or looks wrong.",
+  qa: "Behaviour exercised against the running app.",
+  cso: "Security and money-risk gate.",
+  ship: "Final readiness call before a pull request.",
+};
+
+type GstackState = "passed" | "failed" | "running" | "requested" | "idle";
+
+const GSTACK_TONE: Record<GstackState, string> = {
+  passed: "text-[var(--gain)]",
+  failed: "text-[var(--loss)]",
+  running: "text-[var(--notice)]",
+  requested: "text-[var(--text-secondary)]",
+  idle: "text-[var(--text-muted)]",
+};
+const GSTACK_LABEL: Record<GstackState, string> = {
+  passed: "Passed",
+  failed: "Failed",
+  running: "Running",
+  requested: "Requested",
+  idle: "Not run",
+};
+
+function eventOperation(e: ForgeEvent): string | null {
+  const d = e.detail;
+  const op = d && typeof d === "object" && !Array.isArray(d) ? d["operation"] : null;
+  if (typeof op === "string") return op;
+  const hay = `${e.kind} ${e.message}`.toLowerCase();
+  return null ?? (hay.includes("gstack") ? null : null);
+}
+
+function stateFor(op: string, events: ForgeEvent[]) {
+  const mine = events.filter((e) => {
+    const tagged = eventOperation(e);
+    if (tagged) return tagged === op;
+    const hay = `${e.kind} ${e.message}`.toLowerCase();
+    return hay.includes(op.toLowerCase());
+  });
+  const last = mine[mine.length - 1] ?? null;
+  let state: GstackState = "idle";
+  if (last) {
+    const k = `${last.kind}`.toLowerCase();
+    if (last.level === "error" || k.includes("failed")) state = "failed";
+    else if (last.level === "success" || k.includes("done") || k.includes("passed"))
+      state = "passed";
+    else if (k.includes("start") || k.includes("running")) state = "running";
+    else state = "requested";
+  }
+  return { state, last, count: mine.length };
+}
+
+export function GstackBoard({
+  operations,
+  events,
+  onRun,
+  busy,
+  disabled,
+}: {
+  operations: readonly string[];
+  events: ForgeEvent[];
+  onRun: (operation: string) => void;
+  busy: string | null;
+  disabled: boolean;
+}) {
+  const anyRan = operations.some((op) => stateFor(op, events).state !== "idle");
+  return (
+    <div>
+      <p className="mb-3 text-[12px] text-[var(--text-muted)]">
+        {anyRan
+          ? "Departments that have reported on this job. Each state is read from the job's own events."
+          : "No gstack department has reported on this job yet — the pipeline ran without one."}
+      </p>
+      <ul className="divide-y divide-[var(--border)] rounded-md border border-[var(--border)]">
+        {operations.map((op) => {
+          const { state, last, count } = stateFor(op, events);
+          return (
+            <li key={op} className="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-3 py-3">
+              <span className="min-w-[150px] text-[13px] font-medium capitalize">{op}</span>
+              <span className={`text-[12px] font-medium ${GSTACK_TONE[state]}`}>
+                {GSTACK_LABEL[state]}
+              </span>
+              <span className="min-w-0 flex-1 text-[12px] text-[var(--text-muted)]">
+                {last ? last.message : GSTACK_BLURB[op]}
+                {count > 1 ? ` · ${count} events` : ""}
+              </span>
+              <button
+                type="button"
+                disabled={disabled || busy === op}
+                onClick={() => onRun(op)}
+                className="rounded-md border border-[var(--border-strong)] px-2.5 py-1 text-[12px] disabled:opacity-40"
+              >
+                {busy === op ? "Sending…" : state === "idle" ? "Run" : "Run again"}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
