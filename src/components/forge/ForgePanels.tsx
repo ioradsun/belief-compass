@@ -699,9 +699,7 @@ const GSTACK_LABEL: Record<GstackState, string> = {
 function eventOperation(e: ForgeEvent): string | null {
   const d = e.detail;
   const op = d && typeof d === "object" && !Array.isArray(d) ? d["operation"] : null;
-  if (typeof op === "string") return op;
-  const hay = `${e.kind} ${e.message}`.toLowerCase();
-  return null ?? (hay.includes("gstack") ? null : null);
+  return typeof op === "string" ? op : null;
 }
 
 function stateFor(op: string, events: ForgeEvent[]) {
