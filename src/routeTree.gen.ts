@@ -15,6 +15,7 @@ import { Route as TermsRouteImport } from './routes/terms'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as Lab9f3c7a21b4RouteImport } from './routes/lab-9f3c7a21b4'
 import { Route as HowRouteImport } from './routes/how'
+import { Route as AnalyticsRouteImport } from './routes/analytics'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as MMidRouteImport } from './routes/m.$mid'
@@ -66,6 +67,11 @@ const Lab9f3c7a21b4Route = Lab9f3c7a21b4RouteImport.update({
 const HowRoute = HowRouteImport.update({
   id: '/how',
   path: '/how',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AnalyticsRoute = AnalyticsRouteImport.update({
+  id: '/analytics',
+  path: '/analytics',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminRoute = AdminRouteImport.update({
@@ -191,6 +197,7 @@ const ApiPublicJobsBeliefRollupRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/analytics': typeof AnalyticsRoute
   '/how': typeof HowRoute
   '/lab-9f3c7a21b4': typeof Lab9f3c7a21b4Route
   '/sitemap.xml': typeof SitemapDotxmlRoute
@@ -221,6 +228,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/analytics': typeof AnalyticsRoute
   '/how': typeof HowRoute
   '/lab-9f3c7a21b4': typeof Lab9f3c7a21b4Route
   '/sitemap.xml': typeof SitemapDotxmlRoute
@@ -252,6 +260,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/analytics': typeof AnalyticsRoute
   '/how': typeof HowRoute
   '/lab-9f3c7a21b4': typeof Lab9f3c7a21b4Route
   '/sitemap.xml': typeof SitemapDotxmlRoute
@@ -284,6 +293,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/admin'
+    | '/analytics'
     | '/how'
     | '/lab-9f3c7a21b4'
     | '/sitemap.xml'
@@ -314,6 +324,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/admin'
+    | '/analytics'
     | '/how'
     | '/lab-9f3c7a21b4'
     | '/sitemap.xml'
@@ -344,6 +355,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/admin'
+    | '/analytics'
     | '/how'
     | '/lab-9f3c7a21b4'
     | '/sitemap.xml'
@@ -375,6 +387,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRoute
+  AnalyticsRoute: typeof AnalyticsRoute
   HowRoute: typeof HowRoute
   Lab9f3c7a21b4Route: typeof Lab9f3c7a21b4Route
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
@@ -445,6 +458,13 @@ declare module '@tanstack/react-router' {
       path: '/how'
       fullPath: '/how'
       preLoaderRoute: typeof HowRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/analytics': {
+      id: '/analytics'
+      path: '/analytics'
+      fullPath: '/analytics'
+      preLoaderRoute: typeof AnalyticsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin': {
@@ -607,6 +627,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRoute,
+  AnalyticsRoute: AnalyticsRoute,
   HowRoute: HowRoute,
   Lab9f3c7a21b4Route: Lab9f3c7a21b4Route,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
